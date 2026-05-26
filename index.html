@@ -198,7 +198,7 @@
         </div>
     </div>
 
-    <audio id="sound-player" src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAURB crappy encoded mp3//vQxAAAAAAAAAAAAFhpbmcAAAAPAAAAAgAACCwACwALCxwcHBwcHBwcnJycnJycnJz39/f39/f39///AAAOBWxhbWUzLjk5rQAAAAAAAAAAAAA7DwGgJA0AAgAAAggsAnZfAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/0MQZAAAGkEaY0AAKAEA0gUAAAE67v27bt27btu7bu27u27tu7btu7tu7bt27bu27tu7btu7btu7btu7btu7bu27u27tu7P/0MQZAAAGkEaY0AAKAEA0gUAAAE67v27bt27btu7bu27u27tu7btu7tu7bt27bu27tu7btu7btu7btu7btu7bu27u27tu7P/0MQZAAAGkEaY0AAKAEA0gUAAAE67v27bt27btu7bu27u27tu7btu7tu7bt27bu27tu7bt27bu27tu7btu7bu27u27tu7P/0MQZAAAGkEaY0AAKAEA0gUAAAEaa927du3bdu3bd23dt3bd23dt3bd23dt3bd27du3bt27du3bt27du3bt27u27t27P" preload="auto"></audio>
+    <audio id="sound-player" src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAURB crappy encoded mp3//vQxAAAAAAAAAAAAFhpbmcAAAAPAAAAAgAACCwACwALCxwcHBwcHBwcnJycnJycnJz39/f39/f39///AAAOBWxhbWUzLjk5rQAAAAAAAAAAAAA7DwGgJA0AAgAAAggsAnZfAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/0MQZAAAGkEaY0AAKAEA0gUAAAE67v27bt27btu7bu27u27tu7btu7tu7bt27bu27tu7bt27bu27tu7bt27bu7bu27u27tu7P/0MQZAAAGkEaY0AAKAEA0gUAAAE67v27bt27btu7bu27u27tu7btu7tu7bt27bu27tu7bt27bu27tu7bt27bu7bu27u27tu7P/0MQZAAAGkEaY0AAKAEA0gUAAAE67v27bt27btu7bu27u27tu7btu7tu7bt27bu27tu7bt27bu27tu7bt27bu7bu27u27tu7P/0MQZAAAGkEaY0AAKAEA0gUAAAEaa927du3bdu3bd23dt3bd23dt3bd23dt3bd27du3bt27du3bt27du3bt27u27t27P" preload="auto"></audio>
 
     <script>
         if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./sw.js').catch(() => {}); }
@@ -494,7 +494,6 @@
         
         function updateTimerText(sec) { 
             let m = Math.floor(sec / 60); let s = sec % 60; ui.timer.innerText = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
-            if(isRunning && isPiP && sec % 2 === 0) updateMediaSession();
         }
         
         function toggleMute() { isMuted = !isMuted; ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG; }
@@ -516,7 +515,14 @@
         function updateMediaSession() {
             if ('mediaSession' in navigator && images.length > 0) {
                 const item = images[currentIndex];
-                navigator.mediaSession.metadata = new MediaMetadata({ title: item ? item.name : 'Croquis App', artist: '残り: ' + ui.timer.innerText, album: isFavMode ? '★ お気に入り' : '通常再生' });
+                const currentTitle = item ? item.name : 'Croquis App';
+                if (!navigator.mediaSession.metadata || navigator.mediaSession.metadata.title !== currentTitle) {
+                    navigator.mediaSession.metadata = new MediaMetadata({ 
+                        title: currentTitle, 
+                        artist: 'Croquis Timer', 
+                        album: isFavMode ? '★ お気に入り' : '通常再生' 
+                    });
+                }
                 navigator.mediaSession.playbackState = isRunning ? "playing" : "paused";
             }
         }
@@ -550,82 +556,43 @@
         }
 
         function drawToCanvas(canvas, ctx, drawOverlay) {
-            const uiHeight = drawOverlay ? 90 : 0;
-            const imgWidth = canvas.width;
-            const imgHeight = canvas.height - uiHeight;
-
             ctx.fillStyle = bgMode === 0 ? '#1e1e1e' : (bgMode === 1 ? '#000' : '#fff'); ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
             ctx.save();
             if(!isImageHidden) {
-                ctx.translate(imgWidth / 2, imgHeight / 2);
-                if(settings.flipH) transform = ctx.scale(-1, 1); 
-                if(settings.flipV) transform = ctx.scale(1, -1); 
-                if(settings.mono) ctx.filter = 'grayscale(100%)';
-                ctx.drawImage(ui.img, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
-                
+                ctx.translate(canvas.width/2, canvas.height/2);
+                if(settings.flipH) ctx.scale(-1, 1); if(settings.flipV) ctx.scale(1, -1); if(settings.mono) ctx.filter = 'grayscale(100%)';
+                ctx.drawImage(ui.img, -canvas.width/2, -canvas.height/2, canvas.width, canvas.height);
                 if(settings.grid) {
-                    ctx.filter = 'none'; ctx.strokeStyle = 'rgba(128,128,128,0.4)'; ctx.lineWidth = Math.max(2, imgWidth / 200);
+                    ctx.filter = 'none'; ctx.strokeStyle = 'rgba(128,128,128,0.4)'; ctx.lineWidth = Math.max(2, canvas.width / 200);
                     ctx.beginPath(); 
-                    // 縦線2本
-                    ctx.moveTo(-imgWidth / 6, -imgHeight / 2); ctx.lineTo(-imgWidth / 6, imgHeight / 2);
-                    ctx.moveTo(imgWidth / 6, -imgHeight / 2); ctx.lineTo(imgWidth / 6, imgHeight / 2);
-                    // 横線2本（バグ修正）
-                    ctx.moveTo(-imgWidth / 2, -imgHeight / 6); ctx.lineTo(imgWidth / 2, -imgHeight / 6);
-                    ctx.moveTo(-imgWidth / 2, imgHeight / 6); ctx.lineTo(imgWidth / 2, imgHeight / 6);
+                    ctx.moveTo(-canvas.width/6, -canvas.height/2); ctx.lineTo(-canvas.width/6, canvas.height/2);
+                    ctx.moveTo(canvas.width/6, -canvas.height/2); ctx.lineTo(canvas.width/6, canvas.height/2); 
+                    ctx.moveTo(-canvas.width/2, -canvas.height/6); ctx.lineTo(canvas.width/2, -canvas.height/6);
+                    ctx.moveTo(-canvas.width/2, canvas.height/6); ctx.lineTo(canvas.width/2, canvas.height/6);
                     ctx.stroke();
                 }
             }
             ctx.restore();
-
             if (drawOverlay) {
-                const uiTop = imgHeight;
-                ctx.fillStyle = '#111111'; ctx.fillRect(0, uiTop, canvas.width, uiHeight);
-                ctx.strokeStyle = '#333333'; ctx.lineWidth = 1;
-                ctx.beginPath(); ctx.moveTo(0, uiTop); ctx.lineTo(canvas.width, uiTop); ctx.stroke();
-
-                // プログレスバー
-                const barHeight = 6; 
-                const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000; 
+                const barHeight = Math.max(4, canvas.height * 0.015); const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000; 
                 const remainMs = isRunning ? Math.max(0, expectedEndTime - Date.now()) : (remaining * 1000);
                 const progWidth = (remainMs / totalMs) * canvas.width;
                 
-                ctx.fillStyle = '#222222'; ctx.fillRect(0, uiTop, canvas.width, barHeight);
-                ctx.fillStyle = '#00d4ff'; ctx.fillRect(0, uiTop, progWidth, barHeight);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
+                ctx.fillStyle = '#00d4ff'; ctx.fillRect(0, canvas.height - barHeight, progWidth, barHeight);
 
-                const centerY = uiTop + barHeight + (uiHeight - barHeight) / 2;
+                const fontSize = Math.max(16, canvas.height * 0.04); ctx.font = "bold " + fontSize + "px sans-serif"; ctx.textBaseline = 'bottom'; ctx.textAlign = 'right';
                 let sec = Math.ceil(remainMs / 1000); let m = Math.floor(sec / 60); let s = sec % 60; const timeText = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
                 
-                // タイマーテキスト表示（左端）
-                ctx.font = "bold 24px sans-serif"; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-                ctx.fillStyle = hmActive ? '#ffb020' : '#00d4ff'; 
-                ctx.fillText(hmActive ? hmPhases[hmPhase].t + " " + timeText : timeText, 25, centerY);
-
-                // コントロール配置（中央寄せ）
-                const btnCenterX = canvas.width / 2;
-                ctx.textAlign = 'center';
-                
-                // 戻るインジケーター
-                ctx.font = "20px sans-serif"; ctx.fillStyle = '#888888';
-                ctx.fillText("◀◀", btnCenterX - 70, centerY);
-                
-                // 再生・一時停止状態表示
-                ctx.font = "bold 24px sans-serif"; ctx.fillStyle = isRunning ? '#00d4ff' : '#ffffff';
-                ctx.fillText(isRunning ? "▮▮" : "▶", btnCenterX, centerY);
-                
-                // 進むインジケーター
-                ctx.font = "20px sans-serif"; ctx.fillStyle = '#888888';
-                ctx.fillText("▶▶", btnCenterX + 70, centerY);
+                ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 4; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1; ctx.fillStyle = '#00d4ff'; 
+                ctx.fillText(timeText, canvas.width - 10, canvas.height - barHeight - 5); ctx.shadowColor = "transparent"; 
             }
         }
 
         function updatePiP() {
             if (!isPiP || !ui.img.complete || ui.img.naturalWidth === 0) return;
-            const ratio = ui.img.naturalWidth / ui.img.naturalHeight; 
-            const baseWidth = 800; 
-            const uiHeight = 90; 
-            pipCanvas.width = baseWidth; 
-            pipCanvas.height = (baseWidth / ratio) + uiHeight;
+            const ratio = ui.img.naturalWidth / ui.img.naturalHeight; const baseWidth = Math.max(ui.img.naturalWidth, 800);
+            pipCanvas.width = baseWidth; pipCanvas.height = baseWidth / ratio;
             drawToCanvas(pipCanvas, pipCtx, true);
         }
 
