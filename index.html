@@ -215,7 +215,6 @@
 
         let isEyeHideEnabled = false, eyeHideTimeout = null;
         let showFavsOnly = false; 
-        let skipLoopCount = 0; // 無限スキップ防止用カウンタ
 
         let skipList = JSON.parse(localStorage.getItem('croquis_skips') || '[]');
         let pipVideo, pipCanvas, pipCtx, isPiP = false, pipInitialized = false;
@@ -272,14 +271,10 @@
         function handleFiles(e) {
             const files = Array.from(e.target.files).filter(function(f) { return f.type.startsWith('image/'); });
             if(files.length > 0) { 
-                if (currentImageUrl && currentImageUrl.startsWith('blob:')) { URL.revokeObjectURL(currentImageUrl); }
-                historyUrls.forEach(function(url) { URL.revokeObjectURL(url); });
-                historyUrls = [];
-                
                 sourceImages = files; if(settings.shuffle) shuffleArray(sourceImages); 
                 images = sourceImages; isFavMode = false; showFavsOnly = false;
                 document.getElementById('history-filter-btn').innerText = '全て (履歴)';
-                currentIndex = 0; historyList = []; historyPos = -1; skipLoopCount = 0; nextImage(); 
+                currentIndex = 0; historyList = []; historyPos = -1; nextImage(); 
             }
             e.target.value = ''; 
         }
@@ -293,20 +288,13 @@
             const item = images[currentIndex];
             if(!item) return;
 
-            if(!isFavMode && skipList.includes(item.name)) { 
-                skipLoopCount++;
-                if (skipLoopCount > images.length) {
-                    alert("すべての画像がスキップ対象になっています。設定をリセットするか、新しい画像を読み込んでください。");
-                    stopTimer(); return;
-                }
-                setTimeout(function(){ nextImage(true); }, 10); return; 
-            }
-            skipLoopCount = 0;
+            if(!isFavMode && skipList.includes(item.name)) { setTimeout(function(){ nextImage(true); }, 10); return; }
 
             isImageHidden = false;
             const isFav = isFavMode ? true : dbFavImages.some(function(f){ return f.name === item.name; });
             ui.favIcon.style.display = isFav ? 'block' : 'none';
 
+            // メモリリーク対策（厳格なrevoke）
             if (currentImageUrl && currentImageUrl.startsWith('blob:')) { URL.revokeObjectURL(currentImageUrl); } 
             
             if (item.data) { currentImageUrl = item.data; ui.img.src = currentImageUrl; } 
@@ -491,6 +479,7 @@
                 updateTimerText(remaining);
                 const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
                 ui.prog.style.width = ((remainMs / totalMs) * 100) + '%';
+                // 軽量化：PiP更新を約15fps (66ms) に制限
                 if (isPiP && (now - lastPipUpdateTime > 66)) { updatePiP(); lastPipUpdateTime = now; }
                 animationFrameId = requestAnimationFrame(updateSmoothTimer);
             }
@@ -598,7 +587,7 @@
         }
 
         let pointerStartX = 0; let lastTapTime = 0; const imgContainer = document.getElementById('image-container');
-        imgContainer.addEventListener('pointerdown', function(e) { pointerStartX = e.clientX; }, { passive: true });
+        imgContainer.addEventListener('pointerdown', function(e) { pointerStartX = e.clientX; });
         imgContainer.addEventListener('pointerup', function(e) {
             const pointerEndX = e.clientX; const diffX = pointerStartX - pointerEndX; const threshold = 50;
             if (Math.abs(diffX) > threshold) { if (diffX > 0) { nextImage(); } else { prevImage(); } lastTapTime = 0; } 
