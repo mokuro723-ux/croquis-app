@@ -211,17 +211,23 @@
         let hmActive = false, hmPhase = 0;
         const hmPhases = { 1: {t: "①暗記", s: 120, h: false}, 2: {t: "②記憶描写", s: 300, h: true}, 3: {t: "③模写", s: 900, h: false}, 4: {t: "④実践", s: 900, h: true} };
         let currentImageUrl = null, resizeTimer;
-        let animationFrameId; let lastPipUpdateTime = 0; // 軽量化用タイマー
+        let animationFrameId; let lastPipUpdateTime = 0; 
 
         let isEyeHideEnabled = false, eyeHideTimeout = null;
         let showFavsOnly = false; 
 
         let skipList = JSON.parse(localStorage.getItem('croquis_skips') || '[]');
+        
         let pipVideo, pipCanvas, pipCtx, isPiP = false, pipInitialized = false;
+        let documentPipWindow = null; // Document PiP用の変数
+
         let db; const dbName = "CroquisAppDB", storeName = "favorites";
 
+        // SVGアイコンの定義
         const iconPlaySVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M8 5v14l11-7z"/></svg>`;
         const iconPauseSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+        const iconPrevSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>`;
+        const iconNextSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>`;
         const iconVolSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`;
         const iconMuteSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>`;
 
@@ -257,7 +263,7 @@
 
         function checkDevice() {
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-            if (isIOS && ui.pipBtn) ui.pipBtn.style.display = 'none';
+            if (isIOS && !('pictureInPictureEnabled' in document)) { ui.pipBtn.style.display = 'none'; }
         }
 
         window.onload = async function() {
@@ -294,7 +300,6 @@
             const isFav = isFavMode ? true : dbFavImages.some(function(f){ return f.name === item.name; });
             ui.favIcon.style.display = isFav ? 'block' : 'none';
 
-            // メモリリーク対策（厳格なrevoke）
             if (currentImageUrl && currentImageUrl.startsWith('blob:')) { URL.revokeObjectURL(currentImageUrl); } 
             
             if (item.data) { currentImageUrl = item.data; ui.img.src = currentImageUrl; } 
@@ -461,12 +466,14 @@
         function startTimer() { 
             isRunning = true; ui.playBtn.innerHTML = iconPauseSVG; ui.playBtn.classList.remove("accent"); 
             expectedEndTime = Date.now() + (remaining * 1000); cancelAnimationFrame(animationFrameId); updateSmoothTimer(); updateMediaSession();
-            if(isPiP && pipVideo && pipVideo.paused) pipVideo.play().catch(function(){}); 
+            if(isPiP) {
+                if (pipVideo && pipVideo.paused) pipVideo.play().catch(function(){}); 
+                updatePiP(); // Doc PiPのボタンUI同期
+            }
             if (!isMuted && ui.sound) { ui.sound.volume = 0; ui.sound.play().then(() => { ui.sound.pause(); ui.sound.currentTime = 0; ui.sound.volume = 1; }).catch(()=>{}); }
         }
         function stopTimer() { 
             isRunning = false; ui.playBtn.innerHTML = iconPlaySVG; ui.playBtn.classList.add("accent"); cancelAnimationFrame(animationFrameId); updateMediaSession();
-            // PiP一時停止時のフリーズを回避するため pipVideo.pause() を実行せずストリームを維持
             if (isPiP) updatePiP(); 
         }
         
@@ -480,7 +487,6 @@
                 updateTimerText(remaining);
                 const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
                 ui.prog.style.width = ((remainMs / totalMs) * 100) + '%';
-                // 軽量化：PiP更新を約15fps (66ms間隔) に制限
                 if (isPiP && (now - lastPipUpdateTime > 66)) { updatePiP(); lastPipUpdateTime = now; }
                 animationFrameId = requestAnimationFrame(updateSmoothTimer);
             }
@@ -495,12 +501,19 @@
         
         function updateTimerText(sec) { 
             let m = Math.floor(sec / 60); let s = sec % 60; ui.timer.innerText = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
-            if(isRunning && isPiP && sec % 2 === 0) updateMediaSession();
+            if(isRunning && isPiP && !documentPipWindow && sec % 2 === 0) updateMediaSession();
         }
         
         function toggleMute() { isMuted = !isMuted; ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG; }
         function playSound() { if(!isMuted && ui.sound) { ui.sound.currentTime = 0; ui.sound.play().catch(function(){}); } }
-        function cycleBg() { const colors = ['#1e1e1e', '#000', '#fff']; bgMode = (bgMode + 1) % 3; document.documentElement.style.setProperty('--bg-color', colors[bgMode]); if(isPiP) updatePiP(); }
+        function cycleBg() { 
+            const colors = ['#1e1e1e', '#000', '#fff']; bgMode = (bgMode + 1) % 3; 
+            document.documentElement.style.setProperty('--bg-color', colors[bgMode]); 
+            if(isPiP) {
+                if(documentPipWindow) { documentPipWindow.document.body.style.backgroundColor = colors[bgMode]; }
+                updatePiP();
+            }
+        }
         
         function toggleHardMode() { hmActive ? exitHardMode() : startHardMode(); }
         function startHardMode() { if(images.length === 0) return; hmActive = true; ui.hmBtn.classList.add("active"); setHmPhase(1); startTimer(); }
@@ -530,7 +543,7 @@
                 document.body.appendChild(pipVideo); pipCanvas = document.createElement('canvas'); pipCtx = pipCanvas.getContext('2d', { alpha: false });
                 
                 pipVideo.addEventListener('play', function() { if (!isRunning) startTimer(); }); pipVideo.addEventListener('pause', function() { if (isRunning) stopTimer(); });
-                pipVideo.addEventListener('leavepictureinpicture', function() { isPiP = false; ui.pipBtn.classList.remove('pip-active'); });
+                pipVideo.addEventListener('leavepictureinpicture', function() { if(!documentPipWindow) { isPiP = false; ui.pipBtn.classList.remove('pip-active'); } });
                 pipVideo.addEventListener('enterpictureinpicture', function() { isPiP = true; ui.pipBtn.classList.add('pip-active'); updatePiP(); });
                 pipInitialized = true; return true;
             } catch(e) { return false; }
@@ -538,6 +551,52 @@
 
         async function togglePiP() {
             if (images.length === 0) { alert("画像を読み込んでください"); return; }
+            
+            // 1. 新技術 Document Picture-in-Picture API によるクリック可能な完全なUI実装
+            if ('documentPictureInPicture' in window) {
+                if (documentPipWindow) { documentPipWindow.close(); return; }
+                try {
+                    const ratio = ui.img.naturalWidth / ui.img.naturalHeight;
+                    const pipWidth = Math.max(400, Math.min(800, window.innerWidth * 0.8));
+                    const pipHeight = (pipWidth / ratio) + 60; // 60px分のコントロール領域
+                    
+                    documentPipWindow = await documentPictureInPicture.requestWindow({ width: Math.round(pipWidth), height: Math.round(pipHeight) });
+                    
+                    const pipDoc = documentPipWindow.document;
+                    const currentBg = bgMode === 0 ? '#1e1e1e' : (bgMode === 1 ? '#000' : '#fff');
+                    
+                    pipDoc.body.innerHTML = `
+                        <style>
+                            body { margin:0; background-color:${currentBg}; display:flex; flex-direction:column; height:100vh; overflow:hidden; color:#fff; font-family:sans-serif; user-select:none; }
+                            #canvas-container { flex:1; display:flex; justify-content:center; align-items:center; position:relative; overflow:hidden; background-color: transparent; }
+                            canvas { max-width:100%; max-height:100%; object-fit:contain; }
+                            #controls { height:60px; background-color:#111; display:flex; justify-content:center; align-items:center; gap:25px; border-top:1px solid #333; }
+                            button { background-color:#222; border:none; color:#ddd; cursor:pointer; display:flex; justify-content:center; align-items:center; width:44px; height:44px; border-radius:50%; transition:background 0.2s; outline:none; }
+                            button:hover { background-color:#444; }
+                            button:active { transform: scale(0.95); }
+                            svg { width:24px; height:24px; fill:currentColor; pointer-events:none; }
+                            #pip-play-btn.paused { color: #00d4ff; border: 1px solid #00d4ff; background-color: #1a1a1a; }
+                        </style>
+                        <div id="canvas-container"><canvas></canvas></div>
+                        <div id="controls">
+                            <button id="pip-prev-btn" title="戻る">${iconPrevSVG}</button>
+                            <button id="pip-play-btn" class="${isRunning ? '' : 'paused'}" title="再生/一時停止">${isRunning ? iconPauseSVG : iconPlaySVG}</button>
+                            <button id="pip-next-btn" title="次へ">${iconNextSVG}</button>
+                        </div>
+                    `;
+                    
+                    pipDoc.getElementById('pip-prev-btn').onclick = () => prevImage();
+                    pipDoc.getElementById('pip-play-btn').onclick = () => toggleTimer();
+                    pipDoc.getElementById('pip-next-btn').onclick = () => nextImage();
+                    
+                    documentPipWindow.addEventListener('pagehide', () => { documentPipWindow = null; isPiP = false; ui.pipBtn.classList.remove('pip-active'); });
+                    
+                    isPiP = true; ui.pipBtn.classList.add('pip-active'); updatePiP();
+                    return;
+                } catch(e) { console.warn("Document PiP failed. Falling back to Video PiP", e); }
+            }
+
+            // 2. 非対応ブラウザ（iOS/Safariなど）へのVideo PiPフォールバック
             if (!initPiP() || typeof pipCanvas.captureStream !== 'function') { alert("お使いの環境はPiP機能に対応していません。"); return; }
             if (document.pictureInPictureElement) { await document.exitPictureInPicture().catch(function(){}); } 
             else {
@@ -586,9 +645,27 @@
 
         function updatePiP() {
             if (!isPiP || !ui.img.complete || ui.img.naturalWidth === 0) return;
-            const ratio = ui.img.naturalWidth / ui.img.naturalHeight; const baseWidth = Math.max(ui.img.naturalWidth, 2560);
-            pipCanvas.width = baseWidth; pipCanvas.height = baseWidth / ratio;
-            drawToCanvas(pipCanvas, pipCtx, true);
+            
+            if (documentPipWindow) {
+                const canvas = documentPipWindow.document.querySelector('canvas');
+                if (canvas) {
+                    const ratio = ui.img.naturalWidth / ui.img.naturalHeight;
+                    const baseWidth = Math.max(ui.img.naturalWidth, 1200);
+                    canvas.width = baseWidth; canvas.height = baseWidth / ratio;
+                    const ctx = canvas.getContext('2d');
+                    drawToCanvas(canvas, ctx, true); 
+                }
+                const playBtn = documentPipWindow.document.getElementById('pip-play-btn');
+                if (playBtn) {
+                    playBtn.innerHTML = isRunning ? iconPauseSVG : iconPlaySVG;
+                    if(isRunning) { playBtn.classList.remove('paused'); } 
+                    else { playBtn.classList.add('paused'); }
+                }
+            } else if (pipInitialized && pipVideo) {
+                const ratio = ui.img.naturalWidth / ui.img.naturalHeight; const baseWidth = Math.max(ui.img.naturalWidth, 2560);
+                pipCanvas.width = baseWidth; pipCanvas.height = baseWidth / ratio;
+                drawToCanvas(pipCanvas, pipCtx, true);
+            }
         }
 
         let pointerStartX = 0; let lastTapTime = 0; const imgContainer = document.getElementById('image-container');
