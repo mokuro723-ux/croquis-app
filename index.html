@@ -466,7 +466,8 @@
         }
         function stopTimer() { 
             isRunning = false; ui.playBtn.innerHTML = iconPlaySVG; ui.playBtn.classList.add("accent"); cancelAnimationFrame(animationFrameId); updateMediaSession();
-            if(isPiP && pipVideo && !pipVideo.paused) pipVideo.pause(); 
+            // PiP一時停止時のフリーズを回避するため pipVideo.pause() を実行せずストリームを維持
+            if (isPiP) updatePiP(); 
         }
         
         function updateSmoothTimer() {
@@ -479,7 +480,7 @@
                 updateTimerText(remaining);
                 const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
                 ui.prog.style.width = ((remainMs / totalMs) * 100) + '%';
-                // 軽量化：PiP更新を約15fps (66ms) に制限
+                // 軽量化：PiP更新を約15fps (66ms間隔) に制限
                 if (isPiP && (now - lastPipUpdateTime > 66)) { updatePiP(); lastPipUpdateTime = now; }
                 animationFrameId = requestAnimationFrame(updateSmoothTimer);
             }
@@ -488,12 +489,13 @@
         function resetTimer() { 
             cancelAnimationFrame(animationFrameId); remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
             if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); animationFrameId = requestAnimationFrame(updateSmoothTimer); } 
-            else { updateTimerText(remaining); ui.prog.style.width = '100%'; }
+            else { updateTimerText(remaining); ui.prog.style.width = '100%'; if (isPiP) updatePiP(); }
         }
         function setTimer(sec) { exitHardMode(); timerSeconds = sec; const select = document.getElementById('time-select'); if (select) select.value = sec; resetTimer(); }
         
         function updateTimerText(sec) { 
             let m = Math.floor(sec / 60); let s = sec % 60; ui.timer.innerText = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
+            if(isRunning && isPiP && sec % 2 === 0) updateMediaSession();
         }
         
         function toggleMute() { isMuted = !isMuted; ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG; }
@@ -515,14 +517,7 @@
         function updateMediaSession() {
             if ('mediaSession' in navigator && images.length > 0) {
                 const item = images[currentIndex];
-                const currentTitle = item ? item.name : 'Croquis App';
-                if (!navigator.mediaSession.metadata || navigator.mediaSession.metadata.title !== currentTitle) {
-                    navigator.mediaSession.metadata = new MediaMetadata({ 
-                        title: currentTitle, 
-                        artist: 'Croquis Timer', 
-                        album: isFavMode ? '★ お気に入り' : '通常再生' 
-                    });
-                }
+                navigator.mediaSession.metadata = new MediaMetadata({ title: item ? item.name : 'Croquis App', artist: '残り: ' + ui.timer.innerText, album: isFavMode ? '★ お気に入り' : '通常再生' });
                 navigator.mediaSession.playbackState = isRunning ? "playing" : "paused";
             }
         }
@@ -566,7 +561,7 @@
                     ctx.filter = 'none'; ctx.strokeStyle = 'rgba(128,128,128,0.4)'; ctx.lineWidth = Math.max(2, canvas.width / 200);
                     ctx.beginPath(); 
                     ctx.moveTo(-canvas.width/6, -canvas.height/2); ctx.lineTo(-canvas.width/6, canvas.height/2);
-                    ctx.moveTo(canvas.width/6, -canvas.height/2); ctx.lineTo(canvas.width/6, canvas.height/2); 
+                    ctx.moveTo(canvas.width/6, -canvas.height/2); ctx.lineTo(canvas.width/6, canvas.height/2);
                     ctx.moveTo(-canvas.width/2, -canvas.height/6); ctx.lineTo(canvas.width/2, -canvas.height/6);
                     ctx.moveTo(-canvas.width/2, canvas.height/6); ctx.lineTo(canvas.width/2, canvas.height/6);
                     ctx.stroke();
@@ -591,7 +586,7 @@
 
         function updatePiP() {
             if (!isPiP || !ui.img.complete || ui.img.naturalWidth === 0) return;
-            const ratio = ui.img.naturalWidth / ui.img.naturalHeight; const baseWidth = Math.max(ui.img.naturalWidth, 800);
+            const ratio = ui.img.naturalWidth / ui.img.naturalHeight; const baseWidth = Math.max(ui.img.naturalWidth, 2560);
             pipCanvas.width = baseWidth; pipCanvas.height = baseWidth / ratio;
             drawToCanvas(pipCanvas, pipCtx, true);
         }
