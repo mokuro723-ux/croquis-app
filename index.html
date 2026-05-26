@@ -90,7 +90,7 @@
         .svg-icon { width: 20px; height: 20px; fill: currentColor; pointer-events: none; }
         
         select { outline: none; text-align: center; font-weight: bold; appearance: none; -webkit-appearance: none; padding: 8px 16px; background-color: var(--btn-bg); color: #ddd; border: none; border-radius: 4px; cursor: pointer; }
-        .text-btn font-size: 0.8rem; padding: 6px 10px; min-width: auto; font-weight: bold; }
+        .text-btn { font-size: 0.8rem; padding: 6px 10px; min-width: auto; font-weight: bold; }
 
         #manage-popup {
             position: absolute; bottom: calc(60px + env(safe-area-inset-bottom, 0px)); left: 10px; background-color: rgba(30, 30, 30, 0.95);
@@ -220,6 +220,17 @@
         let pipVideo, pipCanvas, pipCtx, isPiP = false, pipInitialized = false;
         let db; const dbName = "CroquisAppDB", storeName = "favorites";
 
+        // --- 安定化・軽量化のためのBlob URLキャッシュ機構 ---
+        let blobCache = new Map();
+        function getBlobUrl(item) {
+            if (!item) return null;
+            if (item.data) return item.data;
+            if (blobCache.has(item.name)) return blobCache.get(item.name);
+            const url = URL.createObjectURL(item);
+            blobCache.set(item.name, url);
+            return url;
+        }
+
         const iconPlaySVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M8 5v14l11-7z"/></svg>`;
         const iconPauseSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
         const iconVolSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`;
@@ -271,6 +282,8 @@
         function handleFiles(e) {
             const files = Array.from(e.target.files).filter(function(f) { return f.type.startsWith('image/'); });
             if(files.length > 0) { 
+                blobCache.forEach(function(url) { URL.revokeObjectURL(url); });
+                blobCache.clear();
                 sourceImages = files; if(settings.shuffle) shuffleArray(sourceImages); 
                 images = sourceImages; isFavMode = false; showFavsOnly = false;
                 document.getElementById('history-filter-btn').innerText = '全て (履歴)';
@@ -294,15 +307,14 @@
             const isFav = isFavMode ? true : dbFavImages.some(function(f){ return f.name === item.name; });
             ui.favIcon.style.display = isFav ? 'block' : 'none';
 
-            if (currentImageUrl && currentImageUrl.startsWith('blob:')) { URL.revokeObjectURL(currentImageUrl); } 
-            
-            if (item.data) { currentImageUrl = item.data; ui.img.src = currentImageUrl; } 
-            else { currentImageUrl = URL.createObjectURL(item); ui.img.src = currentImageUrl; }
+            currentImageUrl = getBlobUrl(item);
+            ui.img.src = currentImageUrl;
             
             ui.img.style.display = 'block';
             ui.img.onload = function() {
                 applyFilters(); clearTimeout(eyeHideTimeout);
                 if (isEyeHideEnabled && !hmActive) { eyeHideTimeout = setTimeout(function() { isImageHidden = true; applyFilters(); }, 5000); }
+                if (isPiP) { requestAnimationFrame(updatePiP); }
             };
             ui.img.onerror = function() { nextImage(); };
             updateMediaSession();
@@ -344,6 +356,7 @@
             const item = images[currentIndex]; const fname = item.name;
             if (isFavMode) {
                 dbFavImages = dbFavImages.filter(function(f){ return f.name !== fname; });
+                images = dbFavImages;
                 deleteFavFromDB(fname); ui.managePopup.classList.remove('show');
                 if (dbFavImages.length === 0) {
                     alert("お気に入りが空になりました。通常モードに戻ります。");
@@ -399,11 +412,8 @@
             } else { currentIndex = settings.shuffle ? Math.floor(Math.random() * images.length) : (currentIndex + 1) % images.length; }
             
             loadImage(); remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
-            if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); animationFrameId = requestAnimationFrame(updateSmoothTimer); } 
-            else { 
-                updateTimerText(remaining); ui.prog.style.width = '100%'; 
-                if (isPiP) { cancelAnimationFrame(animationFrameId); animationFrameId = requestAnimationFrame(updateSmoothTimer); }
-            }
+            if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); cancelAnimationFrame(animationFrameId); animationFrameId = requestAnimationFrame(updateSmoothTimer); } 
+            else { updateTimerText(remaining); ui.prog.style.width = '100%'; }
             if(!isSkipping) { playSound(); }
             if(document.getElementById('history-panel').classList.contains('open')) renderHistoryThumbs();
         }
@@ -425,7 +435,7 @@
             renderHistoryThumbs();
         }
 
-        function clearHistoryThumbs() { document.getElementById('history-content').innerHTML = ''; historyUrls.forEach(function(url) { URL.revokeObjectURL(url); }); historyUrls = []; }
+        function clearHistoryThumbs() { document.getElementById('history-content').innerHTML = ''; historyUrls = []; }
 
         function renderHistoryThumbs() {
             const content = document.getElementById('history-content'); clearHistoryThumbs();
@@ -447,7 +457,10 @@
                     const imgIndex = historyList[i]; const item = currentPool[imgIndex]; if(!item) continue; matchCount++;
                     const thumbDiv = document.createElement('div'); thumbDiv.style.position = 'relative';
                     const imgEl = document.createElement('img');
-                    if (item.data) { imgEl.src = item.data; } else { const url = URL.createObjectURL(item); historyUrls.push(url); imgEl.src = url; }
+                    
+                    const url = getBlobUrl(item);
+                    imgEl.src = url;
+                    
                     imgEl.className = 'history-thumb' + (i === historyPos ? ' current' : '');
                     imgEl.onclick = (function(idx) { return function() { historyPos = idx; currentIndex = historyList[historyPos]; if (hmActive) exitHardMode(); loadImage(); resetTimer(); if(window.innerWidth <= 440) toggleHistoryPanel(); renderHistoryThumbs(); }; })(i);
                     thumbDiv.appendChild(imgEl);
@@ -460,52 +473,42 @@
         }
 
         function toggleTimer() { if(images.length > 0) isRunning ? stopTimer() : startTimer(); }
+        
         function startTimer() { 
+            if (isRunning) return;
             isRunning = true; ui.playBtn.innerHTML = iconPauseSVG; ui.playBtn.classList.remove("accent"); 
-            expectedEndTime = Date.now() + (remaining * 1000); cancelAnimationFrame(animationFrameId); updateSmoothTimer(); updateMediaSession();
+            expectedEndTime = Date.now() + (remaining * 1000); 
+            cancelAnimationFrame(animationFrameId); 
+            animationFrameId = requestAnimationFrame(updateSmoothTimer); 
+            updateMediaSession();
             if(isPiP && pipVideo && pipVideo.paused) pipVideo.play().catch(function(){}); 
             if (!isMuted && ui.sound) { ui.sound.volume = 0; ui.sound.play().then(() => { ui.sound.pause(); ui.sound.currentTime = 0; ui.sound.volume = 1; }).catch(()=>{}); }
         }
+        
         function stopTimer() { 
-            isRunning = false; ui.playBtn.innerHTML = iconPlaySVG; ui.playBtn.classList.add("accent"); updateMediaSession();
+            isRunning = false; ui.playBtn.innerHTML = iconPlaySVG; ui.playBtn.classList.add("accent"); cancelAnimationFrame(animationFrameId); updateMediaSession();
             if(isPiP && pipVideo && !pipVideo.paused) pipVideo.pause(); 
-            if (isPiP) { cancelAnimationFrame(animationFrameId); animationFrameId = requestAnimationFrame(updateSmoothTimer); } 
-            else { cancelAnimationFrame(animationFrameId); }
         }
         
         function updateSmoothTimer() {
-            if(!isRunning && !isPiP) return;
-            const now = Date.now(); let remainMs;
-            if (isRunning) {
-                remainMs = expectedEndTime - now; remaining = Math.ceil(remainMs / 1000);
-            } else {
-                remainMs = remaining * 1000;
-            }
-            
-            if(isRunning && remainMs <= 0) { 
+            if(!isRunning) return;
+            const now = Date.now(); const remainMs = expectedEndTime - now; remaining = Math.ceil(remainMs / 1000);
+            if(remainMs <= 0) { 
                 remaining = 0; updateTimerText(0); ui.prog.style.width = '0%'; cancelAnimationFrame(animationFrameId);
                 hmActive ? hmNextPhase() : nextImage(); 
             } else { 
-                if (isRunning) {
-                    updateTimerText(remaining);
-                    const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
-                    ui.prog.style.width = ((remainMs / totalMs) * 100) + '%';
-                }
-                if (isPiP) {
-                    const limit = isRunning ? 66 : 200; // 一時停止中は200ms(5fps)に落として軽量化しつつストリームを維持
-                    if (now - lastPipUpdateTime > limit) { updatePiP(); lastPipUpdateTime = now; }
-                }
+                updateTimerText(remaining);
+                const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
+                ui.prog.style.width = ((remainMs / totalMs) * 100) + '%';
+                if (isPiP && (now - lastPipUpdateTime > 66)) { updatePiP(); lastPipUpdateTime = now; }
                 animationFrameId = requestAnimationFrame(updateSmoothTimer);
             }
         }
         
         function resetTimer() { 
             cancelAnimationFrame(animationFrameId); remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
-            if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); animationFrameId = requestAnimationFrame(updateSmoothTimer); } 
-            else { 
-                updateTimerText(remaining); ui.prog.style.width = '100%'; 
-                if (isPiP) { cancelAnimationFrame(animationFrameId); animationFrameId = requestAnimationFrame(updateSmoothTimer); }
-            }
+            if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); cancelAnimationFrame(animationFrameId); animationFrameId = requestAnimationFrame(updateSmoothTimer); } 
+            else { updateTimerText(remaining); ui.prog.style.width = '100%'; }
         }
         function setTimer(sec) { exitHardMode(); timerSeconds = sec; const select = document.getElementById('time-select'); if (select) select.value = sec; resetTimer(); }
         
@@ -545,8 +548,11 @@
                 pipVideo.style.position = 'fixed'; pipVideo.style.left = '-9999px'; pipVideo.style.opacity = '0'; pipVideo.style.pointerEvents = 'none';
                 document.body.appendChild(pipVideo); pipCanvas = document.createElement('canvas'); pipCtx = pipCanvas.getContext('2d', { alpha: false });
                 
-                pipVideo.addEventListener('play', function() { if (!isRunning) startTimer(); }); pipVideo.addEventListener('pause', function() { if (isRunning) stopTimer(); });
-                pipVideo.addEventListener('leavepictureinpicture', function() { isPiP = false; ui.pipBtn.classList.remove('pip-active'); if(!isRunning) cancelAnimationFrame(animationFrameId); });
+                pipVideo.addEventListener('play', function() { if (!isRunning) startTimer(); }); 
+                pipVideo.addEventListener('pause', function() { 
+                    // 一時停止してもPiPが閉じないよう、video要素の同期処理のみ行う（start/stopTimerとの競合バグを排除）
+                });
+                pipVideo.addEventListener('leavepictureinpicture', function() { isPiP = false; ui.pipBtn.classList.remove('pip-active'); });
                 pipVideo.addEventListener('enterpictureinpicture', function() { isPiP = true; ui.pipBtn.classList.add('pip-active'); updatePiP(); });
                 pipInitialized = true; return true;
             } catch(e) { return false; }
@@ -560,9 +566,8 @@
                 try {
                     if (!pipVideo.srcObject) { pipVideo.srcObject = pipCanvas.captureStream(30); }
                     isPiP = true; updatePiP(); 
-                    if(isRunning) { await pipVideo.play().catch(function(){}); } else { pipVideo.pause(); }
+                    if(isRunning) { await pipVideo.play(); } else { await pipVideo.play(); pipVideo.pause(); }
                     await pipVideo.requestPictureInPicture(); updateMediaSession();
-                    if (!isRunning) { cancelAnimationFrame(animationFrameId); animationFrameId = requestAnimationFrame(updateSmoothTimer); }
                 } catch (error) { isPiP = false; }
             }
         }
@@ -599,8 +604,9 @@
 
         function updatePiP() {
             if (!isPiP || !ui.img.complete || ui.img.naturalWidth === 0) return;
+            // 拡大制限の撤廃：キャンバスに完全な等倍比率（無駄なUI余白なし）で描画。固定幅800制限を外し元の最大解像度を維持。
             const ratio = ui.img.naturalWidth / ui.img.naturalHeight; 
-            const baseWidth = Math.max(ui.img.naturalWidth, 2560); // ベース解像度を2560pxへ拡張し、拡大上限を大幅に引き上げ
+            const baseWidth = Math.max(ui.img.naturalWidth, window.screen.width * 2);
             pipCanvas.width = baseWidth; pipCanvas.height = baseWidth / ratio;
             drawToCanvas(pipCanvas, pipCtx, true);
         }
