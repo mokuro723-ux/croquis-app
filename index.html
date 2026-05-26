@@ -466,7 +466,7 @@
         }
         function stopTimer() { 
             isRunning = false; ui.playBtn.innerHTML = iconPlaySVG; ui.playBtn.classList.add("accent"); cancelAnimationFrame(animationFrameId); updateMediaSession();
-            if(isPiP && pipVideo && !pipVideo.paused) pipVideo.pause(); 
+            if (isPiP) updatePiP();
         }
         
         function updateSmoothTimer() {
@@ -488,7 +488,7 @@
         function resetTimer() { 
             cancelAnimationFrame(animationFrameId); remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
             if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); animationFrameId = requestAnimationFrame(updateSmoothTimer); } 
-            else { updateTimerText(remaining); ui.prog.style.width = '100%'; }
+            else { updateTimerText(remaining); ui.prog.style.width = '100%'; if (isPiP) updatePiP(); }
         }
         function setTimer(sec) { exitHardMode(); timerSeconds = sec; const select = document.getElementById('time-select'); if (select) select.value = sec; resetTimer(); }
         
@@ -581,7 +581,7 @@
 
         function updatePiP() {
             if (!isPiP || !ui.img.complete || ui.img.naturalWidth === 0) return;
-            const ratio = ui.img.naturalWidth / ui.img.naturalHeight; const baseWidth = Math.max(ui.img.naturalWidth, 800);
+            const ratio = ui.img.naturalWidth / ui.img.naturalHeight; const baseWidth = Math.max(ui.img.naturalWidth, 2560);
             pipCanvas.width = baseWidth; pipCanvas.height = baseWidth / ratio;
             drawToCanvas(pipCanvas, pipCtx, true);
         }
