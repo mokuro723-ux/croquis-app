@@ -1,7 +1,9 @@
 {
+  "id": "/",
   "name": "Croquis Timer",
   "short_name": "Croquis",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#1e1e1e",
   "theme_color": "#1e1e1e",

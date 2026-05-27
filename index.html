@@ -211,6 +211,7 @@
         let hmActive = false, hmPhase = 0;
         const hmPhases = { 1: {t: "①暗記", s: 120, h: false}, 2: {t: "②記憶描写", s: 300, h: true}, 3: {t: "③模写", s: 900, h: false}, 4: {t: "④実践", s: 900, h: true} };
         let currentImageUrl = null, resizeTimer;
+        let imageLoadToken = 0;
         let animationFrameId; let lastPipUpdateTime = 0; 
 
         let isEyeHideEnabled = false, eyeHideTimeout = null;
@@ -268,7 +269,20 @@
 
         window.onload = async function() {
             checkDevice(); await initDB(); dbFavImages = await getAllFavsFromDB(); initMediaSession();
+            document.addEventListener('visibilitychange', handleVisibilityChange);
         };
+
+        function handleVisibilityChange() {
+            if (document.hidden) {
+                cancelAnimationFrame(animationFrameId);
+            } else {
+                if (isRunning) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = requestAnimationFrame(updateSmoothTimer);
+                }
+                if (isPiP) updatePiP();
+            }
+        }
 
         function toggleBottomPanel() { document.getElementById('bottom-panel').classList.toggle('hidden'); }
         function toggleManagePopup() { ui.managePopup.classList.toggle('show'); }
@@ -293,6 +307,7 @@
             if(images.length === 0) { ui.img.style.display = 'none'; ui.favIcon.style.display = 'none'; return; }
             const item = images[currentIndex];
             if(!item) return;
+            const loadToken = ++imageLoadToken;
 
             if(!isFavMode && skipList.includes(item.name)) { setTimeout(function(){ nextImage(true); }, 10); return; }
 
@@ -302,15 +317,21 @@
 
             if (currentImageUrl && currentImageUrl.startsWith('blob:')) { URL.revokeObjectURL(currentImageUrl); } 
             
-            if (item.data) { currentImageUrl = item.data; ui.img.src = currentImageUrl; } 
-            else { currentImageUrl = URL.createObjectURL(item); ui.img.src = currentImageUrl; }
-            
-            ui.img.style.display = 'block';
             ui.img.onload = function() {
+                if (loadToken !== imageLoadToken) return;
                 applyFilters(); clearTimeout(eyeHideTimeout);
                 if (isEyeHideEnabled && !hmActive) { eyeHideTimeout = setTimeout(function() { isImageHidden = true; applyFilters(); }, 5000); }
             };
-            ui.img.onerror = function() { nextImage(); };
+            ui.img.onerror = function() {
+                if (loadToken !== imageLoadToken) return;
+                nextImage();
+            };
+
+            if (item.data) { currentImageUrl = item.data; } 
+            else { currentImageUrl = URL.createObjectURL(item); }
+
+            ui.img.style.display = 'block';
+            ui.img.src = currentImageUrl;
             updateMediaSession();
         }
 
@@ -487,7 +508,7 @@
                 updateTimerText(remaining);
                 const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
                 ui.prog.style.width = ((remainMs / totalMs) * 100) + '%';
-                if (isPiP && (now - lastPipUpdateTime > 66)) { updatePiP(); lastPipUpdateTime = now; }
+                if (isPiP && !document.hidden && (now - lastPipUpdateTime > 66)) { updatePiP(); lastPipUpdateTime = now; }
                 animationFrameId = requestAnimationFrame(updateSmoothTimer);
             }
         }
