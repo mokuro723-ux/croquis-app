@@ -205,6 +205,7 @@
 
         let sourceImages = []; let dbFavImages = []; let images = [], currentIndex = 0; let isFavMode = false; 
         let historyList = [], historyPos = -1, historyUrls = [];
+        let lastShownIndex = -1;
         let timerSeconds = 30, remaining = 30, isRunning = false, expectedEndTime = 0;
         let settings = { flipH: false, flipV: false, shuffle: true, grid: false, mono: false };
         let isMuted = true, bgMode = 0, isImageHidden = false; 
@@ -213,16 +214,26 @@
         let currentImageUrl = null, resizeTimer;
         let imageLoadToken = 0;
         let animationFrameId; let lastPipUpdateTime = 0; 
+        let historyRenderToken = 0;
+        let preloadUrl = null, preloadName = '';
+        let preloadedImage = null;
+        let historyVirtualCleanup = null;
+        let filterFrameQueued = false;
 
         let isEyeHideEnabled = false, eyeHideTimeout = null;
         let showFavsOnly = false; 
 
         let skipList = JSON.parse(localStorage.getItem('croquis_skips') || '[]');
+        let skipNameSet = new Set(skipList);
+        const settingsKey = 'croquis_ui_settings_v1';
+        let favNameSet = new Set();
         
         let pipVideo, pipCanvas, pipCtx, isPiP = false, pipInitialized = false;
         let documentPipWindow = null; // Document PiP用の変数
+        let pipRenderStamp = '';
 
         let db; const dbName = "CroquisAppDB", storeName = "favorites";
+        let saveTimer = null;
 
         // SVGアイコンの定義
         const iconPlaySVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M8 5v14l11-7z"/></svg>`;
@@ -261,14 +272,73 @@
                 request.onerror = function() { resolve([]); };
             });
         }
+        function rebuildFavNameSet() { favNameSet = new Set(dbFavImages.map(function(f){ return f.name; })); }
+        function rebuildSkipNameSet() { skipNameSet = new Set(skipList); }
+        function hasUnskippedInCurrentPool() {
+            if (isFavMode) return true;
+            if (!images || images.length === 0) return false;
+            for (let i = 0; i < images.length; i++) {
+                const name = images[i] && images[i].name;
+                if (!name || !skipNameSet.has(name)) return true;
+            }
+            return false;
+        }
 
         function checkDevice() {
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
             if (isIOS) { ui.pipBtn.style.display = 'none'; }
         }
 
+        function saveUiSettings() {
+            if (saveTimer) clearTimeout(saveTimer);
+            saveTimer = setTimeout(function() {
+                const payload = {
+                    settings: settings,
+                    bgMode: bgMode,
+                    isMuted: isMuted,
+                    isEyeHideEnabled: isEyeHideEnabled
+                };
+                try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (_) {}
+                saveTimer = null;
+            }, 120);
+        }
+
+        function loadUiSettings() {
+            try {
+                const raw = localStorage.getItem(settingsKey);
+                if (!raw) return;
+                const saved = JSON.parse(raw);
+                if (saved && saved.settings) {
+                    settings.flipH = !!saved.settings.flipH;
+                    settings.flipV = !!saved.settings.flipV;
+                    settings.shuffle = saved.settings.shuffle !== false;
+                    settings.grid = !!saved.settings.grid;
+                    settings.mono = !!saved.settings.mono;
+                }
+                if (saved && typeof saved.bgMode === 'number') bgMode = Math.max(0, Math.min(2, saved.bgMode));
+                if (saved && typeof saved.isMuted === 'boolean') isMuted = saved.isMuted;
+                if (saved && typeof saved.isEyeHideEnabled === 'boolean') isEyeHideEnabled = saved.isEyeHideEnabled;
+            } catch (_) {}
+        }
+
+        function reflectUiSettings() {
+            ['shuffle', 'flipH', 'flipV', 'grid', 'mono'].forEach(function(k) {
+                const btn = document.getElementById(k + '-btn');
+                if (!btn) return;
+                if (settings[k]) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+            if (isEyeHideEnabled) ui.eyeBtn.classList.add('active');
+            else ui.eyeBtn.classList.remove('active');
+            ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG;
+            const colors = ['#1e1e1e', '#000', '#fff'];
+            document.documentElement.style.setProperty('--bg-color', colors[bgMode]);
+        }
+
         window.onload = async function() {
-            checkDevice(); await initDB(); dbFavImages = await getAllFavsFromDB(); initMediaSession();
+            loadUiSettings();
+            checkDevice(); await initDB(); dbFavImages = await getAllFavsFromDB(); rebuildFavNameSet(); initMediaSession();
+            reflectUiSettings();
             document.addEventListener('visibilitychange', handleVisibilityChange);
         };
 
@@ -277,6 +347,14 @@
                 cancelAnimationFrame(animationFrameId);
             } else {
                 if (isRunning) {
+                    const now = Date.now();
+                    if (expectedEndTime <= now) {
+                        remaining = 0;
+                        updateTimerText(0);
+                        ui.prog.style.width = '0%';
+                        hmActive ? hmNextPhase() : nextImage();
+                        return;
+                    }
                     cancelAnimationFrame(animationFrameId);
                     animationFrameId = requestAnimationFrame(updateSmoothTimer);
                 }
@@ -303,16 +381,47 @@
 
         function shuffleArray(arr) { for(let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const temp = arr[i]; arr[i] = arr[j]; arr[j] = temp; } }
 
+        function getNextIndexForPreload() {
+            if (!images.length) return -1;
+            if (settings.shuffle) return Math.floor(Math.random() * images.length);
+            return (currentIndex + 1) % images.length;
+        }
+
+        function clearPreloadUrl() {
+            if (preloadUrl && preloadUrl.startsWith('blob:')) URL.revokeObjectURL(preloadUrl);
+            preloadUrl = null;
+        }
+
+        function updatePreloadQueue() {
+            clearPreloadUrl();
+            preloadedImage = null; preloadName = '';
+            if (images.length === 0) return;
+            const nextIdx = getNextIndexForPreload();
+            if (nextIdx < 0 || !images[nextIdx]) return;
+            const nextItem = images[nextIdx];
+            preloadName = nextItem.name || '';
+            preloadUrl = nextItem.data ? nextItem.data : URL.createObjectURL(nextItem);
+            const img = new Image();
+            img.onload = function() { preloadedImage = img; };
+            img.onerror = function() { if (preloadedImage === img) preloadedImage = null; };
+            img.src = preloadUrl;
+        }
+
         function loadImage() {
             if(images.length === 0) { ui.img.style.display = 'none'; ui.favIcon.style.display = 'none'; return; }
             const item = images[currentIndex];
             if(!item) return;
             const loadToken = ++imageLoadToken;
 
-            if(!isFavMode && skipList.includes(item.name)) { setTimeout(function(){ nextImage(true); }, 10); return; }
+            if(!isFavMode && skipNameSet.has(item.name)) {
+                if (hasUnskippedInCurrentPool()) {
+                    setTimeout(function(){ nextImage(true); }, 10);
+                    return;
+                }
+            }
 
             isImageHidden = false;
-            const isFav = isFavMode ? true : dbFavImages.some(function(f){ return f.name === item.name; });
+            const isFav = isFavMode ? true : favNameSet.has(item.name);
             ui.favIcon.style.display = isFav ? 'block' : 'none';
 
             if (currentImageUrl && currentImageUrl.startsWith('blob:')) { URL.revokeObjectURL(currentImageUrl); } 
@@ -328,11 +437,13 @@
             };
 
             if (item.data) { currentImageUrl = item.data; } 
+            else if (preloadedImage && preloadName && preloadName === item.name && preloadUrl) { currentImageUrl = preloadUrl; preloadUrl = null; preloadedImage = null; preloadName = ''; }
             else { currentImageUrl = URL.createObjectURL(item); }
 
             ui.img.style.display = 'block';
             ui.img.src = currentImageUrl;
             updateMediaSession();
+            updatePreloadQueue();
         }
 
         function applyFilters() {
@@ -350,19 +461,29 @@
             
             if (isPiP) updatePiP();
         }
+        function applyFiltersDeferred() {
+            if (filterFrameQueued) return;
+            filterFrameQueued = true;
+            requestAnimationFrame(function() {
+                filterFrameQueued = false;
+                applyFilters();
+            });
+        }
 
-        window.addEventListener('resize', function() { clearTimeout(resizeTimer); resizeTimer = setTimeout(applyFilters, 100); });
+        window.addEventListener('resize', function() { clearTimeout(resizeTimer); resizeTimer = setTimeout(applyFiltersDeferred, 100); });
         
         function toggle(key) { 
             settings[key] = !settings[key]; const btn = document.getElementById(key + '-btn');
             if(btn) { if(settings[key]) { btn.classList.add("active"); } else { btn.classList.remove("active"); } }
             if(key === 'shuffle' && !isFavMode && sourceImages.length > 0) { shuffleArray(sourceImages); images = sourceImages; }
-            applyFilters(); 
+            saveUiSettings();
+            applyFiltersDeferred(); 
         }
 
         function toggleEyeHide() {
             isEyeHideEnabled = !isEyeHideEnabled;
-            if(isEyeHideEnabled) { ui.eyeBtn.classList.add("active"); } else { ui.eyeBtn.classList.remove("active"); clearTimeout(eyeHideTimeout); isImageHidden = false; applyFilters(); }
+            if(isEyeHideEnabled) { ui.eyeBtn.classList.add("active"); } else { ui.eyeBtn.classList.remove("active"); clearTimeout(eyeHideTimeout); isImageHidden = false; applyFiltersDeferred(); }
+            saveUiSettings();
             loadImage();
         }
 
@@ -371,6 +492,7 @@
             const item = images[currentIndex]; const fname = item.name;
             if (isFavMode) {
                 dbFavImages = dbFavImages.filter(function(f){ return f.name !== fname; });
+                rebuildFavNameSet();
                 deleteFavFromDB(fname); ui.managePopup.classList.remove('show');
                 if (dbFavImages.length === 0) {
                     alert("お気に入りが空になりました。通常モードに戻ります。");
@@ -381,11 +503,11 @@
                 renderHistoryThumbs();
             } else {
                 const foundIdx = dbFavImages.findIndex(function(f){ return f.name === fname; });
-                if(foundIdx > -1) { dbFavImages.splice(foundIdx, 1); deleteFavFromDB(fname); ui.favIcon.style.display = 'none'; } 
+                if(foundIdx > -1) { dbFavImages.splice(foundIdx, 1); rebuildFavNameSet(); deleteFavFromDB(fname); ui.favIcon.style.display = 'none'; } 
                 else {
                     const reader = new FileReader();
                     reader.onload = function(e) {
-                        const dataUrl = e.target.result; dbFavImages.push({ name: fname, data: dataUrl }); saveFavToDB(fname, dataUrl);
+                        const dataUrl = e.target.result; dbFavImages.push({ name: fname, data: dataUrl }); rebuildFavNameSet(); saveFavToDB(fname, dataUrl);
                         ui.favIcon.style.display = 'block';
                         if(document.getElementById('history-panel').classList.contains('open') && showFavsOnly) renderHistoryThumbs();
                     };
@@ -397,13 +519,19 @@
 
         function skipCurrent() {
             if(images.length === 0 || isFavMode) return; const fname = images[currentIndex].name;
-            if(!skipList.includes(fname)) { skipList.push(fname); localStorage.setItem('croquis_skips', JSON.stringify(skipList)); }
+            if(!skipNameSet.has(fname)) {
+                skipList.push(fname);
+                rebuildSkipNameSet();
+                localStorage.setItem('croquis_skips', JSON.stringify(skipList));
+            }
             ui.managePopup.classList.remove('show'); nextImage();
         }
 
         function clearManageData() {
             if(!confirm("お気に入り画像データ、スキップ設定をすべて削除して初期化しますか？")) return;
             skipList = []; dbFavImages = []; localStorage.removeItem('croquis_skips');
+            rebuildFavNameSet();
+            rebuildSkipNameSet();
             if(db) db.transaction(storeName, "readwrite").objectStore(storeName).clear();
             ui.favIcon.style.display = 'none'; ui.managePopup.classList.remove('show');
             isFavMode = false; showFavsOnly = false; document.getElementById('history-filter-btn').innerText = '全て (履歴)';
@@ -416,14 +544,48 @@
             if(images.length === 0) return; 
             if(hmActive) exitHardMode(); 
             cancelAnimationFrame(animationFrameId);
+            const prevIndex = currentIndex;
             
             if (!isSkipping) {
                 if (historyPos < historyList.length - 1) { historyPos++; currentIndex = historyList[historyPos]; } 
-                else { 
-                    currentIndex = settings.shuffle ? Math.floor(Math.random() * images.length) : (currentIndex + 1) % images.length; 
+                else {
+                    if (settings.shuffle) {
+                        if (images.length > 2) {
+                            let candidate = Math.floor(Math.random() * images.length);
+                            let guard = 0;
+                            while ((candidate === prevIndex || candidate === lastShownIndex) && guard < 12) {
+                                candidate = Math.floor(Math.random() * images.length);
+                                guard++;
+                            }
+                            currentIndex = candidate;
+                        } else if (images.length === 2) {
+                            currentIndex = prevIndex === 0 ? 1 : 0;
+                        } else {
+                            currentIndex = 0;
+                        }
+                    } else {
+                        currentIndex = (currentIndex + 1) % images.length;
+                    }
                     historyList.push(currentIndex); if (historyList.length > 100) { historyList.shift(); } else { historyPos++; } 
                 }
-            } else { currentIndex = settings.shuffle ? Math.floor(Math.random() * images.length) : (currentIndex + 1) % images.length; }
+            } else {
+                if (settings.shuffle) {
+                    if (images.length > 1) {
+                        let candidate = Math.floor(Math.random() * images.length);
+                        let guard = 0;
+                        while (candidate === prevIndex && guard < 8) {
+                            candidate = Math.floor(Math.random() * images.length);
+                            guard++;
+                        }
+                        currentIndex = candidate;
+                    } else {
+                        currentIndex = 0;
+                    }
+                } else {
+                    currentIndex = (currentIndex + 1) % images.length;
+                }
+            }
+            lastShownIndex = prevIndex;
             
             loadImage(); remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
             if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); animationFrameId = requestAnimationFrame(updateSmoothTimer); } 
@@ -438,7 +600,7 @@
 
         function toggleHistoryPanel() {
             const panel = document.getElementById('history-panel');
-            if (panel.classList.contains('open')) { panel.classList.remove('open'); clearHistoryThumbs(); } 
+            if (panel.classList.contains('open')) { historyRenderToken++; panel.classList.remove('open'); clearHistoryThumbs(); } 
             else { panel.classList.add('open'); renderHistoryThumbs(); }
         }
 
@@ -449,37 +611,117 @@
             renderHistoryThumbs();
         }
 
-        function clearHistoryThumbs() { document.getElementById('history-content').innerHTML = ''; historyUrls.forEach(function(url) { URL.revokeObjectURL(url); }); historyUrls = []; }
+        function clearHistoryThumbs() {
+            if (historyVirtualCleanup) { historyVirtualCleanup(); historyVirtualCleanup = null; }
+            const content = document.getElementById('history-content');
+            content.innerHTML = '';
+            content.style.display = 'grid';
+            content.style.position = '';
+            content.style.overflowY = 'auto';
+            content.style.alignContent = 'start';
+            historyUrls.forEach(function(url) { URL.revokeObjectURL(url); });
+            historyUrls = [];
+        }
+
+        function mountVirtualHistory(items, buildNode) {
+            const content = document.getElementById('history-content');
+            const cols = window.innerWidth <= 440 ? 3 : 2;
+            const gap = 8;
+            const paddingX = 20;
+            const usable = Math.max(1, content.clientWidth - paddingX);
+            const tile = Math.floor((usable - (gap * (cols - 1))) / cols);
+            const rowHeight = tile + gap;
+            const totalRows = Math.ceil(items.length / cols);
+            const layer = document.createElement('div');
+            layer.style.position = 'relative';
+            layer.style.height = (totalRows * rowHeight) + 'px';
+            layer.style.width = '100%';
+            content.innerHTML = '';
+            content.style.display = 'block';
+            content.style.position = 'relative';
+            content.appendChild(layer);
+            let lastStart = -1;
+            let lastEnd = -1;
+
+            const renderVisible = function() {
+                const viewTop = content.scrollTop;
+                const viewBottom = viewTop + content.clientHeight;
+                const startRow = Math.max(0, Math.floor(viewTop / rowHeight) - 2);
+                const endRow = Math.min(totalRows, Math.ceil(viewBottom / rowHeight) + 2);
+                const start = startRow * cols;
+                const end = Math.min(items.length, endRow * cols);
+                if (start === lastStart && end === lastEnd) return;
+                lastStart = start;
+                lastEnd = end;
+                layer.innerHTML = '';
+                for (let i = start; i < end; i++) {
+                    const col = i % cols;
+                    const row = Math.floor(i / cols);
+                    const node = buildNode(items[i], i);
+                    node.style.position = 'absolute';
+                    node.style.left = (col * (tile + gap)) + 'px';
+                    node.style.top = (row * rowHeight) + 'px';
+                    node.style.width = tile + 'px';
+                    node.style.height = tile + 'px';
+                    layer.appendChild(node);
+                }
+            };
+
+            const onScroll = function() { renderVisible(); };
+            const onResize = function() { renderHistoryThumbs(); };
+            content.addEventListener('scroll', onScroll);
+            window.addEventListener('resize', onResize);
+            renderVisible();
+
+            historyVirtualCleanup = function() {
+                content.removeEventListener('scroll', onScroll);
+                window.removeEventListener('resize', onResize);
+            };
+        }
 
         function renderHistoryThumbs() {
+            const token = ++historyRenderToken;
             const content = document.getElementById('history-content'); clearHistoryThumbs();
             if (showFavsOnly) {
                 if (dbFavImages.length === 0) { content.innerHTML = '<div style="grid-column:span 2; text-align:center; color:#666; font-size:0.8rem; padding:20px 0;">★画像がありません</div>'; return; }
-                dbFavImages.forEach(function(item, idx) {
-                    const thumbDiv = document.createElement('div'); thumbDiv.style.position = 'relative';
-                    const imgEl = document.createElement('img'); imgEl.src = item.data; imgEl.className = 'history-thumb' + (isFavMode && currentIndex === idx ? ' current' : '');
-                    imgEl.onclick = function() {
-                        isFavMode = true; images = dbFavImages; currentIndex = idx; historyList = [idx]; historyPos = 0;
-                        if (hmActive) exitHardMode(); loadImage(); resetTimer();
-                        if(window.innerWidth <= 440) toggleHistoryPanel(); renderHistoryThumbs();
-                    };
-                    thumbDiv.appendChild(imgEl); const badge = document.createElement('div'); badge.className = 'fav-badge'; badge.innerText = '★'; thumbDiv.appendChild(badge); content.appendChild(thumbDiv);
-                });
-            } else {
-                const currentPool = isFavMode ? dbFavImages : sourceImages; const start = Math.max(0, historyList.length - 30); let matchCount = 0;
-                for (let i = historyList.length - 1; i >= start; i--) {
-                    const imgIndex = historyList[i]; const item = currentPool[imgIndex]; if(!item) continue; matchCount++;
+                mountVirtualHistory(dbFavImages, function(item, idx) {
+                    if (token !== historyRenderToken) return document.createElement('div');
                     const thumbDiv = document.createElement('div'); thumbDiv.style.position = 'relative';
                     const imgEl = document.createElement('img');
-                    if (item.data) { imgEl.src = item.data; } else { const url = URL.createObjectURL(item); historyUrls.push(url); imgEl.src = url; }
+                    imgEl.src = item.data;
+                    imgEl.className = 'history-thumb' + (isFavMode && currentIndex === idx ? ' current' : '');
+                    imgEl.onclick = function(index) { return function() {
+                        isFavMode = true; images = dbFavImages; currentIndex = index; historyList = [index]; historyPos = 0;
+                        if (hmActive) exitHardMode(); loadImage(); resetTimer();
+                        if(window.innerWidth <= 440) toggleHistoryPanel(); renderHistoryThumbs();
+                    }; }(idx);
+                    thumbDiv.appendChild(imgEl);
+                    const badge = document.createElement('div'); badge.className = 'fav-badge'; badge.innerText = '★';
+                    thumbDiv.appendChild(badge);
+                    return thumbDiv;
+                });
+            } else {
+                const currentPool = isFavMode ? dbFavImages : sourceImages; const start = Math.max(0, historyList.length - 30);
+                const entries = [];
+                for (let i = historyList.length - 1; i >= start; i--) {
+                    const imgIndex = historyList[i]; const item = currentPool[imgIndex];
+                    if(item) entries.push({ historyIndex: i, item: item });
+                }
+                if(entries.length === 0) { content.innerHTML = '<div style="grid-column:span 2; text-align:center; color:#666; font-size:0.8rem; padding:20px 0;">履歴がありません</div>'; return; }
+                mountVirtualHistory(entries, function(entry) {
+                    if (token !== historyRenderToken) return document.createElement('div');
+                    const i = entry.historyIndex; const item = entry.item;
+                    const thumbDiv = document.createElement('div'); thumbDiv.style.position = 'relative';
+                    const imgEl = document.createElement('img');
+                    if (item.data) { imgEl.src = item.data; }
+                    else { const url = URL.createObjectURL(item); historyUrls.push(url); imgEl.src = url; }
                     imgEl.className = 'history-thumb' + (i === historyPos ? ' current' : '');
                     imgEl.onclick = (function(idx) { return function() { historyPos = idx; currentIndex = historyList[historyPos]; if (hmActive) exitHardMode(); loadImage(); resetTimer(); if(window.innerWidth <= 440) toggleHistoryPanel(); renderHistoryThumbs(); }; })(i);
                     thumbDiv.appendChild(imgEl);
-                    const isFav = isFavMode ? true : dbFavImages.some(function(f){ return f.name === item.name; });
+                    const isFav = isFavMode ? true : favNameSet.has(item.name);
                     if(isFav) { const badge = document.createElement('div'); badge.className = 'fav-badge'; badge.innerText = '★'; thumbDiv.appendChild(badge); }
-                    content.appendChild(thumbDiv);
-                }
-                if(matchCount === 0) content.innerHTML = '<div style="grid-column:span 2; text-align:center; color:#666; font-size:0.8rem; padding:20px 0;">履歴がありません</div>';
+                    return thumbDiv;
+                });
             }
         }
 
@@ -512,6 +754,16 @@
                 animationFrameId = requestAnimationFrame(updateSmoothTimer);
             }
         }
+
+        window.addEventListener('beforeunload', function() {
+            clearPreloadUrl();
+            if (currentImageUrl && currentImageUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(currentImageUrl);
+                currentImageUrl = null;
+            }
+            historyUrls.forEach(function(url) { URL.revokeObjectURL(url); });
+            historyUrls = [];
+        });
         
         function resetTimer() { 
             cancelAnimationFrame(animationFrameId); remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
@@ -522,14 +774,15 @@
         
         function updateTimerText(sec) { 
             let m = Math.floor(sec / 60); let s = sec % 60; ui.timer.innerText = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
-            if(isRunning && isPiP && !documentPipWindow && sec % 2 === 0) updateMediaSession();
+            if(isRunning && isPiP && !documentPipWindow) updateMediaSession();
         }
         
-        function toggleMute() { isMuted = !isMuted; ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG; }
+        function toggleMute() { isMuted = !isMuted; ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG; saveUiSettings(); }
         function playSound() { if(!isMuted && ui.sound) { ui.sound.currentTime = 0; ui.sound.play().catch(function(){}); } }
         function cycleBg() { 
             const colors = ['#1e1e1e', '#000', '#fff']; bgMode = (bgMode + 1) % 3; 
             document.documentElement.style.setProperty('--bg-color', colors[bgMode]); 
+            saveUiSettings();
             if(isPiP) {
                 if(documentPipWindow) { documentPipWindow.document.body.style.backgroundColor = colors[bgMode]; }
                 updatePiP();
@@ -551,7 +804,13 @@
         function updateMediaSession() {
             if ('mediaSession' in navigator && images.length > 0) {
                 const item = images[currentIndex];
-                navigator.mediaSession.metadata = new MediaMetadata({ title: item ? item.name : 'Croquis App', artist: '残り: ' + ui.timer.innerText, album: isFavMode ? '★ お気に入り' : '通常再生' });
+                const title = item ? item.name : 'Croquis App';
+                const artist = '残り: ' + ui.timer.innerText;
+                const album = isFavMode ? '★ お気に入り' : '通常再生';
+                const stamp = title + '|' + artist + '|' + album + '|' + (isRunning ? '1' : '0');
+                if (updateMediaSession.lastStamp === stamp) return;
+                updateMediaSession.lastStamp = stamp;
+                navigator.mediaSession.metadata = new MediaMetadata({ title: title, artist: artist, album: album });
                 navigator.mediaSession.playbackState = isRunning ? "playing" : "paused";
             }
         }
@@ -666,6 +925,13 @@
 
         function updatePiP() {
             if (!isPiP || !ui.img.complete || ui.img.naturalWidth === 0) return;
+            const stamp = [
+                currentIndex, remaining, isRunning ? 1 : 0, isImageHidden ? 1 : 0,
+                settings.flipH ? 1 : 0, settings.flipV ? 1 : 0, settings.grid ? 1 : 0, settings.mono ? 1 : 0,
+                hmActive ? hmPhase : 0, bgMode
+            ].join('|');
+            if (pipRenderStamp === stamp && !document.hidden) return;
+            pipRenderStamp = stamp;
             
             if (documentPipWindow) {
                 const canvas = documentPipWindow.document.querySelector('canvas');
