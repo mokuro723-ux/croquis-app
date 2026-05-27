@@ -21,6 +21,7 @@
             --btn-bg: #333; --accent: #00d4ff; --hm-color: #ffb020; 
             --accent-urgent: #5be7ff;
             --app-height: 100dvh;
+            --bottom-safe: 0px;
         }
         html, body { height: 100%; }
         * { box-sizing: border-box; user-select: none; margin: 0; padding: 0; -webkit-touch-callout: none; }
@@ -78,12 +79,9 @@
         #progress-container { width: 100%; height: 4px; background-color: #222; }
         #progress-bar { width: 100%; height: 100%; background-color: var(--accent); }
         
-        #bottom-panel { position: relative; background-color: var(--panel-bg); padding: 10px; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; border-top: 1px solid var(--border-color); transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease; max-height: 250px; opacity: 1; overflow: visible; padding-bottom: 10px; }
+        #bottom-panel { position: relative; background-color: var(--panel-bg); padding: 10px; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; border-top: 1px solid var(--border-color); transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease; max-height: 250px; opacity: 1; overflow: visible; padding-bottom: calc(10px + var(--bottom-safe)); }
         #bottom-panel.hidden { max-height: 0; padding-top: 0; padding-bottom: 0; border-top: 0px solid transparent; opacity: 0; overflow: hidden; }
         #bottom-panel.idle-dim { opacity: 0.35; }
-        @media (display-mode: standalone) {
-            #bottom-panel { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
-        }
         
         button { background-color: var(--btn-bg); color: #ddd; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; min-width: 45px; display: flex; justify-content: center; align-items: center; font-size: 0.9rem;}
         button:hover { background-color: #444; }
@@ -330,9 +328,21 @@
             if (isIOS) { ui.pipBtn.style.display = 'none'; }
         }
         function syncAppHeight() {
-            const h = window.innerHeight;
+            const vv = window.visualViewport;
+            const innerH = window.innerHeight || 0;
+            const vvH = vv ? vv.height : 0;
+            const h = (vvH > 0) ? Math.min(innerH || vvH, vvH) : innerH;
             if (!h) return;
             document.documentElement.style.setProperty('--app-height', h + 'px');
+
+            const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            let safe = 0;
+            if (isStandalone && isIOS && innerH > 0 && vvH > 0) {
+                safe = Math.max(0, Math.round(innerH - vvH));
+                if (safe > 40) safe = 0;
+            }
+            document.documentElement.style.setProperty('--bottom-safe', safe + 'px');
         }
 
         function flushUiSettings() {
