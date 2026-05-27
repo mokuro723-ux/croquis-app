@@ -19,6 +19,7 @@
         :root { 
             --bg-color: #1e1e1e; --panel-bg: #111; --text-color: #fff; --border-color: #333;
             --btn-bg: #333; --accent: #00d4ff; --hm-color: #ffb020; 
+            --accent-urgent: #5be7ff;
         }
         html, body { height: 100%; }
         * { box-sizing: border-box; user-select: none; margin: 0; padding: 0; -webkit-touch-callout: none; }
@@ -39,6 +40,7 @@
         .top-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: 1; max-width: 150px; height: 36px; }
         
         #phase-label { color: var(--hm-color); font-weight: bold; font-size: 0.8rem; white-space: nowrap; }
+        #hm-step-mini { color: #777; font-size: 0.72rem; white-space: nowrap; }
         #timer-label { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); font-size: 1.8rem; font-weight: bold; text-align: center; color: var(--accent); letter-spacing: 2px; }
         
         .icon-btn { background: none; border: none; color: #aaa; cursor: pointer; padding: 5px; display: flex; justify-content: center; align-items: center; }
@@ -77,6 +79,7 @@
         
         #bottom-panel { position: relative; background-color: var(--panel-bg); padding: 10px; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; border-top: 1px solid var(--border-color); transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease; max-height: 250px; opacity: 1; overflow: visible; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
         #bottom-panel.hidden { max-height: 0; padding-top: 0; padding-bottom: 0; border-top: 0px solid transparent; opacity: 0; overflow: hidden; }
+        #bottom-panel.idle-dim { opacity: 0.35; }
         
         button { background-color: var(--btn-bg); color: #ddd; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; min-width: 45px; display: flex; justify-content: center; align-items: center; font-size: 0.9rem;}
         button:hover { background-color: #444; }
@@ -120,6 +123,7 @@
         <div class="top-left">
             <button class="icon-btn" onclick="toggleHistoryPanel()" title="履歴"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg></button>
             <div id="phase-label"></div>
+            <div id="hm-step-mini"></div>
             <button class="text-btn" id="btn-hm-show" onclick="isImageHidden=false; applyFilters();" style="display:none;">表示</button>
             <button class="text-btn" id="btn-hm-hide" onclick="isImageHidden=true; applyFilters();" style="display:none;">隠す</button>
         </div>
@@ -136,6 +140,7 @@
     <div id="history-panel">
         <div id="history-header">
             <span>履歴管理</span>
+            <button id="history-return-btn" onclick="returnToCurrentFlow()" style="background-color:#333; color:#ddd; font-size:0.75rem; padding:4px 10px; min-width:auto; font-weight:bold; border-radius:4px;">現在へ</button>
             <button id="history-filter-btn" onclick="toggleHistoryFilter()" style="background-color:#444; color:#fff; font-size:0.75rem; padding:4px 10px; min-width:auto; font-weight:bold; border-radius:4px;">全て (履歴)</button>
             <button class="icon-btn" onclick="toggleHistoryPanel()"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
         </div>
@@ -162,9 +167,9 @@
         
         <span class="separator">|</span>
 
-        <button onclick="prevImage()"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
+        <button id="prev-btn" onclick="handlePrevButtonClick(event)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
         <button id="play-btn" class="accent" onclick="toggleTimer()"><svg viewBox="0 0 24 24" class="svg-icon" id="icon-play"><path d="M8 5v14l11-7z"/></svg></button>
-        <button onclick="nextImage()"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+        <button id="next-btn" onclick="handleNextButtonClick(event)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
         
         <span class="separator">|</span>
         
@@ -218,9 +223,14 @@
         let preloadUrl = null, preloadName = '';
         let preloadedImage = null;
         let historyVirtualCleanup = null;
+        let historyResizeTimer = null;
+        let isHistoryPanelOpen = false;
+        let focusIdleTimer = null;
+        let isFocusDimmed = false;
         let filterFrameQueued = false;
         let lastTimerText = '';
         let lastProgressWidth = '';
+        let lastProgressColor = '';
         let lastImageTransform = '';
         let lastImageFilter = '';
         let lastImageOpacity = '';
@@ -245,6 +255,7 @@
         let db; const dbName = "CroquisAppDB", storeName = "favorites";
         let saveTimer = null;
         const hasMediaSession = 'mediaSession' in navigator;
+        const bgColors = ['#1e1e1e', '#000', '#fff'];
 
         // SVGアイコンの定義
         const iconPlaySVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M8 5v14l11-7z"/></svg>`;
@@ -263,10 +274,20 @@
             muteBtn: document.getElementById('mute-btn'), pipBtn: document.getElementById('pip-btn'),
             favIcon: document.getElementById('fav-icon-large'), managePopup: document.getElementById('manage-popup'),
             eyeBtn: document.getElementById('eye-btn'),
+            hmMini: document.getElementById('hm-step-mini'),
             historyPanel: document.getElementById('history-panel'),
             historyContent: document.getElementById('history-content'),
             historyFilterBtn: document.getElementById('history-filter-btn')
         };
+        function updateHmMini() {
+            if (!hmActive) { ui.hmMini.innerText = ''; return; }
+            const active = hmPhase || 1;
+            const parts = ['①','②','③','④'].map(function(mark, idx) {
+                const n = idx + 1;
+                return n === active ? '[' + mark + ']' : mark;
+            });
+            ui.hmMini.innerText = parts.join('');
+        }
 
         function initDB() {
             return new Promise((resolve) => {
@@ -303,16 +324,19 @@
             if (isIOS) { ui.pipBtn.style.display = 'none'; }
         }
 
+        function flushUiSettings() {
+            const payload = {
+                settings: settings,
+                bgMode: bgMode,
+                isMuted: isMuted,
+                isEyeHideEnabled: isEyeHideEnabled
+            };
+            try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (_) {}
+        }
         function saveUiSettings() {
             if (saveTimer) clearTimeout(saveTimer);
             saveTimer = setTimeout(function() {
-                const payload = {
-                    settings: settings,
-                    bgMode: bgMode,
-                    isMuted: isMuted,
-                    isEyeHideEnabled: isEyeHideEnabled
-                };
-                try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (_) {}
+                flushUiSettings();
                 saveTimer = null;
             }, 120);
         }
@@ -345,8 +369,7 @@
             if (isEyeHideEnabled) ui.eyeBtn.classList.add('active');
             else ui.eyeBtn.classList.remove('active');
             ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG;
-            const colors = ['#1e1e1e', '#000', '#fff'];
-            document.documentElement.style.setProperty('--bg-color', colors[bgMode]);
+            document.documentElement.style.setProperty('--bg-color', bgColors[bgMode]);
         }
 
         window.onload = async function() {
@@ -379,9 +402,28 @@
         function toggleBottomPanel() { document.getElementById('bottom-panel').classList.toggle('hidden'); }
         function toggleManagePopup() { ui.managePopup.classList.toggle('show'); }
         document.addEventListener('click', function(e) { if(!e.target.closest('#manage-popup') && !e.target.closest('#manage-btn')) { ui.managePopup.classList.remove('show'); } });
+        function setFocusDimmed(dim) {
+            const panel = document.getElementById('bottom-panel');
+            if (!panel || panel.classList.contains('hidden')) return;
+            if (dim === isFocusDimmed) return;
+            isFocusDimmed = dim;
+            if (dim) panel.classList.add('idle-dim');
+            else panel.classList.remove('idle-dim');
+        }
+        function armFocusIdleTimer() {
+            if (focusIdleTimer) clearTimeout(focusIdleTimer);
+            setFocusDimmed(false);
+            focusIdleTimer = setTimeout(function() { setFocusDimmed(true); }, 5000);
+        }
+        function wakeFocusMode() { armFocusIdleTimer(); }
 
         function handleFiles(e) {
-            const files = Array.from(e.target.files).filter(function(f) { return f.type.startsWith('image/'); });
+            const list = e.target.files;
+            const files = [];
+            for (let i = 0; i < list.length; i++) {
+                const f = list[i];
+                if (f && f.type && f.type.startsWith('image/')) files.push(f);
+            }
             if(files.length > 0) { 
                 sourceImages = files; if(settings.shuffle) shuffleArray(sourceImages); 
                 images = sourceImages; isFavMode = false; showFavsOnly = false;
@@ -617,23 +659,40 @@
             if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); animationFrameId = requestAnimationFrame(updateSmoothTimer); } 
             else { updateTimerText(remaining); ui.prog.style.width = '100%'; }
             if(!isSkipping) { playSound(); }
-            if(ui.historyPanel.classList.contains('open')) renderHistoryThumbs();
+            if(isHistoryPanelOpen) renderHistoryThumbs();
         }
 
         function prevImage() { 
-            if (historyPos > 0) { if (hmActive) exitHardMode(); historyPos--; currentIndex = historyList[historyPos]; loadImage(); resetTimer(); if(ui.historyPanel.classList.contains('open')) renderHistoryThumbs(); } 
+            if (historyPos > 0) { if (hmActive) exitHardMode(); historyPos--; currentIndex = historyList[historyPos]; loadImage(); resetTimer(); if(isHistoryPanelOpen) renderHistoryThumbs(); } 
         }
 
         function toggleHistoryPanel() {
             const panel = ui.historyPanel;
-            if (panel.classList.contains('open')) { historyRenderToken++; panel.classList.remove('open'); clearHistoryThumbs(); } 
-            else { panel.classList.add('open'); renderHistoryThumbs(); }
+            if (isHistoryPanelOpen) {
+                historyRenderToken++;
+                isHistoryPanelOpen = false;
+                panel.classList.remove('open');
+                clearHistoryThumbs();
+            } else {
+                isHistoryPanelOpen = true;
+                panel.classList.add('open');
+                renderHistoryThumbs();
+            }
         }
 
         function toggleHistoryFilter() {
             showFavsOnly = !showFavsOnly;
             if (!showFavsOnly) { if (sourceImages.length > 0 && isFavMode) { isFavMode = false; images = sourceImages; currentIndex = 0; historyList = []; historyPos = -1; loadImage(); resetTimer(); } }
             ui.historyFilterBtn.innerText = showFavsOnly ? '★ お気に入り' : '全て (履歴)';
+            renderHistoryThumbs();
+        }
+        function returnToCurrentFlow() {
+            if (historyList.length === 0) return;
+            historyPos = historyList.length - 1;
+            currentIndex = historyList[historyPos];
+            if (hmActive) exitHardMode();
+            loadImage();
+            resetTimer();
             renderHistoryThumbs();
         }
 
@@ -702,7 +761,13 @@
                     renderVisible();
                 });
             };
-            const onResize = function() { renderHistoryThumbs(); };
+            const onResize = function() {
+                if (historyResizeTimer) clearTimeout(historyResizeTimer);
+                historyResizeTimer = setTimeout(function() {
+                    historyResizeTimer = null;
+                    renderHistoryThumbs();
+                }, 80);
+            };
             content.addEventListener('scroll', onScrollRaf, { passive: true });
             window.addEventListener('resize', onResize);
             renderVisible();
@@ -713,6 +778,10 @@
                 if (scrollRafId) {
                     cancelAnimationFrame(scrollRafId);
                     scrollRafId = 0;
+                }
+                if (historyResizeTimer) {
+                    clearTimeout(historyResizeTimer);
+                    historyResizeTimer = null;
                 }
             };
         }
@@ -795,6 +864,7 @@
             if(remainMs <= 0) { 
                 remaining = 0; updateTimerText(0);
                 if (lastProgressWidth !== '0%') { ui.prog.style.width = '0%'; lastProgressWidth = '0%'; }
+                if (lastProgressColor !== 'var(--accent-urgent)') { ui.prog.style.backgroundColor = 'var(--accent-urgent)'; lastProgressColor = 'var(--accent-urgent)'; }
                 cancelAnimationFrame(animationFrameId);
                 hmActive ? hmNextPhase() : nextImage(); 
             } else { 
@@ -807,12 +877,19 @@
                 const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
                 const nextWidth = ((remainMs / totalMs) * 100) + '%';
                 if (nextWidth !== lastProgressWidth) { ui.prog.style.width = nextWidth; lastProgressWidth = nextWidth; }
+                const nextColor = remaining <= 5 ? 'var(--accent-urgent)' : 'var(--accent)';
+                if (nextColor !== lastProgressColor) { ui.prog.style.backgroundColor = nextColor; lastProgressColor = nextColor; }
                 if (isPiP && !document.hidden && (now - lastPipUpdateTime > 66)) { updatePiP(); lastPipUpdateTime = now; }
                 animationFrameId = requestAnimationFrame(updateSmoothTimer);
             }
         }
 
         window.addEventListener('beforeunload', function() {
+            if (saveTimer) {
+                clearTimeout(saveTimer);
+                saveTimer = null;
+                flushUiSettings();
+            }
             clearPreloadUrl();
             if (currentImageUrl && currentImageUrl.startsWith('blob:')) {
                 URL.revokeObjectURL(currentImageUrl);
@@ -828,6 +905,7 @@
             else {
                 updateTimerText(remaining);
                 if (lastProgressWidth !== '100%') { ui.prog.style.width = '100%'; lastProgressWidth = '100%'; }
+                if (lastProgressColor !== 'var(--accent)') { ui.prog.style.backgroundColor = 'var(--accent)'; lastProgressColor = 'var(--accent)'; }
                 if (isPiP) updatePiP();
             }
         }
@@ -843,19 +921,19 @@
         function toggleMute() { isMuted = !isMuted; ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG; saveUiSettings(); }
         function playSound() { if(!isMuted && ui.sound) { ui.sound.currentTime = 0; ui.sound.play().catch(function(){}); } }
         function cycleBg() { 
-            const colors = ['#1e1e1e', '#000', '#fff']; bgMode = (bgMode + 1) % 3; 
-            document.documentElement.style.setProperty('--bg-color', colors[bgMode]); 
+            bgMode = (bgMode + 1) % 3; 
+            document.documentElement.style.setProperty('--bg-color', bgColors[bgMode]); 
             saveUiSettings();
             if(isPiP) {
-                if(documentPipWindow) { documentPipWindow.document.body.style.backgroundColor = colors[bgMode]; }
+                if(documentPipWindow) { documentPipWindow.document.body.style.backgroundColor = bgColors[bgMode]; }
                 updatePiP();
             }
         }
         
         function toggleHardMode() { hmActive ? exitHardMode() : startHardMode(); }
-        function startHardMode() { if(images.length === 0) return; hmActive = true; ui.hmBtn.classList.add("active"); setHmPhase(1); startTimer(); }
-        function exitHardMode() { hmActive = false; ui.hmBtn.classList.remove("active"); ui.phase.innerText = ""; isImageHidden = false; ui.btnHmShow.style.display = 'none'; ui.btnHmHide.style.display = 'none'; applyFilters(); resetTimer(); }
-        function setHmPhase(p) { hmPhase = p; ui.phase.innerText = hmPhases[p].t; remaining = hmPhases[p].s; isImageHidden = hmPhases[p].h; if (isRunning) expectedEndTime = Date.now() + (remaining * 1000); applyFilters(); playSound(); resetTimer(); }
+        function startHardMode() { if(images.length === 0) return; hmActive = true; ui.hmBtn.classList.add("active"); setHmPhase(1); startTimer(); updateHmMini(); }
+        function exitHardMode() { hmActive = false; ui.hmBtn.classList.remove("active"); ui.phase.innerText = ""; isImageHidden = false; ui.btnHmShow.style.display = 'none'; ui.btnHmHide.style.display = 'none'; updateHmMini(); applyFilters(); resetTimer(); }
+        function setHmPhase(p) { hmPhase = p; ui.phase.innerText = hmPhases[p].t; remaining = hmPhases[p].s; isImageHidden = hmPhases[p].h; if (isRunning) expectedEndTime = Date.now() + (remaining * 1000); updateHmMini(); applyFilters(); playSound(); resetTimer(); }
         function hmNextPhase() { if(hmPhase < 4) { setHmPhase(hmPhase + 1); } else { stopTimer(); ui.phase.innerText = "完了"; ui.btnHmShow.style.display = 'block'; ui.btnHmHide.style.display = 'block'; playSound(); } }
 
         function initMediaSession() {
@@ -1018,17 +1096,82 @@
             }
         }
 
-        let pointerStartX = 0; let lastTapTime = 0; const imgContainer = document.getElementById('image-container');
-        imgContainer.addEventListener('pointerdown', function(e) { pointerStartX = e.clientX; }, { passive: true });
+        let pointerStartX = 0; let pointerStartY = 0; let lastTapTime = 0; const imgContainer = document.getElementById('image-container');
+        let prevLongPressTimer = null, nextLongPressTimer = null;
+        let prevLongPressHandled = false, nextLongPressHandled = false;
+        let prevPressStartX = 0, prevPressStartY = 0, nextPressStartX = 0, nextPressStartY = 0;
+        function handlePrevButtonClick(e) {
+            if (prevLongPressHandled) { prevLongPressHandled = false; if (e) e.preventDefault(); return; }
+            prevImage();
+        }
+        function handleNextButtonClick(e) {
+            if (nextLongPressHandled) { nextLongPressHandled = false; if (e) e.preventDefault(); return; }
+            nextImage();
+        }
+        function onPressStart(btn, which) {
+            const delay = 450;
+            if (which === 'next') { nextPressStartX = pointerStartX; nextPressStartY = pointerStartY; }
+            else { prevPressStartX = pointerStartX; prevPressStartY = pointerStartY; }
+            const timer = setTimeout(function() {
+                if (which === 'next') { nextLongPressHandled = true; skipCurrent(); }
+                else if (which === 'prev') {
+                    prevLongPressHandled = true;
+                    if (images.length === 0 || isFavMode) return;
+                    const fname = images[currentIndex] && images[currentIndex].name;
+                    if (!fname || !skipNameSet.has(fname)) return;
+                    skipList = skipList.filter(function(n){ return n !== fname; });
+                    rebuildSkipNameSet();
+                    localStorage.setItem('croquis_skips', JSON.stringify(skipList));
+                    alert("この画像のスキップを解除しました");
+                }
+            }, delay);
+            if (which === 'next') nextLongPressTimer = timer;
+            else prevLongPressTimer = timer;
+        }
+        function onPressEnd(which) {
+            if (which === 'next' && nextLongPressTimer) { clearTimeout(nextLongPressTimer); nextLongPressTimer = null; }
+            if (which === 'prev' && prevLongPressTimer) { clearTimeout(prevLongPressTimer); prevLongPressTimer = null; }
+        }
+        (function bindLongPressButtons(){
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            if (!prevBtn || !nextBtn) return;
+            prevBtn.addEventListener('pointerdown', function(){ onPressStart(prevBtn, 'prev'); }, { passive: true });
+            prevBtn.addEventListener('pointerup', function(){ onPressEnd('prev'); }, { passive: true });
+            prevBtn.addEventListener('pointerleave', function(){ onPressEnd('prev'); }, { passive: true });
+            prevBtn.addEventListener('pointercancel', function(){ onPressEnd('prev'); }, { passive: true });
+            nextBtn.addEventListener('pointerdown', function(){ onPressStart(nextBtn, 'next'); }, { passive: true });
+            nextBtn.addEventListener('pointerup', function(){ onPressEnd('next'); }, { passive: true });
+            nextBtn.addEventListener('pointerleave', function(){ onPressEnd('next'); }, { passive: true });
+            nextBtn.addEventListener('pointercancel', function(){ onPressEnd('next'); }, { passive: true });
+        })();
+        imgContainer.addEventListener('pointerdown', function(e) { pointerStartX = e.clientX; pointerStartY = e.clientY; wakeFocusMode(); }, { passive: true });
+        document.addEventListener('pointermove', function(e) {
+            const moveThreshold = 14;
+            if (nextLongPressTimer) {
+                if (Math.abs(e.clientX - nextPressStartX) > moveThreshold || Math.abs(e.clientY - nextPressStartY) > moveThreshold) onPressEnd('next');
+            }
+            if (prevLongPressTimer) {
+                if (Math.abs(e.clientX - prevPressStartX) > moveThreshold || Math.abs(e.clientY - prevPressStartY) > moveThreshold) onPressEnd('prev');
+            }
+        }, { passive: true });
         imgContainer.addEventListener('pointerup', function(e) {
             const pointerEndX = e.clientX; const diffX = pointerStartX - pointerEndX; const threshold = 50;
             if (Math.abs(diffX) > threshold) { if (diffX > 0) { nextImage(); } else { prevImage(); } lastTapTime = 0; } 
             else { const currentTime = Date.now(); const tapLength = currentTime - lastTapTime; if (tapLength < 300 && tapLength > 0) { toggleTimer(); lastTapTime = 0; e.preventDefault(); } else { lastTapTime = currentTime; } }
         }, { passive: false });
         document.addEventListener('keydown', function(e) {
+            wakeFocusMode();
             if (document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'INPUT') return;
             if (e.code === 'Space') { e.preventDefault(); toggleTimer(); } else if (e.code === 'ArrowRight') { nextImage(); } else if (e.code === 'ArrowLeft') { prevImage(); }
         });
+        document.addEventListener('pointerdown', function() { wakeFocusMode(); }, { passive: true });
+        window.onload = (function(orig) {
+            return async function() {
+                if (orig) await orig();
+                armFocusIdleTimer();
+            };
+        })(window.onload);
     </script>
 </body>
 </html>
