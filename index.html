@@ -140,7 +140,6 @@
     <div id="history-panel">
         <div id="history-header">
             <span>履歴管理</span>
-            <button id="history-return-btn" onclick="returnToCurrentFlow()" style="background-color:#333; color:#ddd; font-size:0.75rem; padding:4px 10px; min-width:auto; font-weight:bold; border-radius:4px;">現在へ</button>
             <button id="history-filter-btn" onclick="toggleHistoryFilter()" style="background-color:#444; color:#fff; font-size:0.75rem; padding:4px 10px; min-width:auto; font-weight:bold; border-radius:4px;">全て (履歴)</button>
             <button class="icon-btn" onclick="toggleHistoryPanel()"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
         </div>
@@ -241,7 +240,8 @@
         let lastGridTop = '';
 
         let isEyeHideEnabled = false, eyeHideTimeout = null;
-        let showFavsOnly = false; 
+        let showFavsOnly = false;
+        let showHiddenOnly = false;
 
         let skipList = JSON.parse(localStorage.getItem('croquis_skips') || '[]');
         let skipNameSet = new Set(skipList);
@@ -426,7 +426,7 @@
             }
             if(files.length > 0) { 
                 sourceImages = files; if(settings.shuffle) shuffleArray(sourceImages); 
-                images = sourceImages; isFavMode = false; showFavsOnly = false;
+                images = sourceImages; isFavMode = false; showFavsOnly = false; showHiddenOnly = false;
                 ui.historyFilterBtn.innerText = '全て (履歴)';
                 currentIndex = 0; historyList = []; historyPos = -1; nextImage(); 
             }
@@ -564,7 +564,7 @@
                 deleteFavFromDB(fname); ui.managePopup.classList.remove('show');
                 if (dbFavImages.length === 0) {
                     alert("お気に入りが空になりました。通常モードに戻ります。");
-                    isFavMode = false; showFavsOnly = false; images = sourceImages;
+                    isFavMode = false; showFavsOnly = false; showHiddenOnly = false; images = sourceImages;
                     ui.historyFilterBtn.innerText = '全て (履歴)';
                     currentIndex = 0; historyList = []; historyPos = -1; loadImage();
                 } else { currentIndex = currentIndex % dbFavImages.length; loadImage(); }
@@ -602,7 +602,7 @@
             rebuildSkipNameSet();
             if(db) db.transaction(storeName, "readwrite").objectStore(storeName).clear();
             ui.favIcon.style.display = 'none'; ui.managePopup.classList.remove('show');
-            isFavMode = false; showFavsOnly = false; ui.historyFilterBtn.innerText = '全て (履歴)';
+            isFavMode = false; showFavsOnly = false; showHiddenOnly = false; ui.historyFilterBtn.innerText = '全て (履歴)';
             images = sourceImages; currentIndex = 0; historyList = []; historyPos = -1; loadImage();
             if(ui.historyPanel.classList.contains('open')) renderHistoryThumbs();
             alert("データを完全にリセットしました。");
@@ -681,18 +681,23 @@
         }
 
         function toggleHistoryFilter() {
-            showFavsOnly = !showFavsOnly;
-            if (!showFavsOnly) { if (sourceImages.length > 0 && isFavMode) { isFavMode = false; images = sourceImages; currentIndex = 0; historyList = []; historyPos = -1; loadImage(); resetTimer(); } }
-            ui.historyFilterBtn.innerText = showFavsOnly ? '★ お気に入り' : '全て (履歴)';
+            if (!showFavsOnly && !showHiddenOnly) {
+                showFavsOnly = true; showHiddenOnly = false;
+            } else if (showFavsOnly) {
+                showFavsOnly = false; showHiddenOnly = true;
+                if (sourceImages.length > 0 && isFavMode) { isFavMode = false; images = sourceImages; currentIndex = 0; historyList = []; historyPos = -1; loadImage(); resetTimer(); }
+            } else {
+                showFavsOnly = false; showHiddenOnly = false;
+                if (sourceImages.length > 0 && isFavMode) { isFavMode = false; images = sourceImages; currentIndex = 0; historyList = []; historyPos = -1; loadImage(); resetTimer(); }
+            }
+            ui.historyFilterBtn.innerText = showFavsOnly ? '★ お気に入り' : (showHiddenOnly ? '非表示' : '全て (履歴)');
             renderHistoryThumbs();
         }
-        function returnToCurrentFlow() {
-            if (historyList.length === 0) return;
-            historyPos = historyList.length - 1;
-            currentIndex = historyList[historyPos];
-            if (hmActive) exitHardMode();
-            loadImage();
-            resetTimer();
+        function unhideByName(name) {
+            if (!name || !skipNameSet.has(name)) return;
+            skipList = skipList.filter(function(n){ return n !== name; });
+            rebuildSkipNameSet();
+            localStorage.setItem('croquis_skips', JSON.stringify(skipList));
             renderHistoryThumbs();
         }
 
@@ -790,7 +795,48 @@
             const token = ++historyRenderToken;
             const content = ui.historyContent; clearHistoryThumbs();
             const isMobileHistory = window.innerWidth <= 440;
-            if (showFavsOnly) {
+            if (showHiddenOnly) {
+                const hiddenEntries = [];
+                const seen = new Set();
+                for (let i = 0; i < skipList.length; i++) {
+                    const name = skipList[i];
+                    if (!name || seen.has(name)) continue;
+                    seen.add(name);
+                    let fileItem = null;
+                    for (let j = 0; j < sourceImages.length; j++) {
+                        const it = sourceImages[j];
+                        if (it && it.name === name) { fileItem = it; break; }
+                    }
+                    hiddenEntries.push({ name: name, file: fileItem });
+                }
+                if (hiddenEntries.length === 0) { content.innerHTML = '<div style="grid-column:span 2; text-align:center; color:#666; font-size:0.8rem; padding:20px 0;">非表示はありません</div>'; return; }
+                mountVirtualHistory(hiddenEntries, function(entry) {
+                    if (token !== historyRenderToken) return document.createElement('div');
+                    const thumbDiv = document.createElement('div'); thumbDiv.style.position = 'relative';
+                    const imgEl = document.createElement('img');
+                    imgEl.className = 'history-thumb';
+                    if (entry.file) {
+                        const url = URL.createObjectURL(entry.file);
+                        historyUrls.push(url);
+                        imgEl.src = url;
+                    }
+                    const btn = document.createElement('button');
+                    btn.innerText = '表示解除';
+                    btn.style.position = 'absolute';
+                    btn.style.left = '4px';
+                    btn.style.right = '4px';
+                    btn.style.bottom = '4px';
+                    btn.style.padding = '4px 0';
+                    btn.style.fontSize = '0.7rem';
+                    btn.style.minWidth = 'auto';
+                    btn.style.backgroundColor = 'rgba(0,0,0,0.7)';
+                    btn.style.color = '#fff';
+                    btn.onclick = function(ev) { ev.stopPropagation(); unhideByName(entry.name); };
+                    thumbDiv.appendChild(imgEl);
+                    thumbDiv.appendChild(btn);
+                    return thumbDiv;
+                });
+            } else if (showFavsOnly) {
                 if (dbFavImages.length === 0) { content.innerHTML = '<div style="grid-column:span 2; text-align:center; color:#666; font-size:0.8rem; padding:20px 0;">★画像がありません</div>'; return; }
                 mountVirtualHistory(dbFavImages, function(item, idx) {
                     if (token !== historyRenderToken) return document.createElement('div');
