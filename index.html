@@ -20,10 +20,11 @@
             --bg-color: #1e1e1e; --panel-bg: #111; --text-color: #fff; --border-color: #333;
             --btn-bg: #333; --accent: #00d4ff; --hm-color: #ffb020; 
             --accent-urgent: #5be7ff;
+            --app-height: 100dvh;
         }
         html, body { height: 100%; }
         * { box-sizing: border-box; user-select: none; margin: 0; padding: 0; -webkit-touch-callout: none; }
-        body { background-color: var(--bg-color); color: var(--text-color); font-family: sans-serif; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+        body { background-color: var(--bg-color); color: var(--text-color); font-family: sans-serif; display: flex; flex-direction: column; height: var(--app-height); overflow: hidden; }
         
         #top-panel { 
             position: relative; 
@@ -51,7 +52,7 @@
             top: calc(60px + env(safe-area-inset-top, 0px)); 
             left: 0; 
             width: 260px; 
-            height: calc(100dvh - 60px - env(safe-area-inset-top, 0px));
+            height: calc(var(--app-height) - 60px - env(safe-area-inset-top, 0px));
             background-color: rgba(0, 0, 0, 0.85); 
             backdrop-filter: blur(5px); 
             border-right: 1px solid var(--border-color);
@@ -224,6 +225,8 @@
         let historyRenderToken = 0;
         let preloadUrl = null, preloadName = '';
         let preloadedImage = null;
+        let preloadUrl2 = null, preloadName2 = '';
+        let preloadedImage2 = null;
         let historyVirtualCleanup = null;
         let historyResizeTimer = null;
         let isHistoryPanelOpen = false;
@@ -326,6 +329,11 @@
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
             if (isIOS) { ui.pipBtn.style.display = 'none'; }
         }
+        function syncAppHeight() {
+            const h = window.innerHeight;
+            if (!h) return;
+            document.documentElement.style.setProperty('--app-height', h + 'px');
+        }
 
         function flushUiSettings() {
             const payload = {
@@ -379,7 +387,11 @@
             loadUiSettings();
             checkDevice(); await initDB(); dbFavImages = await getAllFavsFromDB(); rebuildFavNameSet(); initMediaSession();
             reflectUiSettings();
+            syncAppHeight();
             document.addEventListener('visibilitychange', handleVisibilityChange);
+            window.addEventListener('resize', syncAppHeight, { passive: true });
+            window.addEventListener('orientationchange', syncAppHeight, { passive: true });
+            if (window.visualViewport) window.visualViewport.addEventListener('resize', syncAppHeight, { passive: true });
         };
 
         function handleVisibilityChange() {
@@ -449,22 +461,58 @@
         function clearPreloadUrl() {
             if (preloadUrl && preloadUrl.startsWith('blob:')) URL.revokeObjectURL(preloadUrl);
             preloadUrl = null;
+            if (preloadUrl2 && preloadUrl2.startsWith('blob:')) URL.revokeObjectURL(preloadUrl2);
+            preloadUrl2 = null;
         }
 
         function updatePreloadQueue() {
             if (images.length === 0) return;
-            const nextIdx = getNextIndexForPreload();
-            if (nextIdx < 0 || !images[nextIdx]) return;
-            const nextItem = images[nextIdx];
-            const nextName = nextItem.name || '';
-            if (preloadName && preloadName === nextName && preloadUrl) return;
-            clearPreloadUrl();
-            preloadedImage = null; preloadName = nextName;
-            preloadUrl = nextItem.data ? nextItem.data : URL.createObjectURL(nextItem);
-            const img = new Image();
-            img.onload = function() { preloadedImage = img; };
-            img.onerror = function() { if (preloadedImage === img) preloadedImage = null; };
-            img.src = preloadUrl;
+            const firstIdx = getNextIndexForPreload();
+            if (firstIdx < 0 || !images[firstIdx]) return;
+            let secondIdx = -1;
+            if (images.length > 1) {
+                if (settings.shuffle) {
+                    let guard = 0;
+                    secondIdx = Math.floor(Math.random() * images.length);
+                    while ((secondIdx === firstIdx || secondIdx === currentIndex) && guard < 16) {
+                        secondIdx = Math.floor(Math.random() * images.length);
+                        guard++;
+                    }
+                } else {
+                    secondIdx = (firstIdx + 1) % images.length;
+                }
+            }
+
+            const firstItem = images[firstIdx];
+            const firstName = firstItem.name || '';
+            if (!(preloadName && preloadName === firstName && preloadUrl)) {
+                if (preloadUrl && preloadUrl.startsWith('blob:')) URL.revokeObjectURL(preloadUrl);
+                preloadName = firstName;
+                preloadedImage = null;
+                preloadUrl = firstItem.data ? firstItem.data : URL.createObjectURL(firstItem);
+                const img1 = new Image();
+                img1.onload = function() { preloadedImage = img1; };
+                img1.onerror = function() { if (preloadedImage === img1) preloadedImage = null; };
+                img1.src = preloadUrl;
+            }
+
+            if (secondIdx >= 0 && images[secondIdx]) {
+                const secondItem = images[secondIdx];
+                const secondName = secondItem.name || '';
+                if (!(preloadName2 && preloadName2 === secondName && preloadUrl2)) {
+                    if (preloadUrl2 && preloadUrl2.startsWith('blob:')) URL.revokeObjectURL(preloadUrl2);
+                    preloadName2 = secondName;
+                    preloadedImage2 = null;
+                    preloadUrl2 = secondItem.data ? secondItem.data : URL.createObjectURL(secondItem);
+                    const img2 = new Image();
+                    img2.onload = function() { preloadedImage2 = img2; };
+                    img2.onerror = function() { if (preloadedImage2 === img2) preloadedImage2 = null; };
+                    img2.src = preloadUrl2;
+                }
+            } else {
+                if (preloadUrl2 && preloadUrl2.startsWith('blob:')) URL.revokeObjectURL(preloadUrl2);
+                preloadUrl2 = null; preloadName2 = ''; preloadedImage2 = null;
+            }
         }
 
         function loadImage() {
@@ -497,8 +545,11 @@
             };
 
             if (item.data) { currentImageUrl = item.data; } 
-            else if (preloadedImage && preloadName && preloadName === item.name && preloadUrl) { currentImageUrl = preloadUrl; preloadUrl = null; preloadedImage = null; preloadName = ''; }
-            else { currentImageUrl = URL.createObjectURL(item); }
+            else if (preloadedImage && preloadName && preloadName === item.name && preloadUrl) {
+                currentImageUrl = preloadUrl; preloadUrl = null; preloadedImage = null; preloadName = '';
+            } else if (preloadedImage2 && preloadName2 && preloadName2 === item.name && preloadUrl2) {
+                currentImageUrl = preloadUrl2; preloadUrl2 = null; preloadedImage2 = null; preloadName2 = '';
+            } else { currentImageUrl = URL.createObjectURL(item); }
 
             ui.img.style.display = 'block';
             ui.img.src = currentImageUrl;
