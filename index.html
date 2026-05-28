@@ -77,6 +77,19 @@
         .fav-badge { position: absolute; top: 2px; right: 2px; color: gold; font-size: 12px; pointer-events: none; }
 
         #image-container { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; padding: 10px; overflow: hidden; touch-action: none; }
+        #image-container::after {
+            content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: 2px;
+            box-shadow: inset 0 0 0 0 transparent;
+            opacity: 0; z-index: 20;
+        }
+        #image-container.timer-flash::after {
+            box-shadow: inset 0 0 60px 12px rgba(0, 212, 255, 0.45);
+            animation: timerFlash 0.7s ease-out forwards;
+        }
+        @keyframes timerFlash {
+            0%   { opacity: 1; }
+            100% { opacity: 0; }
+        }
         #canvas-area { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
         #main-image { max-width: 100%; max-height: 100%; object-fit: contain; display: none; transition: opacity 0.2s; }
         #grid-overlay { position: absolute; pointer-events: none; display: none; border: 1px solid rgba(128,128,128,0.4); background-image: linear-gradient(to right, rgba(128,128,128,0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(128,128,128,0.4) 1px, transparent 1px); background-size: 33.33% 33.33%; z-index: 5; }
@@ -272,6 +285,7 @@
         let pipVideo, pipCanvas, pipCtx, isPiP = false, pipInitialized = false;
         let documentPipWindow = null; // Document PiP用の変数
         let pipRenderStamp = '';
+        let pipFlashStartTime = 0; // Video PiP用フラッシュタイムスタンプ
 
         let db; const dbName = "CroquisAppDB", storeName = "favorites";
         let saveTimer = null;
@@ -451,6 +465,7 @@
                         remaining = 0;
                         updateTimerText(0);
                         ui.prog.style.width = '0%';
+                        flashScreen();
                         hmActive ? hmNextPhase() : nextImage();
                         return;
                     }
@@ -756,9 +771,15 @@
 
         function toggleEyeHide() {
             isEyeHideEnabled = !isEyeHideEnabled;
-            if(isEyeHideEnabled) { ui.eyeBtn.classList.add("active"); } else { ui.eyeBtn.classList.remove("active"); clearTimeout(eyeHideTimeout); isImageHidden = false; applyFiltersDeferred(); }
+            if (isEyeHideEnabled) {
+                ui.eyeBtn.classList.add("active");
+            } else {
+                ui.eyeBtn.classList.remove("active");
+                clearTimeout(eyeHideTimeout);
+                isImageHidden = false;
+                applyFiltersDeferred();
+            }
             saveUiSettings();
-            loadImage();
         }
 
         function toggleFavCurrent() {
@@ -870,7 +891,14 @@
         }
 
         function prevImage() { 
-            if (historyPos > 0) { if (hmActive) exitHardMode(); historyPos--; currentIndex = historyList[historyPos]; loadImage(); resetTimer(); if(isHistoryPanelOpen) renderHistoryThumbs(); } 
+            if (historyPos > 0) {
+                if (hmActive) exitHardMode();
+                clearTimeout(timerTickId); timerTickId = null;
+                cancelAnimationFrame(animationFrameId); animationFrameId = null;
+                historyPos--; currentIndex = historyList[historyPos];
+                loadImage(); resetTimer();
+                if(isHistoryPanelOpen) renderHistoryThumbs();
+            } 
         }
 
         function toggleHistoryPanel() {
@@ -1132,6 +1160,7 @@
                 updateTimerText(0);
                 clearTimeout(timerTickId); timerTickId = null;
                 cancelAnimationFrame(animationFrameId); animationFrameId = null;
+                flashScreen();
                 hmActive ? hmNextPhase() : nextImage();
                 return;
             }
@@ -1213,6 +1242,76 @@
         
         function toggleMute() { isMuted = !isMuted; ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG; saveUiSettings(); }
         function playSound() { if(!isMuted && ui.sound) { ui.sound.currentTime = 0; ui.sound.play().catch(function(){}); } }
+
+        function flashScreen() {
+            const el = document.getElementById('image-container');
+            if (!el) return;
+            el.classList.remove('timer-flash');
+            void el.offsetWidth;
+            el.classList.add('timer-flash');
+            el.addEventListener('animationend', function() {
+                el.classList.remove('timer-flash');
+            }, { once: true });
+
+            // Document PiP側を光らせる
+            if (documentPipWindow) {
+                try {
+                    const pipDoc = documentPipWindow.document;
+                    const container = pipDoc.getElementById('canvas-container');
+                    if (container) {
+                        container.classList.remove('timer-flash');
+                        void container.offsetWidth;
+                        container.classList.add('timer-flash');
+                        container.addEventListener('animationend', function() {
+                            container.classList.remove('timer-flash');
+                        }, { once: true });
+                    }
+                } catch(e) {}
+            }
+
+            // Video PiP側を光らせる（Canvas描画でフェード）
+            if (isPiP && !documentPipWindow && pipInitialized) {
+                pipFlashStartTime = Date.now();
+                animatePipFlash();
+            }
+        }
+
+        function animatePipFlash() {
+            const elapsed = Date.now() - pipFlashStartTime;
+            const duration = 700;
+            if (elapsed >= duration) {
+                // フラッシュ終了後に通常描画を1回実行
+                pipRenderStamp = '';
+                updatePiP();
+                return;
+            }
+            const alpha = 0.45 * (1 - elapsed / duration);
+            const ratio = ui.img.naturalWidth / ui.img.naturalHeight;
+            const baseWidth = Math.max(ui.img.naturalWidth, 2560);
+            pipCanvas.width = baseWidth; pipCanvas.height = baseWidth / ratio;
+            drawToCanvas(pipCanvas, pipCtx, true);
+            // Canvas周囲にグローを描画
+            const w = pipCanvas.width, h = pipCanvas.height;
+            const glowSize = Math.round(w * 0.06);
+            const grad = pipCtx.createLinearGradient(0, 0, glowSize, 0);
+            grad.addColorStop(0, `rgba(0,212,255,${alpha})`);
+            grad.addColorStop(1, 'rgba(0,212,255,0)');
+            // 左辺
+            pipCtx.fillStyle = grad; pipCtx.fillRect(0, 0, glowSize, h);
+            // 右辺
+            pipCtx.save(); pipCtx.translate(w, 0); pipCtx.scale(-1, 1);
+            pipCtx.fillStyle = grad; pipCtx.fillRect(0, 0, glowSize, h); pipCtx.restore();
+            // 上辺
+            const gradT = pipCtx.createLinearGradient(0, 0, 0, glowSize);
+            gradT.addColorStop(0, `rgba(0,212,255,${alpha})`);
+            gradT.addColorStop(1, 'rgba(0,212,255,0)');
+            pipCtx.fillStyle = gradT; pipCtx.fillRect(0, 0, w, glowSize);
+            // 下辺
+            pipCtx.save(); pipCtx.translate(0, h); pipCtx.scale(1, -1);
+            pipCtx.fillStyle = gradT; pipCtx.fillRect(0, 0, w, glowSize); pipCtx.restore();
+
+            requestAnimationFrame(animatePipFlash);
+        }
         function cycleBg() { 
             bgMode = (bgMode + 1) % 3; 
             document.documentElement.style.setProperty('--bg-color', bgColors[bgMode]); 
@@ -1283,6 +1382,9 @@
                         <style>
                             body { margin:0; background-color:${currentBg}; display:flex; flex-direction:column; height:100vh; overflow:hidden; color:#fff; font-family:sans-serif; user-select:none; }
                             #canvas-container { flex:1; display:flex; justify-content:center; align-items:center; position:relative; overflow:hidden; background-color: transparent; }
+                            #canvas-container::after { content:''; position:absolute; inset:0; pointer-events:none; opacity:0; box-shadow:inset 0 0 60px 12px rgba(0,212,255,0.45); }
+                            #canvas-container.timer-flash::after { animation: timerFlash 0.7s ease-out forwards; }
+                            @keyframes timerFlash { 0% { opacity:1; } 100% { opacity:0; } }
                             canvas { max-width:100%; max-height:100%; object-fit:contain; }
                             #controls { height:60px; background-color:#111; display:flex; justify-content:center; align-items:center; gap:25px; border-top:1px solid #333; }
                             button { background-color:#222; border:none; color:#ddd; cursor:pointer; display:flex; justify-content:center; align-items:center; width:44px; height:44px; border-radius:50%; transition:background 0.2s; outline:none; }
