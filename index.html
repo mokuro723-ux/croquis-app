@@ -235,7 +235,8 @@
         const hmPhases = { 1: {t: "①暗記", s: 120, h: false}, 2: {t: "②記憶描写", s: 300, h: true}, 3: {t: "③模写", s: 900, h: false}, 4: {t: "④実践", s: 900, h: true} };
         let currentImageUrl = null, resizeTimer;
         let imageLoadToken = 0;
-        let animationFrameId; let lastPipUpdateTime = 0; 
+        let animationFrameId; let lastPipUpdateTime = 0;
+        let timerTickId = null;
         let historyRenderToken = 0;
         let preloadUrl = null, preloadName = '';
         let preloadedImage = null;
@@ -439,7 +440,10 @@
 
         function handleVisibilityChange() {
             if (document.hidden) {
+                // PiP表示中はバックグラウンドでもtimerTickを維持する
+                // rAF（描画ループ）だけ止める
                 cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
             } else {
                 if (isRunning) {
                     const now = Date.now();
@@ -450,8 +454,9 @@
                         hmActive ? hmNextPhase() : nextImage();
                         return;
                     }
+                    // フォアグラウンド復帰時にrAF描画ループを再開
                     cancelAnimationFrame(animationFrameId);
-                    animationFrameId = requestAnimationFrame(updateSmoothTimer);
+                    animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
                 }
                 if (isPiP) updatePiP();
             }
@@ -812,7 +817,8 @@
         function nextImage(isSkipping = false) { 
             if(images.length === 0) return; 
             if(hmActive) exitHardMode(); 
-            cancelAnimationFrame(animationFrameId);
+            clearTimeout(timerTickId); timerTickId = null;
+            cancelAnimationFrame(animationFrameId); animationFrameId = null;
             const prevIndex = currentIndex;
             
             if (!isSkipping) {
@@ -857,7 +863,7 @@
             lastShownIndex = prevIndex;
             
             loadImage(); remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
-            if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); animationFrameId = requestAnimationFrame(updateSmoothTimer); } 
+            if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); updateSmoothTimer(); } 
             else { updateTimerText(remaining); ui.prog.style.width = '100%'; }
             if(!isSkipping) { playSound(); }
             if(isHistoryPanelOpen) renderHistoryThumbs();
@@ -1094,43 +1100,77 @@
         function toggleTimer() { if(images.length > 0) isRunning ? stopTimer() : startTimer(); }
         function startTimer() { 
             isRunning = true; ui.playBtn.innerHTML = iconPauseSVG; ui.playBtn.classList.remove("accent"); 
-            expectedEndTime = Date.now() + (remaining * 1000); cancelAnimationFrame(animationFrameId); updateSmoothTimer(); updateMediaSession();
+            expectedEndTime = Date.now() + (remaining * 1000);
+            // バックグラウンド対応: setTimeoutループを開始
+            clearTimeout(timerTickId);
+            timerTickLoop();
+            // フォアグラウンド時はrAF描画ループも起動
+            cancelAnimationFrame(animationFrameId);
+            if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+            updateMediaSession();
             if(isPiP) {
                 if (pipVideo && pipVideo.paused) pipVideo.play().catch(function(){}); 
-                updatePiP(); // Doc PiPのボタンUI同期
+                updatePiP();
             }
             if (!isMuted && ui.sound) { ui.sound.volume = 0; ui.sound.play().then(() => { ui.sound.pause(); ui.sound.currentTime = 0; ui.sound.volume = 1; }).catch(()=>{}); }
         }
         function stopTimer() { 
-            isRunning = false; ui.playBtn.innerHTML = iconPlaySVG; ui.playBtn.classList.add("accent"); cancelAnimationFrame(animationFrameId); updateMediaSession();
+            isRunning = false; ui.playBtn.innerHTML = iconPlaySVG; ui.playBtn.classList.add("accent");
+            clearTimeout(timerTickId); timerTickId = null;
+            cancelAnimationFrame(animationFrameId); animationFrameId = null;
+            updateMediaSession();
             if (isPiP) updatePiP(); 
         }
         
-        function updateSmoothTimer() {
-            if(!isRunning) return;
+        // バックグラウンドでも動作するタイマー進行ループ（250ms間隔）
+        function timerTickLoop() {
+            if (!isRunning) return;
+            const now = Date.now();
+            const remainMs = expectedEndTime - now;
+            if (remainMs <= 0) {
+                remaining = 0;
+                updateTimerText(0);
+                clearTimeout(timerTickId); timerTickId = null;
+                cancelAnimationFrame(animationFrameId); animationFrameId = null;
+                hmActive ? hmNextPhase() : nextImage();
+                return;
+            }
+            const nextRemaining = Math.ceil(remainMs / 1000);
+            if (nextRemaining !== remaining) {
+                remaining = nextRemaining;
+                updateTimerText(remaining);
+            }
+            // PiP中かつバックグラウンドのときはここでPiP描画も更新
+            if (isPiP && document.hidden) { updatePiP(); }
+            timerTickId = setTimeout(timerTickLoop, 250);
+        }
+
+        // フォアグラウンド専用のなめらか描画ループ（requestAnimationFrame）
+        function updateSmoothTimerRAF() {
+            if (!isRunning || document.hidden) { animationFrameId = null; return; }
             const now = Date.now(); const remainMs = expectedEndTime - now;
             const nextRemaining = Math.ceil(remainMs / 1000);
-            if(remainMs <= 0) { 
-                remaining = 0; updateTimerText(0);
-                if (lastProgressWidth !== '0%') { ui.prog.style.width = '0%'; lastProgressWidth = '0%'; }
-                if (lastProgressColor !== 'var(--accent-urgent)') { ui.prog.style.backgroundColor = 'var(--accent-urgent)'; lastProgressColor = 'var(--accent-urgent)'; }
-                cancelAnimationFrame(animationFrameId);
-                hmActive ? hmNextPhase() : nextImage(); 
-            } else { 
-                if (nextRemaining !== remaining) {
-                    remaining = nextRemaining;
-                    updateTimerText(remaining);
-                } else {
-                    remaining = nextRemaining;
-                }
-                const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
-                const nextWidth = ((remainMs / totalMs) * 100) + '%';
-                if (nextWidth !== lastProgressWidth) { ui.prog.style.width = nextWidth; lastProgressWidth = nextWidth; }
-                const nextColor = remaining <= 5 ? 'var(--accent-urgent)' : 'var(--accent)';
-                if (nextColor !== lastProgressColor) { ui.prog.style.backgroundColor = nextColor; lastProgressColor = nextColor; }
-                if (isPiP && !document.hidden && (now - lastPipUpdateTime > 66)) { updatePiP(); lastPipUpdateTime = now; }
-                animationFrameId = requestAnimationFrame(updateSmoothTimer);
+            if (remainMs <= 0) {
+                // timerTickLoopに処理を任せる（二重発火防止）
+                animationFrameId = null; return;
             }
+            if (nextRemaining !== remaining) { remaining = nextRemaining; updateTimerText(remaining); }
+            else { remaining = nextRemaining; }
+            const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
+            const nextWidth = ((remainMs / totalMs) * 100) + '%';
+            if (nextWidth !== lastProgressWidth) { ui.prog.style.width = nextWidth; lastProgressWidth = nextWidth; }
+            const nextColor = remaining <= 5 ? 'var(--accent-urgent)' : 'var(--accent)';
+            if (nextColor !== lastProgressColor) { ui.prog.style.backgroundColor = nextColor; lastProgressColor = nextColor; }
+            if (isPiP && (now - lastPipUpdateTime > 66)) { updatePiP(); lastPipUpdateTime = now; }
+            animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+        }
+
+        // 旧updateSmoothTimer: resetTimer等から呼ばれる箇所との互換維持用
+        function updateSmoothTimer() {
+            clearTimeout(timerTickId);
+            timerTickLoop();
+            cancelAnimationFrame(animationFrameId);
+            if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
         }
 
         window.addEventListener('beforeunload', function() {
@@ -1139,6 +1179,8 @@
                 saveTimer = null;
                 flushUiSettings();
             }
+            clearTimeout(timerTickId); timerTickId = null;
+            cancelAnimationFrame(animationFrameId); animationFrameId = null;
             clearPreloadUrl();
             if (currentImageUrl && currentImageUrl.startsWith('blob:')) {
                 URL.revokeObjectURL(currentImageUrl);
@@ -1149,8 +1191,10 @@
         });
         
         function resetTimer() { 
-            cancelAnimationFrame(animationFrameId); remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
-            if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); animationFrameId = requestAnimationFrame(updateSmoothTimer); } 
+            clearTimeout(timerTickId); timerTickId = null;
+            cancelAnimationFrame(animationFrameId); animationFrameId = null;
+            remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
+            if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); updateSmoothTimer(); } 
             else {
                 updateTimerText(remaining);
                 if (lastProgressWidth !== '100%') { ui.prog.style.width = '100%'; lastProgressWidth = '100%'; }
