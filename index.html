@@ -44,6 +44,7 @@
         }
         .top-left { display: flex; align-items: center; gap: 10px; flex: 1; max-width: 150px; height: 36px; }
         .top-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: 1; max-width: 150px; height: 36px; }
+        #image-counter { color: #666; font-size: 0.72rem; white-space: nowrap; letter-spacing: 0.5px; }
         
         #phase-label { color: var(--hm-color); font-weight: bold; font-size: 0.8rem; white-space: nowrap; }
         #hm-step-mini { color: #777; font-size: 0.72rem; white-space: nowrap; }
@@ -104,6 +105,7 @@
         
         button { background-color: var(--btn-bg); color: #ddd; border: none; padding: var(--bottom-btn-pad-y) var(--bottom-btn-pad-x); border-radius: 4px; cursor: pointer; min-width: var(--bottom-btn-min); display: flex; justify-content: center; align-items: center; font-size: 0.9rem;}
         button:hover { background-color: #444; }
+        select:hover { background-color: #444; }
         button.active { background-color: #555; color: var(--accent); outline: 1px solid var(--accent); }
         button.accent { background-color: var(--accent); color: #000; font-weight: bold; }
         button.hard-mode { color: var(--hm-color); }
@@ -150,6 +152,7 @@
     <div id="top-panel">
         <div class="top-left">
             <button class="icon-btn" onclick="toggleHistoryPanel()" title="履歴"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg></button>
+            <div id="image-counter"></div>
             <div id="phase-label"></div>
             <div id="hm-step-mini"></div>
             <button class="text-btn" id="btn-hm-show" onclick="isImageHidden=false; applyFilters();" style="display:none;">表示</button>
@@ -277,7 +280,7 @@
         let showFavsOnly = false;
         let showHiddenOnly = false;
 
-        let skipList = JSON.parse(localStorage.getItem('croquis_skips') || '[]');
+        let skipList = (function(){ try { return JSON.parse(localStorage.getItem('croquis_skips') || '[]'); } catch(_){ return []; } })();
         let skipNameSet = new Set(skipList);
         const settingsKey = 'croquis_ui_settings_v1';
         let favNameSet = new Set();
@@ -341,6 +344,14 @@
                 request.onsuccess = function() { resolve(request.result || []); };
                 request.onerror = function() { resolve([]); };
             });
+        }
+        let skipSaveTimer = null;
+        function saveSkipList() {
+            if (skipSaveTimer) clearTimeout(skipSaveTimer);
+            skipSaveTimer = setTimeout(function() {
+                try { localStorage.setItem('croquis_skips', JSON.stringify(skipList)); } catch(_) {}
+                skipSaveTimer = null;
+            }, 120);
         }
         function rebuildFavNameSet() { favNameSet = new Set(dbFavImages.map(function(f){ return f.name; })); }
         function rebuildSkipNameSet() { skipNameSet = new Set(skipList); }
@@ -469,7 +480,9 @@
                         hmActive ? hmNextPhase() : nextImage();
                         return;
                     }
-                    // フォアグラウンド復帰時にrAF描画ループを再開
+                    // 復帰時に残り秒を正確に補正してから描画ループを再開
+                    remaining = Math.ceil((expectedEndTime - now) / 1000);
+                    updateTimerText(remaining);
                     cancelAnimationFrame(animationFrameId);
                     animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
                 }
@@ -496,11 +509,13 @@
         function wakeFocusMode() { armFocusIdleTimer(); }
 
         function applyLoadedFiles(files) {
-            if(files.length > 0) { 
-                sourceImages = files; if(settings.shuffle) shuffleArray(sourceImages); 
+            if (files.length > 0) { 
+                sourceImages = files; if (settings.shuffle) shuffleArray(sourceImages); 
                 images = sourceImages; isFavMode = false; showFavsOnly = false; showHiddenOnly = false;
                 ui.historyFilterBtn.innerText = '全て (履歴)';
-                currentIndex = 0; historyList = []; historyPos = -1; nextImage(); 
+                currentIndex = 0; historyList = [0]; historyPos = 0;
+                loadImage(); resetTimer();
+                updateImageCounter();
             }
         }
 
@@ -655,8 +670,8 @@
             }
         }
 
-        function loadImage() {
-            if(images.length === 0) { ui.img.style.display = 'none'; ui.favIcon.style.display = 'none'; return; }
+        function loadImage(skipDepth) {
+            if(images.length === 0) { ui.img.style.display = 'none'; ui.favIcon.style.display = 'none'; updateImageCounter(); return; }
             const item = images[currentIndex];
             if(!item) return;
             const loadToken = ++imageLoadToken;
@@ -668,7 +683,7 @@
             }
 
             if(!isFavMode && skipNameSet.has(item.name)) {
-                if (hasUnskippedInCurrentPool()) {
+                if (hasUnskippedInCurrentPool() && (skipDepth || 0) < images.length) {
                     setTimeout(function(){ nextImage(true); }, 10);
                     return;
                 }
@@ -687,7 +702,7 @@
             };
             ui.img.onerror = function() {
                 if (loadToken !== imageLoadToken) return;
-                nextImage();
+                if (images.length > 1) nextImage();
             };
 
             if (item.data) { currentImageUrl = item.data; } 
@@ -701,6 +716,7 @@
             ui.img.src = currentImageUrl;
             updateMediaSession();
             updatePreloadQueue();
+            updateImageCounter();
         }
 
         function applyFilters() {
@@ -795,6 +811,7 @@
                     ui.historyFilterBtn.innerText = '全て (履歴)';
                     currentIndex = 0; historyList = []; historyPos = -1; loadImage();
                 } else { currentIndex = currentIndex % dbFavImages.length; loadImage(); }
+                updateImageCounter();
                 renderHistoryThumbs();
             } else {
                 const foundIdx = dbFavImages.findIndex(function(f){ return f.name === fname; });
@@ -817,7 +834,7 @@
             if(!skipNameSet.has(fname)) {
                 skipList.push(fname);
                 rebuildSkipNameSet();
-                localStorage.setItem('croquis_skips', JSON.stringify(skipList));
+                saveSkipList();
             }
             ui.managePopup.classList.remove('show'); nextImage();
         }
@@ -831,6 +848,7 @@
             ui.favIcon.style.display = 'none'; ui.managePopup.classList.remove('show');
             isFavMode = false; showFavsOnly = false; showHiddenOnly = false; ui.historyFilterBtn.innerText = '全て (履歴)';
             images = sourceImages; currentIndex = 0; historyList = []; historyPos = -1; loadImage();
+            updateImageCounter();
             if(ui.historyPanel.classList.contains('open')) renderHistoryThumbs();
             alert("データを完全にリセットしました。");
         }
@@ -862,7 +880,9 @@
                     } else {
                         currentIndex = (currentIndex + 1) % images.length;
                     }
-                    historyList.push(currentIndex); if (historyList.length > 100) { historyList.shift(); } else { historyPos++; } 
+                    historyList.push(currentIndex);
+                    if (historyList.length > 100) { historyList.shift(); historyPos = historyList.length - 1; }
+                    else { historyPos++; }
                 }
             } else {
                 if (settings.shuffle) {
@@ -885,7 +905,7 @@
             
             loadImage(); remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
             if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); updateSmoothTimer(); } 
-            else { updateTimerText(remaining); ui.prog.style.width = '100%'; }
+            else { updateTimerText(remaining); ui.prog.style.width = '100%'; lastProgressWidth = '100%'; }
             if(!isSkipping) { playSound(); }
             if(isHistoryPanelOpen) renderHistoryThumbs();
         }
@@ -926,13 +946,14 @@
                 if (sourceImages.length > 0 && isFavMode) { isFavMode = false; images = sourceImages; currentIndex = 0; historyList = []; historyPos = -1; loadImage(); resetTimer(); }
             }
             ui.historyFilterBtn.innerText = showFavsOnly ? '★ お気に入り' : (showHiddenOnly ? '非表示' : '全て (履歴)');
+            updateImageCounter();
             renderHistoryThumbs();
         }
         function unhideByName(name) {
             if (!name || !skipNameSet.has(name)) return;
             skipList = skipList.filter(function(n){ return n !== name; });
             rebuildSkipNameSet();
-            localStorage.setItem('croquis_skips', JSON.stringify(skipList));
+            saveSkipList();
             renderHistoryThumbs();
         }
 
@@ -1129,11 +1150,9 @@
         function startTimer() { 
             isRunning = true; ui.playBtn.innerHTML = iconPauseSVG; ui.playBtn.classList.remove("accent"); 
             expectedEndTime = Date.now() + (remaining * 1000);
-            // バックグラウンド対応: setTimeoutループを開始
-            clearTimeout(timerTickId);
+            clearTimeout(timerTickId); timerTickId = null;
+            cancelAnimationFrame(animationFrameId); animationFrameId = null;
             timerTickLoop();
-            // フォアグラウンド時はrAF描画ループも起動
-            cancelAnimationFrame(animationFrameId);
             if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
             updateMediaSession();
             if(isPiP) {
@@ -1165,12 +1184,15 @@
                 return;
             }
             const nextRemaining = Math.ceil(remainMs / 1000);
-            if (nextRemaining !== remaining) {
+            const secondChanged = (nextRemaining !== remaining);
+            if (secondChanged) {
                 remaining = nextRemaining;
                 updateTimerText(remaining);
             }
-            // PiP中かつバックグラウンドのときはここでPiP描画も更新
-            if (isPiP && document.hidden) { updatePiP(); }
+            // PiP中かつバックグラウンドのときは残り秒が変わったときだけ再描画
+            if (isPiP && document.hidden && secondChanged) {
+                pipRenderStamp = ''; updatePiP();
+            }
             timerTickId = setTimeout(timerTickLoop, 250);
         }
 
@@ -1196,9 +1218,10 @@
 
         // 旧updateSmoothTimer: resetTimer等から呼ばれる箇所との互換維持用
         function updateSmoothTimer() {
-            clearTimeout(timerTickId);
+            // 既存のループを確実に止めてから再起動
+            clearTimeout(timerTickId); timerTickId = null;
+            cancelAnimationFrame(animationFrameId); animationFrameId = null;
             timerTickLoop();
-            cancelAnimationFrame(animationFrameId);
             if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
         }
 
@@ -1231,13 +1254,27 @@
                 if (isPiP) updatePiP();
             }
         }
-        function setTimer(sec) { exitHardMode(); timerSeconds = sec; const select = document.getElementById('time-select'); if (select) select.value = sec; resetTimer(); }
+        function setTimer(sec) { 
+            if (!hmActive) exitHardMode();
+            timerSeconds = sec;
+            const select = document.getElementById('time-select');
+            if (select) select.value = sec;
+            resetTimer();
+        }
         
         function updateTimerText(sec) { 
             let m = Math.floor(sec / 60); let s = sec % 60;
             const txt = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
             if (txt !== lastTimerText) { ui.timer.innerText = txt; lastTimerText = txt; }
             if(isRunning && isPiP && !documentPipWindow) updateMediaSession();
+        }
+
+        function updateImageCounter() {
+            const el = document.getElementById('image-counter');
+            if (!el) return;
+            const pool = isFavMode ? dbFavImages : sourceImages;
+            if (!pool || pool.length === 0) { el.textContent = ''; return; }
+            el.textContent = (currentIndex + 1) + ' / ' + pool.length;
         }
         
         function toggleMute() { isMuted = !isMuted; ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG; saveUiSettings(); }
@@ -1277,6 +1314,7 @@
         }
 
         function animatePipFlash() {
+            if (!isPiP || !pipCanvas || !pipCtx || documentPipWindow) return;
             const elapsed = Date.now() - pipFlashStartTime;
             const duration = 700;
             if (elapsed >= duration) {
@@ -1316,15 +1354,31 @@
             bgMode = (bgMode + 1) % 3; 
             document.documentElement.style.setProperty('--bg-color', bgColors[bgMode]); 
             saveUiSettings();
-            if(isPiP) {
-                if(documentPipWindow) { documentPipWindow.document.body.style.backgroundColor = bgColors[bgMode]; }
+            if (isPiP) {
+                pipRenderStamp = '';
                 updatePiP();
             }
         }
         
         function toggleHardMode() { hmActive ? exitHardMode() : startHardMode(); }
-        function startHardMode() { if(images.length === 0) return; hmActive = true; ui.hmBtn.classList.add("active"); setHmPhase(1); startTimer(); updateHmMini(); }
-        function exitHardMode() { hmActive = false; ui.hmBtn.classList.remove("active"); ui.phase.innerText = ""; isImageHidden = false; ui.btnHmShow.style.display = 'none'; ui.btnHmHide.style.display = 'none'; updateHmMini(); applyFilters(); resetTimer(); }
+        function startHardMode() { 
+            if(images.length === 0) return; 
+            hmActive = true; ui.hmBtn.classList.add("active");
+            startTimer();
+            setHmPhase(1);
+            updateHmMini();
+        }
+        function exitHardMode() { 
+            hmActive = false; ui.hmBtn.classList.remove("active"); ui.phase.innerText = ""; 
+            isImageHidden = false; ui.btnHmShow.style.display = 'none'; ui.btnHmHide.style.display = 'none'; 
+            updateHmMini(); applyFilters();
+            stopTimer();
+            remaining = timerSeconds;
+            updateTimerText(remaining);
+            ui.prog.style.width = '100%'; lastProgressWidth = '100%';
+            if (lastProgressColor !== 'var(--accent)') { ui.prog.style.backgroundColor = 'var(--accent)'; lastProgressColor = 'var(--accent)'; }
+            if (isPiP) updatePiP();
+        }
         function setHmPhase(p) { hmPhase = p; ui.phase.innerText = hmPhases[p].t; remaining = hmPhases[p].s; isImageHidden = hmPhases[p].h; if (isRunning) expectedEndTime = Date.now() + (remaining * 1000); updateHmMini(); applyFilters(); playSound(); resetTimer(); }
         function hmNextPhase() { if(hmPhase < 4) { setHmPhase(hmPhase + 1); } else { stopTimer(); ui.phase.innerText = "完了"; ui.btnHmShow.style.display = 'block'; ui.btnHmHide.style.display = 'block'; playSound(); } }
 
@@ -1338,7 +1392,7 @@
             if (hasMediaSession && images.length > 0) {
                 const item = images[currentIndex];
                 const title = item ? item.name : 'Croquis App';
-                const artist = '残り: ' + ui.timer.innerText;
+                const artist = '残り: ' + lastTimerText;
                 const album = isFavMode ? '★ お気に入り' : '通常再生';
                 const stamp = title + '|' + artist + '|' + album + '|' + (isRunning ? '1' : '0');
                 if (updateMediaSession.lastStamp === stamp) return;
@@ -1426,6 +1480,12 @@
         }
 
         function drawToCanvas(canvas, ctx, drawOverlay) {
+            const ratio = ui.img.naturalWidth / ui.img.naturalHeight;
+            const baseWidth = Math.max(ui.img.naturalWidth, canvas === pipCanvas ? 2560 : 1200);
+            const targetH = Math.round(baseWidth / ratio);
+            if (canvas.width !== baseWidth || canvas.height !== targetH) {
+                canvas.width = baseWidth; canvas.height = targetH;
+            }
             ctx.fillStyle = bgMode === 0 ? '#1e1e1e' : (bgMode === 1 ? '#000' : '#fff'); ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.save();
             if(!isImageHidden) {
@@ -1472,9 +1532,6 @@
             if (documentPipWindow) {
                 const canvas = documentPipWindow.document.querySelector('canvas');
                 if (canvas) {
-                    const ratio = ui.img.naturalWidth / ui.img.naturalHeight;
-                    const baseWidth = Math.max(ui.img.naturalWidth, 1200);
-                    canvas.width = baseWidth; canvas.height = baseWidth / ratio;
                     const ctx = canvas.getContext('2d');
                     drawToCanvas(canvas, ctx, true); 
                 }
@@ -1485,8 +1542,6 @@
                     else { playBtn.classList.add('paused'); }
                 }
             } else if (pipInitialized && pipVideo) {
-                const ratio = ui.img.naturalWidth / ui.img.naturalHeight; const baseWidth = Math.max(ui.img.naturalWidth, 2560);
-                pipCanvas.width = baseWidth; pipCanvas.height = baseWidth / ratio;
                 drawToCanvas(pipCanvas, pipCtx, true);
             }
         }
@@ -1503,10 +1558,10 @@
             if (nextLongPressHandled) { nextLongPressHandled = false; if (e) e.preventDefault(); return; }
             nextImage();
         }
-        function onPressStart(btn, which) {
+        function onPressStart(btn, which, startX, startY) {
             const delay = 450;
-            if (which === 'next') { nextPressStartX = pointerStartX; nextPressStartY = pointerStartY; }
-            else { prevPressStartX = pointerStartX; prevPressStartY = pointerStartY; }
+            if (which === 'next') { nextPressStartX = startX; nextPressStartY = startY; }
+            else { prevPressStartX = startX; prevPressStartY = startY; }
             const timer = setTimeout(function() {
                 if (which === 'next') { nextLongPressHandled = true; skipCurrent(); }
                 else if (which === 'prev') {
@@ -1516,7 +1571,7 @@
                     if (!fname || !skipNameSet.has(fname)) return;
                     skipList = skipList.filter(function(n){ return n !== fname; });
                     rebuildSkipNameSet();
-                    localStorage.setItem('croquis_skips', JSON.stringify(skipList));
+                    saveSkipList();
                     alert("この画像のスキップを解除しました");
                 }
             }, delay);
@@ -1531,11 +1586,11 @@
             const prevBtn = document.getElementById('prev-btn');
             const nextBtn = document.getElementById('next-btn');
             if (!prevBtn || !nextBtn) return;
-            prevBtn.addEventListener('pointerdown', function(){ onPressStart(prevBtn, 'prev'); }, { passive: true });
+            prevBtn.addEventListener('pointerdown', function(e){ onPressStart(prevBtn, 'prev', e.clientX, e.clientY); }, { passive: true });
             prevBtn.addEventListener('pointerup', function(){ onPressEnd('prev'); }, { passive: true });
             prevBtn.addEventListener('pointerleave', function(){ onPressEnd('prev'); }, { passive: true });
             prevBtn.addEventListener('pointercancel', function(){ onPressEnd('prev'); }, { passive: true });
-            nextBtn.addEventListener('pointerdown', function(){ onPressStart(nextBtn, 'next'); }, { passive: true });
+            nextBtn.addEventListener('pointerdown', function(e){ onPressStart(nextBtn, 'next', e.clientX, e.clientY); }, { passive: true });
             nextBtn.addEventListener('pointerup', function(){ onPressEnd('next'); }, { passive: true });
             nextBtn.addEventListener('pointerleave', function(){ onPressEnd('next'); }, { passive: true });
             nextBtn.addEventListener('pointercancel', function(){ onPressEnd('next'); }, { passive: true });
@@ -1558,7 +1613,13 @@
         document.addEventListener('keydown', function(e) {
             wakeFocusMode();
             if (document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'INPUT') return;
-            if (e.code === 'Space') { e.preventDefault(); toggleTimer(); } else if (e.code === 'ArrowRight') { nextImage(); } else if (e.code === 'ArrowLeft') { prevImage(); }
+            if (e.code === 'Escape') {
+                if (ui.managePopup.classList.contains('show')) { ui.managePopup.classList.remove('show'); return; }
+                if (document.getElementById('history-panel').classList.contains('open')) { toggleHistoryPanel(); return; }
+            }
+            if (e.code === 'Space') { e.preventDefault(); toggleTimer(); } 
+            else if (e.code === 'ArrowRight') { nextImage(); } 
+            else if (e.code === 'ArrowLeft') { prevImage(); }
         });
         document.addEventListener('pointerdown', function() { wakeFocusMode(); }, { passive: true });
     </script>
