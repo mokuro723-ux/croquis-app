@@ -96,6 +96,7 @@
         button.hard-mode { color: var(--hm-color); }
         button.hard-mode.active { background-color: var(--hm-color); color: black; outline: none; }
         button.pip-active { background-color: #00d4ff; color: #000; outline: none; }
+        button.flip-disabled { opacity: 0.3; pointer-events: none; }
         
         .separator { color: #555; align-self: center; font-size: 1.2rem; margin: 0 4px; font-weight: 100; }
         .svg-icon { width: 20px; height: 20px; fill: currentColor; pointer-events: none; }
@@ -192,6 +193,7 @@
             <option value="180">3m</option>
             <option value="300">5m</option>
             <option value="600">10m</option>
+            <option value="1800">30m</option>
         </select>
         
         <span class="separator">|</span>
@@ -199,6 +201,7 @@
         <button id="shuffle-btn" onclick="toggle('shuffle')" class="active" title="シャッフル"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
         <button id="flipH-btn" onclick="toggle('flipH')" title="左右反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10,6 L4,12 L10,18 Z" /><rect x="11" y="4" width="2" height="16" /><path d="M14,6 L20,12 L14,18 Z" /></svg></button>
         <button id="flipV-btn" onclick="toggle('flipV')" title="上下反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6,10 L12,4 L18,10 Z" /><rect x="4" y="11" width="16" height="2" /><path d="M6,14 L12,20 L18,14 Z" /></svg></button>
+        <button id="randomFlip-btn" onclick="toggleRandomFlip()" title="ランダム反転（画像ごとにランダムで反転）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM8 17c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm4 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm4 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/></svg></button>
         <button id="grid-btn" onclick="toggle('grid')" title="グリッド"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg></button>
         <button id="mono-btn" onclick="toggle('mono')" title="モノクロ"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm1-17.93c3.95.49 7 3.85 7 7.93s-3.05 7.44-7 7.93V4.07z"/></svg></button>
         
@@ -225,6 +228,7 @@
         let lastShownIndex = -1;
         let timerSeconds = 30, remaining = 30, isRunning = false, expectedEndTime = 0;
         let settings = { flipH: false, flipV: false, shuffle: true, grid: false, mono: false };
+        let randomFlipEnabled = false;
         let isMuted = true, bgMode = 0, isImageHidden = false; 
         let hmActive = false, hmPhase = 0;
         const hmPhases = { 1: {t: "①暗記", s: 120, h: false}, 2: {t: "②記憶描写", s: 300, h: true}, 3: {t: "③模写", s: 900, h: false}, 4: {t: "④実践", s: 900, h: true} };
@@ -334,9 +338,11 @@
             return false;
         }
 
+        function isIOSDevice() {
+            return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+        }
         function checkDevice() {
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-            if (isIOS) { ui.pipBtn.style.display = 'none'; }
+            if (isIOSDevice()) { ui.pipBtn.style.display = 'none'; }
         }
         function syncAppHeight() {
             const vv = window.visualViewport;
@@ -347,7 +353,7 @@
             document.documentElement.style.setProperty('--app-height', h + 'px');
 
             const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const isIOS = isIOSDevice();
             let safe = 0;
             if (isStandalone && isIOS && innerH > 0 && vvH > 0) {
                 safe = Math.max(0, Math.round(innerH - vvH));
@@ -361,7 +367,8 @@
                 settings: settings,
                 bgMode: bgMode,
                 isMuted: isMuted,
-                isEyeHideEnabled: isEyeHideEnabled
+                isEyeHideEnabled: isEyeHideEnabled,
+                randomFlipEnabled: randomFlipEnabled
             };
             try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (_) {}
         }
@@ -388,6 +395,7 @@
                 if (saved && typeof saved.bgMode === 'number') bgMode = Math.max(0, Math.min(2, saved.bgMode));
                 if (saved && typeof saved.isMuted === 'boolean') isMuted = saved.isMuted;
                 if (saved && typeof saved.isEyeHideEnabled === 'boolean') isEyeHideEnabled = saved.isEyeHideEnabled;
+                if (saved && typeof saved.randomFlipEnabled === 'boolean') randomFlipEnabled = saved.randomFlipEnabled;
             } catch (_) {}
         }
 
@@ -400,6 +408,18 @@
             });
             if (isEyeHideEnabled) ui.eyeBtn.classList.add('active');
             else ui.eyeBtn.classList.remove('active');
+            const rfBtn = document.getElementById('randomFlip-btn');
+            if (rfBtn) {
+                if (randomFlipEnabled) {
+                    rfBtn.classList.add('active');
+                    document.getElementById('flipH-btn').classList.add('flip-disabled');
+                    document.getElementById('flipV-btn').classList.add('flip-disabled');
+                } else {
+                    rfBtn.classList.remove('active');
+                    document.getElementById('flipH-btn').classList.remove('flip-disabled');
+                    document.getElementById('flipV-btn').classList.remove('flip-disabled');
+                }
+            }
             ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG;
             document.documentElement.style.setProperty('--bg-color', bgColors[bgMode]);
         }
@@ -547,7 +567,13 @@
 
         function getNextIndexForPreload() {
             if (!images.length) return -1;
-            if (settings.shuffle) return Math.floor(Math.random() * images.length);
+            if (settings.shuffle) {
+                if (images.length === 1) return 0;
+                let idx, guard = 0;
+                do { idx = Math.floor(Math.random() * images.length); guard++; }
+                while (idx === currentIndex && guard < 16);
+                return idx;
+            }
             return (currentIndex + 1) % images.length;
         }
 
@@ -613,6 +639,12 @@
             const item = images[currentIndex];
             if(!item) return;
             const loadToken = ++imageLoadToken;
+
+            if (randomFlipEnabled) {
+                const r = Math.floor(Math.random() * 4);
+                settings.flipH = (r === 1 || r === 3);
+                settings.flipV = (r === 2 || r === 3);
+            }
 
             if(!isFavMode && skipNameSet.has(item.name)) {
                 if (hasUnskippedInCurrentPool()) {
@@ -693,6 +725,27 @@
             if(key === 'shuffle' && !isFavMode && sourceImages.length > 0) { shuffleArray(sourceImages); images = sourceImages; }
             saveUiSettings();
             applyFiltersDeferred(); 
+        }
+
+        function toggleRandomFlip() {
+            randomFlipEnabled = !randomFlipEnabled;
+            const btn = document.getElementById('randomFlip-btn');
+            if (randomFlipEnabled) {
+                btn.classList.add('active');
+                // ランダム反転ON時は手動flipボタンを非活性化
+                document.getElementById('flipH-btn').classList.add('flip-disabled');
+                document.getElementById('flipV-btn').classList.add('flip-disabled');
+            } else {
+                btn.classList.remove('active');
+                document.getElementById('flipH-btn').classList.remove('flip-disabled');
+                document.getElementById('flipV-btn').classList.remove('flip-disabled');
+                // OFF時は反転をリセット
+                settings.flipH = false; settings.flipV = false;
+                const hBtn = document.getElementById('flipH-btn'); if(hBtn) hBtn.classList.remove('active');
+                const vBtn = document.getElementById('flipV-btn'); if(vBtn) vBtn.classList.remove('active');
+                applyFiltersDeferred();
+            }
+            saveUiSettings();
         }
 
         function toggleEyeHide() {
