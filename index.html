@@ -117,10 +117,10 @@
 
         @media (max-width: 440px) {
             :root {
-                --bottom-gap: clamp(4px, 1.2vw, 6px);
-                --bottom-btn-pad-x: clamp(7px, 2.1vw, 9px);
-                --bottom-btn-pad-y: clamp(6px, 1.6vw, 7px);
-                --bottom-btn-min: clamp(36px, 10vw, 40px);
+                --bottom-gap: 4px;
+                --bottom-btn-pad-x: 6px;
+                --bottom-btn-pad-y: 6px;
+                --bottom-btn-min: 34px;
             }
             #top-panel { padding: 0 8px 12px 8px; }
             .top-left, .top-right { max-width: 110px; gap: 4px; height: 36px; }
@@ -129,6 +129,7 @@
             #timer-label { font-size: 1.5rem; letter-spacing: 1px; bottom: 12px; }
             #history-panel { width: 100%; border-right: none; }
             #history-content { grid-template-columns: repeat(3, 1fr); }
+            select { padding: 7px 10px; }
         }
     </style>
 </head>
