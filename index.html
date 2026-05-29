@@ -92,14 +92,14 @@
             100% { opacity: 0; }
         }
         #canvas-area { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
-        #main-image { max-width: 100%; max-height: 100%; object-fit: contain; display: none; transition: opacity 0.2s; }
-        #grid-overlay { position: absolute; pointer-events: none; display: none; border: 1px solid rgba(128,128,128,0.4); background-image: linear-gradient(to right, rgba(128,128,128,0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(128,128,128,0.4) 1px, transparent 1px); background-size: 33.33% 33.33%; z-index: 5; }
+        #main-image { max-width: 100%; max-height: 100%; object-fit: contain; display: none; will-change: transform; contain: layout style; }
+        #grid-overlay { position: absolute; pointer-events: none; display: none; inset: 0; border: none; background-image: linear-gradient(to right, rgba(128,128,128,0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(128,128,128,0.4) 1px, transparent 1px); background-size: 33.33% 33.33%; z-index: 5; }
         #fav-icon-large { position: absolute; top: 10px; right: 10px; font-size: 2rem; color: gold; display: none; text-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 10; pointer-events: none; }
         
         #progress-container { width: 100%; height: 4px; background-color: #222; }
         #progress-bar { width: 100%; height: 100%; background-color: var(--accent); }
         
-        #bottom-panel { position: relative; background-color: var(--panel-bg); padding: 10px; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--bottom-gap); border-top: 1px solid var(--border-color); transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease; max-height: 250px; opacity: 1; overflow: visible; padding-bottom: calc(10px + var(--bottom-safe)); }
+        #bottom-panel { position: relative; background-color: var(--panel-bg); padding: 10px; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--bottom-gap); border-top: 1px solid var(--border-color); transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease; max-height: 250px; opacity: 1; overflow: visible; padding-bottom: calc(10px + var(--bottom-safe)); will-change: opacity; }
         #bottom-panel.hidden { max-height: 0; padding-top: 0; padding-bottom: 0; border-top: 0px solid transparent; opacity: 0; overflow: hidden; }
         #bottom-panel.idle-dim { opacity: 0.35; }
         
@@ -123,7 +123,7 @@
             position: absolute; bottom: calc(60px + env(safe-area-inset-bottom, 0px)); left: 10px; background-color: rgba(30, 30, 30, 0.95);
             border: 1px solid var(--border-color); border-radius: 6px; padding: 8px;
             display: flex; flex-direction: column; gap: 5px; z-index: 150;
-            opacity: 0; pointer-events: none; transform: translateY(10px); transition: all 0.2s ease;
+            opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity 0.2s ease, transform 0.2s ease;
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         #manage-popup.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
@@ -271,10 +271,6 @@
         let lastImageFilter = '';
         let lastImageOpacity = '';
         let lastGridDisplay = '';
-        let lastGridWidth = '';
-        let lastGridHeight = '';
-        let lastGridLeft = '';
-        let lastGridTop = '';
 
         let isEyeHideEnabled = false, eyeHideTimeout = null;
         let showFavsOnly = false;
@@ -315,7 +311,8 @@
             hmMini: document.getElementById('hm-step-mini'),
             historyPanel: document.getElementById('history-panel'),
             historyContent: document.getElementById('history-content'),
-            historyFilterBtn: document.getElementById('history-filter-btn')
+            historyFilterBtn: document.getElementById('history-filter-btn'),
+            imageCounter: document.getElementById('image-counter')
         };
         function updateHmMini() {
             if (!hmActive) { ui.hmMini.innerText = ''; return; }
@@ -520,9 +517,12 @@
             focusIdleTimer = setTimeout(function() { setFocusDimmed(true); }, 5000);
         }
 
+        let originalOrder = [];
+
         function applyLoadedFiles(files) {
             if (files.length > 0) { 
                 clearPreloadUrl();
+                originalOrder = files.slice();
                 sourceImages = files; if (settings.shuffle) shuffleArray(sourceImages); 
                 images = sourceImages; isFavMode = false; showFavsOnly = false; showHiddenOnly = false;
                 ui.historyFilterBtn.innerText = '全て (履歴)';
@@ -534,6 +534,7 @@
 
         function handleFiles(e) {
             const list = e.target.files;
+            if (!list || list.length === 0) return;
             const files = [];
             for (let i = 0; i < list.length; i++) {
                 const f = list[i];
@@ -717,6 +718,7 @@
 
             ui.img.onload = function() {
                 if (loadToken !== imageLoadToken) return;
+                ui.img.style.display = 'block';
                 applyFilters(); clearTimeout(eyeHideTimeout);
                 if (isEyeHideEnabled && !hmActive) { eyeHideTimeout = setTimeout(function() { isImageHidden = true; applyFilters(); }, 5000); }
             };
@@ -742,7 +744,6 @@
             }
             currentImageUrl = newUrl;
 
-            ui.img.style.display = 'block';
             ui.img.src = currentImageUrl;
             updateMediaSession();
             if (!skipPreload) updatePreloadQueue();
@@ -760,15 +761,7 @@
             if (nextOpacity !== lastImageOpacity) { ui.img.style.opacity = nextOpacity; lastImageOpacity = nextOpacity; }
             
             if(settings.grid && !isImageHidden && ui.img.complete) {
-                const w = ui.img.offsetWidth + 'px';
-                const h = ui.img.offsetHeight + 'px';
-                const l = ui.img.offsetLeft + 'px';
-                const t = ui.img.offsetTop + 'px';
                 if (lastGridDisplay !== 'block') { ui.grid.style.display = 'block'; lastGridDisplay = 'block'; }
-                if (w !== lastGridWidth) { ui.grid.style.width = w; lastGridWidth = w; }
-                if (h !== lastGridHeight) { ui.grid.style.height = h; lastGridHeight = h; }
-                if (l !== lastGridLeft) { ui.grid.style.left = l; lastGridLeft = l; }
-                if (t !== lastGridTop) { ui.grid.style.top = t; lastGridTop = t; }
             } else {
                 if (lastGridDisplay !== 'none') { ui.grid.style.display = 'none'; lastGridDisplay = 'none'; }
             }
@@ -791,7 +784,15 @@
             if(btn) { if(settings[key]) { btn.classList.add("active"); } else { btn.classList.remove("active"); } }
             if (key === 'shuffle' && !isFavMode && sourceImages.length > 0) {
                 const currentItem = images[currentIndex];
-                shuffleArray(sourceImages);
+                if (settings.shuffle) {
+                    // ONにしたとき: シャッフル
+                    shuffleArray(sourceImages);
+                } else {
+                    // OFFにしたとき: 元の順序に復元
+                    if (originalOrder.length === sourceImages.length) {
+                        sourceImages = originalOrder.slice();
+                    }
+                }
                 images = sourceImages;
                 if (currentItem) {
                     const newIdx = images.findIndex(function(f){ return f.name === currentItem.name; });
@@ -857,7 +858,11 @@
                 renderHistoryThumbs();
             } else {
                 const foundIdx = dbFavImages.findIndex(function(f){ return f.name === fname; });
-                if(foundIdx > -1) { dbFavImages.splice(foundIdx, 1); rebuildFavNameSet(); deleteFavFromDB(fname); ui.favIcon.style.display = 'none'; } 
+                if(foundIdx > -1) {
+                    dbFavImages.splice(foundIdx, 1); rebuildFavNameSet(); deleteFavFromDB(fname);
+                    ui.favIcon.style.display = 'none';
+                    if (isHistoryPanelOpen && showFavsOnly) renderHistoryThumbs();
+                }
                 else {
                     const reader = new FileReader();
                     reader.onload = function(e) {
@@ -892,10 +897,23 @@
             if (db) { const tx = db.transaction(storeName, "readwrite"); tx.onerror = function(){}; tx.objectStore(storeName).clear(); }
             ui.favIcon.style.display = 'none'; ui.managePopup.classList.remove('show');
             isFavMode = false; showFavsOnly = false; showHiddenOnly = false; ui.historyFilterBtn.innerText = '全て (履歴)';
-            images = sourceImages; currentIndex = 0; historyList = [0]; historyPos = 0; loadImage();
+            if (sourceImages.length > 0) {
+                images = sourceImages; currentIndex = 0; historyList = [0]; historyPos = 0; loadImage();
+            } else {
+                images = []; currentIndex = 0; historyList = []; historyPos = -1;
+            }
             updateImageCounter();
             if(isHistoryPanelOpen) renderHistoryThumbs();
             alert("データを完全にリセットしました。");
+        }
+
+        function pickShuffledIndex(excludeA, excludeB, maxGuard) {
+            if (images.length === 1) return 0;
+            if (images.length === 2) return excludeA === 0 ? 1 : 0;
+            let candidate, guard = 0;
+            do { candidate = Math.floor(Math.random() * images.length); guard++; }
+            while ((candidate === excludeA || candidate === excludeB) && guard < maxGuard);
+            return candidate;
         }
 
         function nextImage(isSkipping = false) { 
@@ -908,49 +926,26 @@
             if (!isSkipping) {
                 if (historyPos < historyList.length - 1) { historyPos++; currentIndex = historyList[historyPos]; } 
                 else {
-                    if (settings.shuffle) {
-                        if (images.length > 2) {
-                            let candidate = Math.floor(Math.random() * images.length);
-                            let guard = 0;
-                            while ((candidate === prevIndex || candidate === lastShownIndex) && guard < 12) {
-                                candidate = Math.floor(Math.random() * images.length);
-                                guard++;
-                            }
-                            currentIndex = candidate;
-                        } else if (images.length === 2) {
-                            currentIndex = prevIndex === 0 ? 1 : 0;
-                        } else {
-                            currentIndex = 0;
-                        }
-                    } else {
-                        currentIndex = (currentIndex + 1) % images.length;
-                    }
+                    currentIndex = settings.shuffle
+                        ? pickShuffledIndex(prevIndex, lastShownIndex, 12)
+                        : (currentIndex + 1) % images.length;
                     historyList.push(currentIndex);
                     if (historyList.length > 100) { historyList.shift(); historyPos = historyList.length - 1; }
                     else { historyPos++; }
                 }
             } else {
-                if (settings.shuffle) {
-                    if (images.length > 1) {
-                        let candidate = Math.floor(Math.random() * images.length);
-                        let guard = 0;
-                        while (candidate === prevIndex && guard < 8) {
-                            candidate = Math.floor(Math.random() * images.length);
-                            guard++;
-                        }
-                        currentIndex = candidate;
-                    } else {
-                        currentIndex = 0;
-                    }
-                } else {
-                    currentIndex = (currentIndex + 1) % images.length;
-                }
+                currentIndex = settings.shuffle
+                    ? pickShuffledIndex(prevIndex, -1, 8)
+                    : (currentIndex + 1) % images.length;
             }
             lastShownIndex = prevIndex;
             updatePreloadQueue(); // インデックス確定後すぐに先読み開始
             loadImage(0, true); remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
-            if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); updateSmoothTimer(); } 
-            else { updateTimerText(remaining); ui.prog.style.width = '100%'; lastProgressWidth = '100%'; }
+            if (isRunning) {
+                expectedEndTime = Date.now() + (remaining * 1000);
+                timerTickLoop();
+                if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+            } else { updateTimerText(remaining); ui.prog.style.width = '100%'; lastProgressWidth = '100%'; }
             if(!isSkipping) { playSound(); }
             if(isHistoryPanelOpen) renderHistoryThumbs();
         }
@@ -984,10 +979,18 @@
                 showFavsOnly = true; showHiddenOnly = false;
             } else if (showFavsOnly) {
                 showFavsOnly = false; showHiddenOnly = true;
-                if (sourceImages.length > 0 && isFavMode) { isFavMode = false; images = sourceImages; currentIndex = 0; historyList = [0]; historyPos = 0; loadImage(); resetTimer(); }
+                if (sourceImages.length > 0 && isFavMode) {
+                    isFavMode = false; images = sourceImages;
+                    currentIndex = Math.min(0, sourceImages.length - 1);
+                    historyList = [currentIndex]; historyPos = 0; loadImage(); resetTimer();
+                }
             } else {
                 showFavsOnly = false; showHiddenOnly = false;
-                if (sourceImages.length > 0 && isFavMode) { isFavMode = false; images = sourceImages; currentIndex = 0; historyList = [0]; historyPos = 0; loadImage(); resetTimer(); }
+                if (sourceImages.length > 0 && isFavMode) {
+                    isFavMode = false; images = sourceImages;
+                    currentIndex = Math.min(0, sourceImages.length - 1);
+                    historyList = [currentIndex]; historyPos = 0; loadImage(); resetTimer();
+                }
             }
             ui.historyFilterBtn.innerText = showFavsOnly ? '★ お気に入り' : (showHiddenOnly ? '非表示' : '全て (履歴)');
             updateImageCounter();
@@ -1091,7 +1094,15 @@
             };
         }
 
+        let renderHistoryRafId = 0;
         function renderHistoryThumbs() {
+            if (renderHistoryRafId) cancelAnimationFrame(renderHistoryRafId);
+            renderHistoryRafId = requestAnimationFrame(function() {
+                renderHistoryRafId = 0;
+                _renderHistoryThumbsImpl();
+            });
+        }
+        function _renderHistoryThumbsImpl() {
             const token = ++historyRenderToken;
             const content = ui.historyContent; clearHistoryThumbs();
             const isMobileHistory = window.innerWidth <= 440;
@@ -1191,6 +1202,7 @@
         }
 
         function toggleTimer() { if(images.length > 0) isRunning ? stopTimer() : startTimer(); }
+        let audioPrewarmed = false;
         function startTimer() { 
             isRunning = true; ui.playBtn.innerHTML = iconPauseSVG; ui.playBtn.classList.remove("accent"); 
             expectedEndTime = Date.now() + (remaining * 1000);
@@ -1203,7 +1215,10 @@
                 if (pipVideo && pipVideo.paused) pipVideo.play().catch(function(){}); 
                 updatePiP();
             }
-            if (!isMuted && ui.sound) { ui.sound.volume = 0; ui.sound.play().then(() => { ui.sound.pause(); ui.sound.currentTime = 0; ui.sound.volume = 1; }).catch(()=>{}); }
+            if (!isMuted && ui.sound && !audioPrewarmed) {
+                audioPrewarmed = true;
+                ui.sound.volume = 0; ui.sound.play().then(function() { ui.sound.pause(); ui.sound.currentTime = 0; ui.sound.volume = 1; }).catch(function(){});
+            }
         }
         function stopTimer() { 
             isRunning = false; ui.playBtn.innerHTML = iconPlaySVG; ui.playBtn.classList.add("accent");
@@ -1250,7 +1265,6 @@
                 animationFrameId = null; return;
             }
             if (nextRemaining !== remaining) { remaining = nextRemaining; updateTimerText(remaining); }
-            else { remaining = nextRemaining; }
             const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
             const nextWidth = ((remainMs / totalMs) * 100) + '%';
             if (nextWidth !== lastProgressWidth) { ui.prog.style.width = nextWidth; lastProgressWidth = nextWidth; }
@@ -1290,8 +1304,11 @@
             clearTimeout(timerTickId); timerTickId = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
             remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
-            if (isRunning) { expectedEndTime = Date.now() + (remaining * 1000); updateSmoothTimer(); } 
-            else {
+            if (isRunning) {
+                expectedEndTime = Date.now() + (remaining * 1000);
+                timerTickLoop();
+                if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+            } else {
                 updateTimerText(remaining);
                 if (lastProgressWidth !== '100%') { ui.prog.style.width = '100%'; lastProgressWidth = '100%'; }
                 if (lastProgressColor !== 'var(--accent)') { ui.prog.style.backgroundColor = 'var(--accent)'; lastProgressColor = 'var(--accent)'; }
@@ -1299,7 +1316,7 @@
             }
         }
         function setTimer(sec) { 
-            if (!hmActive) exitHardMode();
+            if (hmActive) exitHardMode();
             timerSeconds = sec;
             const select = document.getElementById('time-select');
             if (select) select.value = sec;
@@ -1310,11 +1327,10 @@
             let m = Math.floor(sec / 60); let s = sec % 60;
             const txt = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
             if (txt !== lastTimerText) { ui.timer.innerText = txt; lastTimerText = txt; }
-            if(isRunning && isPiP && !documentPipWindow) updateMediaSession();
         }
 
         function updateImageCounter() {
-            const el = document.getElementById('image-counter');
+            const el = ui.imageCounter;
             if (!el) return;
             const pool = isFavMode ? dbFavImages : sourceImages;
             if (!pool || pool.length === 0) { el.textContent = ''; return; }
@@ -1325,7 +1341,7 @@
         function playSound() { if(!isMuted && ui.sound) { ui.sound.currentTime = 0; ui.sound.play().catch(function(){}); } }
 
         function flashScreen() {
-            const el = document.getElementById('image-container');
+            const el = imgContainer;
             if (!el) return;
             el.classList.remove('timer-flash');
             void el.offsetWidth;
@@ -1408,8 +1424,8 @@
         function startHardMode() { 
             if(images.length === 0) return; 
             hmActive = true; ui.hmBtn.classList.add("active");
-            startTimer();
             setHmPhase(1);
+            startTimer();
             updateHmMini();
         }
         function exitHardMode() { 
@@ -1503,7 +1519,8 @@
                     pipDoc.getElementById('pip-play-btn').onclick = () => toggleTimer();
                     pipDoc.getElementById('pip-next-btn').onclick = () => nextImage();
                     
-                    documentPipWindow.addEventListener('pagehide', () => { documentPipWindow = null; isPiP = false; ui.pipBtn.classList.remove('pip-active'); });
+                    function onPipPageHide() { documentPipWindow = null; isPiP = false; ui.pipBtn.classList.remove('pip-active'); }
+                    documentPipWindow.addEventListener('pagehide', onPipPageHide);
                     
                     isPiP = true; ui.pipBtn.classList.add('pip-active'); updatePiP();
                     return;
@@ -1515,7 +1532,7 @@
             if (document.pictureInPictureElement) { await document.exitPictureInPicture().catch(function(){}); } 
             else {
                 try {
-                    if (!pipVideo.srcObject) { pipVideo.srcObject = pipCanvas.captureStream(30); }
+                    if (!pipVideo.srcObject) { pipVideo.srcObject = pipCanvas.captureStream(1); }
                     isPiP = true; updatePiP(); 
                     if(isRunning) { await pipVideo.play(); } else { pipVideo.pause(); }
                     await pipVideo.requestPictureInPicture(); updateMediaSession();
@@ -1524,8 +1541,11 @@
         }
 
         function drawToCanvas(canvas, ctx, drawOverlay) {
-            const ratio = ui.img.naturalWidth / ui.img.naturalHeight;
-            const baseWidth = Math.max(ui.img.naturalWidth, canvas === pipCanvas ? 2560 : 1200);
+            const nw = ui.img.naturalWidth, nh = ui.img.naturalHeight;
+            if (!nw || !nh) return;
+            const ratio = nw / nh;
+            const maxW = canvas === pipCanvas ? 2560 : 1200;
+            const baseWidth = Math.min(Math.max(nw, maxW), maxW);
             const targetH = Math.round(baseWidth / ratio);
             if (canvas.width !== baseWidth || canvas.height !== targetH) {
                 canvas.width = baseWidth; canvas.height = targetH;
@@ -1649,9 +1669,17 @@
             }
         }, { passive: true });
         imgContainer.addEventListener('pointerup', function(e) {
-            const pointerEndX = e.clientX; const diffX = pointerStartX - pointerEndX; const threshold = 50;
-            if (Math.abs(diffX) > threshold) { if (diffX > 0) { nextImage(); } else { prevImage(); } lastTapTime = 0; } 
-            else { const currentTime = Date.now(); const tapLength = currentTime - lastTapTime; if (tapLength < 300 && tapLength > 0) { toggleTimer(); lastTapTime = 0; e.preventDefault(); } else { lastTapTime = currentTime; } }
+            const pointerEndX = e.clientX; const pointerEndY = e.clientY;
+            const diffX = pointerStartX - pointerEndX;
+            const diffY = pointerStartY - pointerEndY;
+            const threshold = 50;
+            if (Math.abs(diffX) > threshold && Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX > 0) { nextImage(); } else { prevImage(); } lastTapTime = 0;
+            } else if (Math.abs(diffY) <= 10 && Math.abs(diffX) <= threshold) {
+                const currentTime = Date.now(); const tapLength = currentTime - lastTapTime;
+                if (tapLength < 300 && tapLength > 0) { toggleTimer(); lastTapTime = 0; e.preventDefault(); }
+                else { lastTapTime = currentTime; }
+            }
         }, { passive: false });
         document.addEventListener('keydown', function(e) {
             armFocusIdleTimer();
