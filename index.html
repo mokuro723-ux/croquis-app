@@ -1318,7 +1318,7 @@
             if (!el) return;
             const pool = isFavMode ? dbFavImages : sourceImages;
             if (!pool || pool.length === 0) { el.textContent = ''; return; }
-            el.textContent = (currentIndex + 1) + ' / ' + pool.length;
+            el.textContent = (historyPos + 1) + ' / ' + pool.length;
         }
         
         function toggleMute() { isMuted = !isMuted; ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG; saveUiSettings(); }
