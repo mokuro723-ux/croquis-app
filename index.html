@@ -1332,6 +1332,10 @@
             if (isPiP && document.hidden && secondChanged) {
                 pipRenderStamp = ''; updatePiP();
             }
+            // Android Video PiP（フォアグラウンド時も）はタイマー表示更新のため毎秒再描画
+            if (isPiP && !documentPipWindow && !document.hidden && secondChanged) {
+                pipRenderStamp = ''; updatePiP();
+            }
             timerTickId = setTimeout(timerTickLoop, 250);
         }
 
@@ -1565,10 +1569,31 @@
             } catch(e) { return false; }
         }
 
+        const isAndroid = /Android/i.test(navigator.userAgent);
+
         async function togglePiP() {
             if (images.length === 0) { alert("画像を読み込んでください"); return; }
             
-            // 1. 新技術 Document Picture-in-Picture API によるクリック可能な完全なUI実装
+            // Android は Video PiP 優先（スリープ耐性のため）
+            if (isAndroid) {
+                if (!initPiP() || typeof pipCanvas.captureStream !== 'function') { alert("お使いの環境はPiP機能に対応していません。"); return; }
+                if (document.pictureInPictureElement) {
+                    await document.exitPictureInPicture().catch(function(){});
+                } else {
+                    try {
+                        if (!pipVideo.srcObject) { pipVideo.srcObject = pipCanvas.captureStream(1); }
+                        isPiP = true; updatePiP();
+                        if (isRunning) { await pipVideo.play(); } else { pipVideo.pause(); }
+                        await pipVideo.requestPictureInPicture();
+                        updateMediaSession();
+                        requestWakeLock();
+                        startSilentAudio();
+                    } catch(error) { isPiP = false; }
+                }
+                return;
+            }
+
+            // 非Android: Document PiP優先
             if ('documentPictureInPicture' in window) {
                 if (documentPipWindow) { documentPipWindow.close(); return; }
                 try {
@@ -1700,13 +1725,23 @@
                 const progWidth = (remainMs / totalMs) * canvas.width;
                 
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
-                ctx.fillStyle = '#00d4ff'; ctx.fillRect(0, canvas.height - barHeight, progWidth, barHeight);
+                const barColor = remaining <= 10 ? '#5be7ff' : '#00d4ff';
+                ctx.fillStyle = barColor; ctx.fillRect(0, canvas.height - barHeight, progWidth, barHeight);
 
-                const fontSize = Math.max(16, canvas.height * 0.04); ctx.font = "bold " + fontSize + "px sans-serif"; ctx.textBaseline = 'bottom'; ctx.textAlign = 'right';
+                // タイマーテキスト（Video PiP時は大きく表示）
+                const isVideoPiP = isPiP && !documentPipWindow;
+                const fontSize = isVideoPiP ? Math.max(48, canvas.height * 0.10) : Math.max(16, canvas.height * 0.04);
+                ctx.font = "bold " + fontSize + "px sans-serif"; ctx.textBaseline = 'top'; ctx.textAlign = 'right';
                 let sec = Math.ceil(remainMs / 1000); let m = Math.floor(sec / 60); let s = sec % 60; const timeText = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
                 
-                ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 4; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1; ctx.fillStyle = '#00d4ff'; 
-                ctx.fillText(timeText, canvas.width - 10, canvas.height - barHeight - 5); ctx.shadowColor = "transparent"; 
+                // 背景の黒丸
+                if (isVideoPiP) {
+                    ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 20;
+                }
+                ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 6; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+                ctx.fillStyle = remaining <= 10 ? '#5be7ff' : '#00d4ff';
+                ctx.fillText(timeText, canvas.width - 20, 20);
+                ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
             }
         }
 
