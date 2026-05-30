@@ -97,7 +97,9 @@
         #fav-icon-large { position: absolute; top: 10px; right: 10px; font-size: 2rem; color: gold; display: none; text-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 10; pointer-events: none; }
         
         #progress-container { width: 100%; height: 4px; background-color: #222; }
-        #progress-bar { width: 100%; height: 100%; background-color: var(--accent); }
+        #progress-bar { width: 100%; height: 100%; background-color: var(--accent); transition: background-color 0.3s; }
+        #timer-label.urgent { color: var(--accent-urgent); animation: urgentPulse 1s ease-in-out infinite; }
+        @keyframes urgentPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         
         #bottom-panel { position: relative; background-color: var(--panel-bg); padding: 10px; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--bottom-gap); border-top: 1px solid var(--border-color); transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease; max-height: 250px; opacity: 1; overflow: visible; padding-bottom: calc(10px + var(--bottom-safe)); will-change: opacity; }
         #bottom-panel.hidden { max-height: 0; padding-top: 0; padding-bottom: 0; border-top: 0px solid transparent; opacity: 0; overflow: hidden; }
@@ -111,7 +113,7 @@
         button.hard-mode { color: var(--hm-color); }
         button.hard-mode.active { background-color: var(--hm-color); color: black; outline: none; }
         button.pip-active { background-color: #00d4ff; color: #000; outline: none; }
-        button.flip-disabled { opacity: 0.3; pointer-events: none; }
+        #image-container.drag-over { outline: 3px dashed var(--accent); outline-offset: -6px; background-color: rgba(0, 212, 255, 0.05); }
         
         .separator { color: #555; align-self: center; font-size: 1.2rem; margin: 0 4px; font-weight: 100; }
         .svg-icon { width: 20px; height: 20px; fill: currentColor; pointer-events: none; }
@@ -145,6 +147,22 @@
             #history-panel { width: 100%; border-right: none; }
             #history-content { grid-template-columns: repeat(3, 1fr); }
             select { padding: 7px 10px; }
+        }
+
+        @media (orientation: landscape) and (max-height: 500px) {
+            :root {
+                --bottom-gap: 3px;
+                --bottom-btn-pad-x: 5px;
+                --bottom-btn-pad-y: 4px;
+                --bottom-btn-min: 30px;
+            }
+            #top-panel { padding: 0 8px 6px 8px; }
+            #timer-label { font-size: 1.3rem; bottom: 8px; }
+            #bottom-panel { padding-top: 5px; padding-bottom: calc(5px + var(--bottom-safe)); }
+            .svg-icon { width: 16px; height: 16px; }
+            select { padding: 5px 8px; font-size: 0.8rem; }
+            .text-btn { font-size: 0.75rem; padding: 4px 7px; }
+            #history-panel { width: 60%; }
         }
     </style>
 </head>
@@ -312,7 +330,8 @@
             historyPanel: document.getElementById('history-panel'),
             historyContent: document.getElementById('history-content'),
             historyFilterBtn: document.getElementById('history-filter-btn'),
-            imageCounter: document.getElementById('image-counter')
+            imageCounter: document.getElementById('image-counter'),
+            timeSelect: document.getElementById('time-select')
         };
         function updateHmMini() {
             if (!hmActive) { ui.hmMini.innerText = ''; return; }
@@ -465,7 +484,11 @@
             syncAppHeight();
             document.addEventListener('visibilitychange', handleVisibilityChange);
             window.addEventListener('resize', syncAppHeight, { passive: true });
-            window.addEventListener('orientationchange', syncAppHeight, { passive: true });
+            window.addEventListener('orientationchange', function() {
+                syncAppHeight();
+                setTimeout(syncAppHeight, 100);
+                setTimeout(syncAppHeight, 300);
+            }, { passive: true });
             if (window.visualViewport) window.visualViewport.addEventListener('resize', syncAppHeight, { passive: true });
             armFocusIdleTimer();
         };
@@ -475,7 +498,6 @@
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
                 // PiP中でない場合はtimerTickLoopも停止して電力消費を抑える
-                // 復帰時にexpectedEndTimeから正確に補正する
                 if (!isPiP && timerTickId) {
                     clearTimeout(timerTickId); timerTickId = null;
                 }
@@ -492,10 +514,25 @@
                     }
                     remaining = Math.ceil((expectedEndTime - now) / 1000);
                     updateTimerText(remaining);
-                    // timerTickLoopが止まっていれば再起動
                     if (!timerTickId) timerTickLoop();
                     cancelAnimationFrame(animationFrameId);
                     animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+                }
+                // スリープ復帰時にDocument PiPが消えていたら自動再接続
+                if (isPiP && !documentPipWindow && 'documentPictureInPicture' in window) {
+                    setTimeout(function() {
+                        if (isPiP && !documentPipWindow) togglePiP();
+                    }, 600);
+                }
+                // Video PiP復帰: document PiP非対応環境でPiPフラグが残っていたら再接続
+                if (isPiP && !documentPipWindow && !('documentPictureInPicture' in window) && pipInitialized) {
+                    setTimeout(function() {
+                        if (isPiP && !document.pictureInPictureElement) {
+                            pipVideo.requestPictureInPicture().catch(function(){
+                                isPiP = false; ui.pipBtn.classList.remove('pip-active');
+                            });
+                        }
+                    }, 600);
                 }
                 if (isPiP) updatePiP();
             }
@@ -608,9 +645,11 @@
         document.getElementById('folder-input').addEventListener('change', handleFiles);
         document.getElementById('file-input').addEventListener('change', handleFiles);
         const dropArea = document.getElementById('image-container');
-        dropArea.addEventListener('dragover', function(e) { e.preventDefault(); }, { passive: false });
+        dropArea.addEventListener('dragover', function(e) { e.preventDefault(); dropArea.classList.add('drag-over'); }, { passive: false });
+        dropArea.addEventListener('dragleave', function(e) { if (!dropArea.contains(e.relatedTarget)) dropArea.classList.remove('drag-over'); }, { passive: true });
         dropArea.addEventListener('drop', async function(e) {
             e.preventDefault();
+            dropArea.classList.remove('drag-over');
             const files = await getDroppedImageFiles(e.dataTransfer);
             applyLoadedFiles(files);
         }, { passive: false });
@@ -782,18 +821,17 @@
         function toggle(key) { 
             settings[key] = !settings[key]; const btn = document.getElementById(key + '-btn');
             if(btn) { if(settings[key]) { btn.classList.add("active"); } else { btn.classList.remove("active"); } }
-            if (key === 'shuffle' && !isFavMode && sourceImages.length > 0) {
+            if (key === 'shuffle') {
                 const currentItem = images[currentIndex];
-                if (settings.shuffle) {
-                    // ONにしたとき: シャッフル
-                    shuffleArray(sourceImages);
-                } else {
-                    // OFFにしたとき: 元の順序に復元
-                    if (originalOrder.length === sourceImages.length) {
-                        sourceImages = originalOrder.slice();
-                    }
+                if (isFavMode) {
+                    // お気に入りモードでもシャッフル
+                    if (settings.shuffle) { shuffleArray(dbFavImages); images = dbFavImages; }
+                    else { dbFavImages.sort(function(a,b){ return a.name < b.name ? -1 : 1; }); images = dbFavImages; }
+                } else if (sourceImages.length > 0) {
+                    if (settings.shuffle) { shuffleArray(sourceImages); }
+                    else { if (originalOrder.length === sourceImages.length) sourceImages = originalOrder.slice(); }
+                    images = sourceImages;
                 }
-                images = sourceImages;
                 if (currentItem) {
                     const newIdx = images.findIndex(function(f){ return f.name === currentItem.name; });
                     if (newIdx > -1) currentIndex = newIdx;
@@ -1224,6 +1262,7 @@
             isRunning = false; ui.playBtn.innerHTML = iconPlaySVG; ui.playBtn.classList.add("accent");
             clearTimeout(timerTickId); timerTickId = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
+            ui.timer.classList.remove('urgent');
             updateMediaSession();
             if (isPiP) updatePiP(); 
         }
@@ -1247,6 +1286,9 @@
             if (secondChanged) {
                 remaining = nextRemaining;
                 updateTimerText(remaining);
+                // 残り10秒以下でタイマー文字をハイライト
+                if (remaining <= 10) { ui.timer.classList.add('urgent'); }
+                else { ui.timer.classList.remove('urgent'); }
             }
             // PiP中かつバックグラウンドのときは残り秒が変わったときだけ再描画
             if (isPiP && document.hidden && secondChanged) {
@@ -1274,15 +1316,6 @@
             animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
         }
 
-        // 旧updateSmoothTimer: resetTimer等から呼ばれる箇所との互換維持用
-        function updateSmoothTimer() {
-            // 既存のループを確実に止めてから再起動
-            clearTimeout(timerTickId); timerTickId = null;
-            cancelAnimationFrame(animationFrameId); animationFrameId = null;
-            timerTickLoop();
-            if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
-        }
-
         window.addEventListener('beforeunload', function() {
             if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; flushUiSettings(); }
             if (skipSaveTimer) {
@@ -1291,6 +1324,7 @@
             }
             clearTimeout(timerTickId); timerTickId = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
+            clearPreloadUrl();
             clearPreloadUrl();
             if (currentImageUrl && currentImageUrl.startsWith('blob:')) {
                 URL.revokeObjectURL(currentImageUrl);
@@ -1303,6 +1337,7 @@
         function resetTimer() { 
             clearTimeout(timerTickId); timerTickId = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
+            ui.timer.classList.remove('urgent');
             remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
             if (isRunning) {
                 expectedEndTime = Date.now() + (remaining * 1000);
@@ -1318,8 +1353,7 @@
         function setTimer(sec) { 
             if (hmActive) exitHardMode();
             timerSeconds = sec;
-            const select = document.getElementById('time-select');
-            if (select) select.value = sec;
+            if (ui.timeSelect) ui.timeSelect.value = sec;
             resetTimer();
         }
         
@@ -1469,8 +1503,19 @@
                 pipVideo.style.position = 'fixed'; pipVideo.style.left = '-9999px'; pipVideo.style.opacity = '0'; pipVideo.style.pointerEvents = 'none';
                 document.body.appendChild(pipVideo); pipCanvas = document.createElement('canvas'); pipCtx = pipCanvas.getContext('2d', { alpha: false });
                 
-                pipVideo.addEventListener('play', function() { if (!isRunning) startTimer(); }); pipVideo.addEventListener('pause', function() { if (isRunning) stopTimer(); });
-                pipVideo.addEventListener('leavepictureinpicture', function() { if(!documentPipWindow) { isPiP = false; ui.pipBtn.classList.remove('pip-active'); } });
+                pipVideo.addEventListener('play', function() { if (isPiP && !isRunning) startTimer(); });
+                pipVideo.addEventListener('pause', function() { if (isPiP && isRunning) stopTimer(); });
+                pipVideo.addEventListener('leavepictureinpicture', function() {
+                    if (!documentPipWindow) {
+                        // スリープによる強制終了か、ユーザー操作による終了かを区別
+                        // document.hiddenがtrueの場合はスリープ復帰待ちで再接続を試みる
+                        if (document.hidden) {
+                            // 復帰後のvisibilitychangeで再接続する（isPiPフラグを維持）
+                        } else {
+                            isPiP = false; ui.pipBtn.classList.remove('pip-active');
+                        }
+                    }
+                });
                 pipVideo.addEventListener('enterpictureinpicture', function() { isPiP = true; ui.pipBtn.classList.add('pip-active'); updatePiP(); });
                 pipInitialized = true; return true;
             } catch(e) { return false; }
@@ -1483,9 +1528,10 @@
             if ('documentPictureInPicture' in window) {
                 if (documentPipWindow) { documentPipWindow.close(); return; }
                 try {
-                    const ratio = ui.img.naturalWidth / ui.img.naturalHeight;
+                    const nw = ui.img.naturalWidth, nh = ui.img.naturalHeight;
+                    const ratio = (nw && nh) ? nw / nh : 4 / 3;
                     const pipWidth = Math.max(400, Math.min(800, window.innerWidth * 0.8));
-                    const pipHeight = (pipWidth / ratio) + 60; // 60px分のコントロール領域
+                    const pipHeight = (pipWidth / ratio) + 60;
                     
                     documentPipWindow = await documentPictureInPicture.requestWindow({ width: Math.round(pipWidth), height: Math.round(pipHeight) });
                     
@@ -1518,6 +1564,23 @@
                     pipDoc.getElementById('pip-prev-btn').onclick = () => prevImage();
                     pipDoc.getElementById('pip-play-btn').onclick = () => toggleTimer();
                     pipDoc.getElementById('pip-next-btn').onclick = () => nextImage();
+
+                    // ペン入力対応: pointerupでも確実に反応させる
+                    function addPipBtnHandler(id, fn) {
+                        const btn = pipDoc.getElementById(id);
+                        if (!btn) return;
+                        let didClick = false;
+                        btn.addEventListener('pointerdown', function(e) { didClick = false; e.preventDefault(); }, { passive: false });
+                        btn.addEventListener('pointerup', function(e) {
+                            if (!didClick) { didClick = true; fn(); }
+                        });
+                        btn.addEventListener('click', function() {
+                            if (!didClick) { didClick = true; fn(); }
+                        });
+                    }
+                    addPipBtnHandler('pip-prev-btn', function(){ prevImage(); });
+                    addPipBtnHandler('pip-play-btn', function(){ toggleTimer(); });
+                    addPipBtnHandler('pip-next-btn', function(){ nextImage(); });
                     
                     function onPipPageHide() { documentPipWindow = null; isPiP = false; ui.pipBtn.classList.remove('pip-active'); }
                     documentPipWindow.addEventListener('pagehide', onPipPageHide);
@@ -1674,7 +1737,7 @@
             const diffY = pointerStartY - pointerEndY;
             const threshold = 50;
             if (Math.abs(diffX) > threshold && Math.abs(diffX) > Math.abs(diffY)) {
-                if (diffX > 0) { nextImage(); } else { prevImage(); } lastTapTime = 0;
+                if (diffX > 0) { nextImage(); } else { if (!hmActive) prevImage(); } lastTapTime = 0;
             } else if (Math.abs(diffY) <= 10 && Math.abs(diffX) <= threshold) {
                 const currentTime = Date.now(); const tapLength = currentTime - lastTapTime;
                 if (tapLength < 300 && tapLength > 0) { toggleTimer(); lastTapTime = 0; e.preventDefault(); }
