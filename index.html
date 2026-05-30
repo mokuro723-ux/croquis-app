@@ -300,6 +300,41 @@
         let favNameSet = new Set();
         
         let pipVideo, pipCanvas, pipCtx, isPiP = false, pipInitialized = false;
+        let wakeLock = null;
+        let silentAudioCtx = null, silentAudioNode = null;
+        async function requestWakeLock() {
+            if (!('wakeLock' in navigator)) return;
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                wakeLock.addEventListener('release', function() { wakeLock = null; });
+            } catch(e) {}
+        }
+        function releaseWakeLock() {
+            if (wakeLock) { wakeLock.release().catch(function(){}); wakeLock = null; }
+        }
+
+        // Silent AudioContext: バックグラウンドでページをアクティブ扱いに維持
+        function startSilentAudio() {
+            if (silentAudioCtx) return;
+            try {
+                silentAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                // 無音のバッファを作って繰り返し再生
+                const buf = silentAudioCtx.createBuffer(1, silentAudioCtx.sampleRate, silentAudioCtx.sampleRate);
+                function loop() {
+                    if (!silentAudioCtx) return;
+                    silentAudioNode = silentAudioCtx.createBufferSource();
+                    silentAudioNode.buffer = buf;
+                    silentAudioNode.connect(silentAudioCtx.destination);
+                    silentAudioNode.loop = true;
+                    silentAudioNode.start(0);
+                }
+                loop();
+            } catch(e) {}
+        }
+        function stopSilentAudio() {
+            if (silentAudioNode) { try { silentAudioNode.stop(); } catch(e) {} silentAudioNode = null; }
+            if (silentAudioCtx) { silentAudioCtx.close().catch(function(){}); silentAudioCtx = null; }
+        }
         let documentPipWindow = null; // Document PiP用の変数
         let pipRenderStamp = '';
         let pipFlashStartTime = 0; // Video PiP用フラッシュタイムスタンプ
@@ -530,10 +565,13 @@
                         if (isPiP && !document.pictureInPictureElement) {
                             pipVideo.requestPictureInPicture().catch(function(){
                                 isPiP = false; ui.pipBtn.classList.remove('pip-active');
+                                releaseWakeLock(); stopSilentAudio();
                             });
                         }
                     }, 600);
                 }
+                // WakeLockはvisibility復帰時に自動解除されるので再取得
+                if (isPiP && !wakeLock) requestWakeLock();
                 if (isPiP) updatePiP();
             }
         }
@@ -1324,6 +1362,7 @@
             }
             clearTimeout(timerTickId); timerTickId = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
+            releaseWakeLock(); stopSilentAudio();
             clearPreloadUrl();
             clearPreloadUrl();
             if (currentImageUrl && currentImageUrl.startsWith('blob:')) {
@@ -1507,16 +1546,21 @@
                 pipVideo.addEventListener('pause', function() { if (isPiP && isRunning) stopTimer(); });
                 pipVideo.addEventListener('leavepictureinpicture', function() {
                     if (!documentPipWindow) {
-                        // スリープによる強制終了か、ユーザー操作による終了かを区別
-                        // document.hiddenがtrueの場合はスリープ復帰待ちで再接続を試みる
                         if (document.hidden) {
-                            // 復帰後のvisibilitychangeで再接続する（isPiPフラグを維持）
+                            // スリープによる強制終了 → isPiPフラグ維持して復帰後に再接続
                         } else {
                             isPiP = false; ui.pipBtn.classList.remove('pip-active');
+                            releaseWakeLock();
+                            stopSilentAudio();
                         }
                     }
                 });
-                pipVideo.addEventListener('enterpictureinpicture', function() { isPiP = true; ui.pipBtn.classList.add('pip-active'); updatePiP(); });
+                pipVideo.addEventListener('enterpictureinpicture', function() {
+                    isPiP = true; ui.pipBtn.classList.add('pip-active');
+                    requestWakeLock();
+                    startSilentAudio();
+                    updatePiP();
+                });
                 pipInitialized = true; return true;
             } catch(e) { return false; }
         }
@@ -1547,7 +1591,7 @@
                             @keyframes timerFlash { 0% { opacity:1; } 100% { opacity:0; } }
                             canvas { max-width:100%; max-height:100%; object-fit:contain; }
                             #controls { height:60px; background-color:#111; display:flex; justify-content:center; align-items:center; gap:25px; border-top:1px solid #333; }
-                            button { background-color:#222; border:none; color:#ddd; cursor:pointer; display:flex; justify-content:center; align-items:center; width:44px; height:44px; border-radius:50%; transition:background 0.2s; outline:none; }
+                            button { background-color:#222; border:none; color:#ddd; cursor:pointer; display:flex; justify-content:center; align-items:center; width:44px; height:44px; border-radius:50%; transition:background 0.2s; outline:none; touch-action:none; -webkit-user-select:none; user-select:none; }
                             button:hover { background-color:#444; }
                             button:active { transform: scale(0.95); }
                             svg { width:24px; height:24px; fill:currentColor; pointer-events:none; }
@@ -1561,31 +1605,51 @@
                         </div>
                     `;
                     
-                    pipDoc.getElementById('pip-prev-btn').onclick = () => prevImage();
-                    pipDoc.getElementById('pip-play-btn').onclick = () => toggleTimer();
-                    pipDoc.getElementById('pip-next-btn').onclick = () => nextImage();
-
-                    // ペン入力対応: pointerupでも確実に反応させる
+                    // onclick は pointerup と二重発火するため削除し、pointer系イベントのみで制御
+                    // pointerId でトラッキングして確実に1回だけ実行
                     function addPipBtnHandler(id, fn) {
                         const btn = pipDoc.getElementById(id);
                         if (!btn) return;
-                        let didClick = false;
-                        btn.addEventListener('pointerdown', function(e) { didClick = false; e.preventDefault(); }, { passive: false });
+                        let activePointerId = null;
+
+                        btn.addEventListener('pointerdown', function(e) {
+                            e.preventDefault();
+                            btn.setPointerCapture(e.pointerId);
+                            activePointerId = e.pointerId;
+                        }, { passive: false });
+
                         btn.addEventListener('pointerup', function(e) {
-                            if (!didClick) { didClick = true; fn(); }
+                            if (activePointerId === e.pointerId) {
+                                activePointerId = null;
+                                // ボタン領域内でのpointerupのみ実行
+                                const rect = btn.getBoundingClientRect();
+                                if (e.clientX >= rect.left && e.clientX <= rect.right &&
+                                    e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                                    fn();
+                                }
+                            }
                         });
-                        btn.addEventListener('click', function() {
-                            if (!didClick) { didClick = true; fn(); }
+
+                        btn.addEventListener('pointercancel', function(e) {
+                            if (activePointerId === e.pointerId) activePointerId = null;
                         });
                     }
                     addPipBtnHandler('pip-prev-btn', function(){ prevImage(); });
                     addPipBtnHandler('pip-play-btn', function(){ toggleTimer(); });
                     addPipBtnHandler('pip-next-btn', function(){ nextImage(); });
                     
-                    function onPipPageHide() { documentPipWindow = null; isPiP = false; ui.pipBtn.classList.remove('pip-active'); }
+                    function onPipPageHide() {
+                        documentPipWindow = null; isPiP = false;
+                        ui.pipBtn.classList.remove('pip-active');
+                        releaseWakeLock();
+                        stopSilentAudio();
+                    }
                     documentPipWindow.addEventListener('pagehide', onPipPageHide);
                     
-                    isPiP = true; ui.pipBtn.classList.add('pip-active'); updatePiP();
+                    isPiP = true; ui.pipBtn.classList.add('pip-active');
+                    requestWakeLock();
+                    startSilentAudio();
+                    updatePiP();
                     return;
                 } catch(e) { console.warn("Document PiP failed. Falling back to Video PiP", e); }
             }
