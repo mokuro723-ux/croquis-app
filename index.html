@@ -203,29 +203,6 @@
         }
         #bw-float-val { font-size: 0.82rem; color: var(--accent); min-width: 22px; text-align: right; }
 
-        /* フローティング2階調スライダー */
-        #bw-float {
-            display: none; position: fixed; left: 12px; bottom: calc(var(--bottom-safe) + 90px);
-            background: rgba(20,20,20,0.92); border: 1px solid #444;
-            border-radius: 10px; padding: 8px 12px; z-index: 150;
-            width: 160px; cursor: grab; user-select: none; -webkit-user-select: none;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-        }
-        #bw-float.visible { display: block; }
-        #bw-float-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-        #bw-float-label { font-size: 0.72rem; color: #888; letter-spacing: 0.5px; }
-        #bw-float-val { font-size: 0.9rem; font-weight: bold; color: var(--accent); }
-        #bw-float-slider {
-            -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
-            background: #444; border-radius: 2px; outline: none; cursor: pointer;
-        }
-        #bw-float-slider::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 18px; height: 18px;
-            border-radius: 50%; background: var(--accent); cursor: pointer; border: none;
-        }
-        #bw-float-slider::-moz-range-thumb {
-            width: 18px; height: 18px; border-radius: 50%; background: var(--accent); cursor: pointer; border: none;
-        }
 
         /* 全画面休憩オーバーレイ */
         #break-overlay {
@@ -484,14 +461,7 @@
             </div>
         </div>
 
-        <div id="bw-float">
-            <div id="bw-float-header">
-                <span id="bw-float-label">2階調</span>
-                <span id="bw-float-val">10</span>
-            </div>
-            <input type="range" id="bw-float-slider" min="1" max="20" step="1" value="10"
-                oninput="onBwContrastChange(parseInt(this.value))">
-        </div>
+        <div id="break-overlay">
             <div id="break-content">
                 <div id="break-countdown">20</div>
                 <div id="break-message">目を閉じて休んでください</div>
@@ -738,7 +708,7 @@
                 if (settings[k]) btn.classList.add('active');
                 else btn.classList.remove('active');
             });
-            if (settings.bw) { const b = document.getElementById('bw-btn'); if(b) b.classList.add('active'); const bf = document.getElementById('bw-float'); if(bf) bf.classList.add('visible'); }
+            if (settings.bw) { const b = document.getElementById('bw-btn'); if(b) b.classList.add('active'); }
             const breakToggle = document.getElementById('break-reminder-toggle');
             if (breakToggle) breakToggle.checked = breakReminderEnabled;
             const eyeSel = document.getElementById('eye-hide-delay-select');
@@ -955,11 +925,6 @@
             if (sl) sl.value = val;
             const lbl = document.getElementById('bw-contrast-val');
             if (lbl) lbl.textContent = val;
-            // フローティングスライダーと同期
-            const fsl = document.getElementById('bw-float-slider');
-            if (fsl) fsl.value = val;
-            const fval = document.getElementById('bw-float-val');
-            if (fval) fval.textContent = val;
             if (settings.bw) applyFiltersDeferred();
             saveUiSettings();
         }
@@ -1384,7 +1349,6 @@
         function toggleBW() {
             settings.bw = !settings.bw;
             const bwBtn = document.getElementById('bw-btn');
-            const bwFloat = document.getElementById('bw-float');
             if (settings.bw) {
                 bwBtn.classList.add('active');
                 if (settings.mono) {
@@ -1392,10 +1356,8 @@
                     const monoBtn = document.getElementById('mono-btn');
                     if (monoBtn) monoBtn.classList.remove('active');
                 }
-                if (bwFloat) bwFloat.classList.add('visible');
             } else {
                 bwBtn.classList.remove('active');
-                if (bwFloat) bwFloat.classList.remove('visible');
             }
             applyFiltersDeferred();
             saveUiSettings();
@@ -2346,35 +2308,6 @@
             pointerStartX = e.clientX; pointerStartY = e.clientY; armFocusIdleTimer();
             if (!e.target.closest('#manage-popup') && !e.target.closest('#manage-btn')) { ui.managePopup.classList.remove('show'); }
         }, { passive: true });
-
-        // フローティングスライダーのドラッグ移動
-        (function() {
-            const el = document.getElementById('bw-float');
-            const header = document.getElementById('bw-float-header');
-            if (!el || !header) return;
-            let dragging = false, startX = 0, startY = 0, origLeft = 0, origBottom = 0;
-            header.addEventListener('pointerdown', function(e) {
-                if (e.target.tagName === 'INPUT') return;
-                dragging = true;
-                header.setPointerCapture(e.pointerId);
-                const rect = el.getBoundingClientRect();
-                startX = e.clientX; startY = e.clientY;
-                origLeft = rect.left;
-                origBottom = window.innerHeight - rect.bottom;
-                el.style.cursor = 'grabbing';
-            });
-            header.addEventListener('pointermove', function(e) {
-                if (!dragging) return;
-                const dx = e.clientX - startX;
-                const dy = e.clientY - startY;
-                const newLeft = Math.max(0, Math.min(window.innerWidth - el.offsetWidth, origLeft + dx));
-                const newBottom = Math.max(0, Math.min(window.innerHeight - el.offsetHeight, origBottom - dy));
-                el.style.left = newLeft + 'px';
-                el.style.bottom = newBottom + 'px';
-            });
-            header.addEventListener('pointerup', function() { dragging = false; el.style.cursor = 'grab'; });
-            header.addEventListener('pointercancel', function() { dragging = false; el.style.cursor = 'grab'; });
-        })();
     </script>
 </body>
 </html>
