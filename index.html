@@ -344,10 +344,10 @@
             </div>
             <div id="settings-content">
                 <div class="settings-section">
-                    <div class="settings-section-title">👁️ 休憩リマインダー</div>
+                    <div class="settings-section-title">休憩リマインダー</div>
                     <div class="settings-row">
                         <div class="settings-label">
-                            <span>15分ごとに目の休憩</span>
+                            <span>目の休憩</span>
                             <span class="settings-desc">設定した間隔のセッション終了時に<br>休憩を促します</span>
                         </div>
                         <label class="settings-toggle">
@@ -356,7 +356,7 @@
                         </label>
                     </div>
                     <div class="settings-row">
-                        <div class="settings-label"><span>③ 休憩インターバル</span></div>
+                        <div class="settings-label"><span>休憩インターバル</span></div>
                         <select id="break-interval-select" class="settings-select" onchange="onBreakIntervalChange(parseInt(this.value))">
                             <option value="10">10分</option>
                             <option value="15" selected>15分</option>
@@ -365,7 +365,7 @@
                         </select>
                     </div>
                     <div class="settings-row">
-                        <div class="settings-label"><span>④ 休憩時間</span></div>
+                        <div class="settings-label"><span>休憩時間</span></div>
                         <select id="break-duration-select" class="settings-select" onchange="onBreakDurationChange(parseInt(this.value))">
                             <option value="10">10秒</option>
                             <option value="20" selected>20秒</option>
@@ -374,10 +374,10 @@
                     </div>
                 </div>
                 <div class="settings-section">
-                    <div class="settings-section-title">🖼️ 表示</div>
+                    <div class="settings-section-title">表示</div>
                     <div class="settings-row">
                         <div class="settings-label">
-                            <span>① 画像を隠すまでの時間</span>
+                            <span>画像を隠すまでの時間</span>
                             <span class="settings-desc">目隠しモード時、画像が消えるまでの秒数</span>
                         </div>
                         <select id="eye-hide-delay-select" class="settings-select" onchange="onEyeHideDelayChange(parseInt(this.value))">
@@ -389,7 +389,7 @@
                     </div>
                     <div class="settings-row">
                         <div class="settings-label">
-                            <span>② パネル自動非表示まで</span>
+                            <span>パネル自動非表示</span>
                             <span class="settings-desc">操作しないとボタンが薄くなるまでの時間</span>
                         </div>
                         <select id="focus-idle-delay-select" class="settings-select" onchange="onFocusIdleDelayChange(parseInt(this.value))">
@@ -401,7 +401,7 @@
                     </div>
                     <div class="settings-row">
                         <div class="settings-label">
-                            <span>⑥ タイマー終了フラッシュ</span>
+                            <span>タイマー終了フラッシュ</span>
                             <span class="settings-desc">タイマー終了時の画面端の光る強さ</span>
                         </div>
                         <select id="flash-intensity-select" class="settings-select" onchange="onFlashIntensityChange(parseInt(this.value))">
@@ -412,9 +412,7 @@
                         </select>
                     </div>
                     <div class="settings-row">
-                        <div class="settings-label">
-                            <span>⑧ プログレスバーの太さ</span>
-                        </div>
+                        <div class="settings-label"><span>プログレスバーの太さ</span></div>
                         <select id="progress-size-select" class="settings-select" onchange="onProgressSizeChange(parseInt(this.value))">
                             <option value="1">細</option>
                             <option value="2" selected>中</option>
@@ -423,11 +421,9 @@
                     </div>
                 </div>
                 <div class="settings-section">
-                    <div class="settings-section-title">🔊 サウンド</div>
+                    <div class="settings-section-title">サウンド</div>
                     <div class="settings-row">
-                        <div class="settings-label">
-                            <span>⑩ タイマー終了音量</span>
-                        </div>
+                        <div class="settings-label"><span>タイマー終了音量</span></div>
                         <select id="sound-volume-select" class="settings-select" onchange="onSoundVolumeChange(parseInt(this.value))">
                             <option value="0">なし</option>
                             <option value="1">小</option>
