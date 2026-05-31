@@ -1,3 +1,2223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <meta name="theme-color" content="#1e1e1e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Croquis Timer">
+    <meta name="mobile-web-app-capable" content="yes">
+    
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./icon.png">
+    
+    <title>Croquis Timer</title>
+    
+    <style>
+        :root { 
+            --bg-color: #1e1e1e; --panel-bg: #111; --text-color: #fff; --border-color: #333;
+            --btn-bg: #333; --accent: #00d4ff; --hm-color: #ffb020; 
+            --accent-urgent: #5be7ff;
+            --app-height: 100dvh;
+            --bottom-safe: 0px;
+            --bottom-gap: 6px;
+            --bottom-btn-pad-x: 12px;
+            --bottom-btn-pad-y: 8px;
+            --bottom-btn-min: 45px;
+        }
+        html, body { height: 100%; }
+        * { box-sizing: border-box; user-select: none; margin: 0; padding: 0; -webkit-touch-callout: none; }
+        body { background-color: var(--bg-color); color: var(--text-color); font-family: sans-serif; display: flex; flex-direction: column; height: var(--app-height); overflow: hidden; }
+        
+        #top-panel { 
+            position: relative; 
+            height: calc(60px + env(safe-area-inset-top, 0px)); 
+            background-color: var(--panel-bg); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: flex-end; 
+            padding: 0 15px 12px 15px; 
+            z-index: 100; 
+            border-bottom: 1px solid var(--border-color); 
+        }
+        .top-left { display: flex; align-items: center; gap: 10px; flex: 1; max-width: 150px; height: 36px; }
+        .top-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: 1; max-width: 150px; height: 36px; }
+        #image-counter { color: #666; font-size: 0.72rem; white-space: nowrap; letter-spacing: 0.5px; }
+        
+        #phase-label { color: var(--hm-color); font-weight: bold; font-size: 0.8rem; white-space: nowrap; }
+        #hm-step-mini { color: #777; font-size: 0.72rem; white-space: nowrap; }
+        #timer-label { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); font-size: 1.8rem; font-weight: bold; text-align: center; color: var(--accent); letter-spacing: 2px; }
+        
+        .icon-btn { background: none; border: none; color: #aaa; cursor: pointer; padding: 5px; display: flex; justify-content: center; align-items: center; }
+        .icon-btn:hover { color: #fff; }
+        
+        #history-panel {
+            position: absolute; 
+            top: calc(60px + env(safe-area-inset-top, 0px)); 
+            left: 0; 
+            width: 260px; 
+            height: calc(var(--app-height) - 60px - env(safe-area-inset-top, 0px));
+            background-color: rgba(0, 0, 0, 0.85); 
+            backdrop-filter: blur(5px); 
+            border-right: 1px solid var(--border-color);
+            z-index: 90; 
+            transform: translateX(-100%); 
+            transition: transform 0.3s ease; 
+            display: flex; 
+            flex-direction: column;
+        }
+        #history-panel.open { transform: translateX(0); }
+        #history-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 1px solid var(--border-color); font-size: 0.9rem; color: var(--accent); font-weight: bold; }
+        #history-header > span { flex: 0 0 auto; white-space: nowrap; }
+        #history-filter-btn { flex: 0 0 110px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #history-content { flex: 1; overflow-y: auto; padding: 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; align-content: start; }
+        .history-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; cursor: pointer; border: 2px solid transparent; background-color: #222; }
+        .history-thumb.current { border-color: var(--accent); }
+        .fav-badge { position: absolute; top: 2px; right: 2px; color: gold; font-size: 12px; pointer-events: none; }
+
+        #image-container { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; padding: 10px; overflow: hidden; touch-action: none; }
+        #image-container::after {
+            content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: 2px;
+            box-shadow: inset 0 0 0 0 transparent;
+            opacity: 0; z-index: 20;
+        }
+        #image-container.timer-flash::after {
+            box-shadow: inset 0 0 var(--flash-blur, 60px) 12px rgba(0, 212, 255, var(--flash-alpha, 0.45));
+            animation: timerFlash 0.7s ease-out forwards;
+        }
+        @keyframes timerFlash {
+            0%   { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        #canvas-area { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
+        #main-image { max-width: 100%; max-height: 100%; object-fit: contain; display: none; will-change: transform; contain: layout style; }
+        #grid-overlay { position: absolute; pointer-events: none; display: none; inset: 0; border: none; background-image: linear-gradient(to right, rgba(128,128,128,0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(128,128,128,0.4) 1px, transparent 1px); background-size: 33.33% 33.33%; z-index: 5; }
+        #fav-icon-large { position: absolute; top: 10px; right: 10px; font-size: 2rem; color: gold; display: none; text-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 10; pointer-events: none; }
+        
+        #progress-container { width: 100%; height: var(--progress-height, 4px); background-color: #222; }
+        #progress-bar { width: 100%; height: 100%; background-color: var(--accent); transition: background-color 0.3s; }
+        #timer-label.urgent { color: var(--accent-urgent); animation: urgentPulse 1s ease-in-out infinite; }
+        @keyframes urgentPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        
+        #bottom-panel { position: relative; background-color: var(--panel-bg); padding: 10px; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--bottom-gap); border-top: 1px solid var(--border-color); transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease; max-height: 250px; opacity: 1; overflow: visible; padding-bottom: calc(10px + var(--bottom-safe)); will-change: opacity; }
+        #bottom-panel.hidden { max-height: 0; padding-top: 0; padding-bottom: 0; border-top: 0px solid transparent; opacity: 0; overflow: hidden; }
+        #bottom-panel.idle-dim { opacity: 0.35; }
+        
+        button { background-color: var(--btn-bg); color: #ddd; border: none; padding: var(--bottom-btn-pad-y) var(--bottom-btn-pad-x); border-radius: 4px; cursor: pointer; min-width: var(--bottom-btn-min); display: flex; justify-content: center; align-items: center; font-size: 0.9rem;}
+        button:hover { background-color: #444; }
+        select:hover { background-color: #444; }
+        button.active { background-color: #555; color: var(--accent); outline: 1px solid var(--accent); }
+        button.accent { background-color: var(--accent); color: #000; font-weight: bold; }
+        button.hard-mode { color: var(--hm-color); }
+        button.hard-mode.active { background-color: var(--hm-color); color: black; outline: none; }
+        button.pip-active { background-color: #00d4ff; color: #000; outline: none; }
+        #image-container.drag-over { outline: 3px dashed var(--accent); outline-offset: -6px; background-color: rgba(0, 212, 255, 0.05); }
+        
+        .separator { color: #555; align-self: center; font-size: 1.2rem; margin: 0 4px; font-weight: 100; }
+        .svg-icon { width: 20px; height: 20px; fill: currentColor; pointer-events: none; }
+        
+        select { outline: none; text-align: center; font-weight: bold; appearance: none; -webkit-appearance: none; padding: 8px 16px; background-color: var(--btn-bg); color: #ddd; border: none; border-radius: 4px; cursor: pointer; }
+        .text-btn { font-size: 0.8rem; padding: 6px 10px; min-width: auto; font-weight: bold; }
+
+        #manage-popup {
+            position: absolute; bottom: calc(60px + env(safe-area-inset-bottom, 0px)); left: 10px; background-color: rgba(30, 30, 30, 0.95);
+            border: 1px solid var(--border-color); border-radius: 6px; padding: 8px;
+            display: flex; flex-direction: column; gap: 5px; z-index: 150;
+            opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity 0.2s ease, transform 0.2s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        #manage-popup.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+        #manage-popup button { justify-content: flex-start; gap: 8px; padding: 10px; font-size: 0.9rem; }
+
+        #settings-panel {
+            display: none; position: fixed; top: 0; right: 0; bottom: 0;
+            width: min(300px, 90vw); background-color: var(--panel-bg); border-left: 1px solid var(--border-color);
+            z-index: 200; flex-direction: column; overflow: hidden;
+            box-shadow: -6px 0 24px rgba(0,0,0,0.6);
+            transform: translateX(100%); transition: transform 0.25s ease;
+        }
+        #settings-panel.open { display: flex; transform: translateX(0); }
+        #settings-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0;
+            font-size: 0.85rem; font-weight: bold; color: var(--accent); letter-spacing: 1px; text-transform: uppercase;
+        }
+        #settings-header button {
+            background: none; border: none; color: #666; padding: 4px; cursor: pointer; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #settings-header button:hover { color: #ccc; background-color: #333; }
+        #settings-content { flex: 1; overflow-y: auto; padding: 10px 12px; }
+        #settings-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 199; }
+        #settings-overlay.open { display: block; }
+
+        .settings-section { margin-bottom: 6px; }
+        .settings-section-title {
+            font-size: 0.7rem; color: #555; letter-spacing: 1.5px; text-transform: uppercase;
+            padding: 10px 0 6px; border-bottom: 1px solid #2a2a2a; margin-bottom: 4px;
+        }
+        .settings-row {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; padding: 9px 0; border-bottom: 1px solid #222;
+        }
+        .settings-row:last-child { border-bottom: none; }
+        .settings-label { flex: 1; font-size: 0.84rem; color: #bbb; line-height: 1.4; }
+        .settings-desc { display: block; font-size: 0.72rem; color: #555; margin-top: 2px; }
+
+        /* トグルスイッチ：既存ボタンの active スタイルに合わせる */
+        .settings-toggle { position: relative; display: inline-block; width: 42px; height: 22px; flex-shrink: 0; }
+        .settings-toggle input { opacity: 0; width: 0; height: 0; }
+        .settings-toggle-slider {
+            position: absolute; inset: 0; background: #333; border-radius: 22px;
+            cursor: pointer; transition: background 0.2s; border: 1px solid #444;
+        }
+        .settings-toggle-slider::before {
+            content: ''; position: absolute; width: 16px; height: 16px;
+            left: 2px; top: 2px; background: #666; border-radius: 50%; transition: transform 0.2s, background 0.2s;
+        }
+        .settings-toggle input:checked + .settings-toggle-slider { background: #1a3a3f; border-color: var(--accent); }
+        .settings-toggle input:checked + .settings-toggle-slider::before { transform: translateX(20px); background: var(--accent); }
+
+        /* セレクト：既存ボタンに合わせる */
+        .settings-select {
+            appearance: none; -webkit-appearance: none;
+            background-color: var(--btn-bg); border: 1px solid #444; color: #ddd;
+            border-radius: 4px; padding: 5px 10px; font-size: 0.82rem; cursor: pointer;
+            text-align: center; min-width: 64px;
+        }
+        .settings-select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+
+        /* 全画面休憩オーバーレイ */
+        #break-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.96);
+            z-index: 500; flex-direction: column; align-items: center; justify-content: center;
+        }
+        #break-overlay.active { display: flex; }
+        #break-content { text-align: center; }
+        #break-countdown { font-size: 5rem; font-weight: bold; color: var(--accent); line-height: 1; margin-bottom: 16px; }
+        #break-message { font-size: 1.4rem; color: #eee; margin-bottom: 8px; }
+        #break-sub { font-size: 0.9rem; color: #666; margin-bottom: 32px; }
+        #break-skip-btn { background: #333; border: 1px solid #555; color: #aaa; padding: 10px 24px; border-radius: 20px; cursor: pointer; font-size: 0.9rem; transition: background 0.2s; }
+        #break-skip-btn:hover { background: #444; color: #fff; }
+
+        /* コーナー表示（長尺タイマー用） */
+        #break-corner {
+            display: none; position: fixed; bottom: calc(var(--bottom-safe) + 100px); right: 12px;
+            background: rgba(0,0,0,0.85); border: 1px solid var(--accent);
+            border-radius: 10px; padding: 8px 14px; z-index: 400;
+            text-align: center; pointer-events: none;
+        }
+        #break-corner.active { display: block; }
+        #break-corner-count { font-size: 1.6rem; font-weight: bold; color: var(--accent); line-height: 1; }
+        #break-corner-msg { font-size: 0.72rem; color: #aaa; margin-top: 2px; }
+        .popup-danger { color: #ff5555 !important; }
+
+        @media (max-width: 440px) {
+            :root {
+                --bottom-gap: 4px;
+                --bottom-btn-pad-x: 6px;
+                --bottom-btn-pad-y: 6px;
+                --bottom-btn-min: 34px;
+            }
+            #top-panel { padding: 0 8px 12px 8px; }
+            .top-left, .top-right { max-width: 110px; gap: 4px; height: 36px; }
+            .icon-btn { padding: 3px; }
+            .svg-icon { width: 18px; height: 18px; }
+            #timer-label { font-size: 1.5rem; letter-spacing: 1px; bottom: 12px; }
+            #history-panel { width: 100%; border-right: none; }
+            #history-content { grid-template-columns: repeat(3, 1fr); }
+            select { padding: 7px 10px; }
+        }
+
+        @media (orientation: landscape) and (max-height: 500px) {
+            :root {
+                --bottom-gap: 3px;
+                --bottom-btn-pad-x: 5px;
+                --bottom-btn-pad-y: 4px;
+                --bottom-btn-min: 30px;
+            }
+            #top-panel { padding: 0 8px 6px 8px; }
+            #timer-label { font-size: 1.3rem; bottom: 8px; }
+            #bottom-panel { padding-top: 5px; padding-bottom: calc(5px + var(--bottom-safe)); }
+            .svg-icon { width: 16px; height: 16px; }
+            select { padding: 5px 8px; font-size: 0.8rem; }
+            .text-btn { font-size: 0.75rem; padding: 4px 7px; }
+            #history-panel { width: 60%; }
+        }
+    </style>
+</head>
+<body>
+    <div id="top-panel">
+        <div class="top-left">
+            <button class="icon-btn" onclick="toggleHistoryPanel()" title="履歴"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg></button>
+            <button class="icon-btn" id="settings-btn" onclick="toggleSettingsPanel()" title="設定"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a6.97 6.97 0 0 0-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54a7.32 7.32 0 0 0-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54a7.32 7.32 0 0 0 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></button>
+            <div id="image-counter"></div>
+            <div id="phase-label"></div>
+            <div id="hm-step-mini"></div>
+            <button class="text-btn" id="btn-hm-show" onclick="isImageHidden=false; applyFilters();" style="display:none;">表示</button>
+            <button class="text-btn" id="btn-hm-hide" onclick="isImageHidden=true; applyFilters();" style="display:none;">隠す</button>
+        </div>
+        <div id="timer-label">00:30</div>
+        <div class="top-right">
+            <button class="icon-btn" id="bg-btn" onclick="cycleBg()" title="背景色"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg></button>
+            <button class="icon-btn" id="mute-btn" onclick="toggleMute()" title="音切替">
+                <svg viewBox="0 0 24 24" class="svg-icon" id="icon-vol"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+            </button>
+            <button class="icon-btn" onclick="toggleBottomPanel()" title="メニュー開閉"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg></button>
+        </div>
+    </div>
+
+    <div id="history-panel">
+        <div id="history-header">
+            <span>履歴管理</span>
+            <button id="history-filter-btn" onclick="toggleHistoryFilter()" style="background-color:#444; color:#fff; font-size:0.75rem; padding:4px 10px; min-width:auto; font-weight:bold; border-radius:4px;">全て (履歴)</button>
+            <button class="icon-btn" onclick="toggleHistoryPanel()"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+        </div>
+        <div id="history-content"></div>
+    </div>
+
+    <div id="image-container">
+        <div id="canvas-area">
+            <img id="main-image" src="" draggable="false">
+            <div id="grid-overlay"></div>
+            <div id="fav-icon-large">★</div>
+        </div>
+    </div>
+
+    <div id="progress-container"><div id="progress-bar"></div></div>
+
+    <div id="bottom-panel">
+        <input type="file" id="folder-input" webkitdirectory directory multiple style="display:none;">
+        <input type="file" id="file-input" multiple accept="image/*" style="display:none;">
+        
+        <button onclick="document.getElementById('folder-input').click()" title="フォルダ"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></button>
+        <button onclick="document.getElementById('file-input').click()" title="複数画像"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg></button>
+        <button onclick="toggleManagePopup()" id="manage-btn" title="画像管理"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44A.991.991 0 0 1 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9zM12 4.15L6.04 7.5 12 10.85l5.96-3.35L12 4.15zM5 15.91l6 3.38v-6.71L5 9.21v6.7zM19 15.91v-6.7l-6 3.37v6.71l6-3.38z"/></svg></button>
+        
+        <span class="separator">|</span>
+
+        <button id="prev-btn" onclick="handlePrevButtonClick(event)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
+        <button id="play-btn" class="accent" onclick="toggleTimer()"><svg viewBox="0 0 24 24" class="svg-icon" id="icon-play"><path d="M8 5v14l11-7z"/></svg></button>
+        <button id="next-btn" onclick="handleNextButtonClick(event)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+        
+        <span class="separator">|</span>
+        
+        <select id="time-select" onchange="setTimer(parseInt(this.value))">
+            <option value="30">30s</option>
+            <option value="60">1m</option>
+            <option value="120">2m</option>
+            <option value="180">3m</option>
+            <option value="300">5m</option>
+            <option value="600">10m</option>
+            <option value="1800">30m</option>
+        </select>
+        
+        <span class="separator">|</span>
+        
+        <button id="shuffle-btn" onclick="toggle('shuffle')" class="active" title="シャッフル"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
+        <button id="flipH-btn" onclick="toggle('flipH')" title="左右反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10,6 L4,12 L10,18 Z" /><rect x="11" y="4" width="2" height="16" /><path d="M14,6 L20,12 L14,18 Z" /></svg></button>
+        <button id="flipV-btn" onclick="toggle('flipV')" title="上下反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6,10 L12,4 L18,10 Z" /><rect x="4" y="11" width="16" height="2" /><path d="M6,14 L12,20 L18,14 Z" /></svg></button>
+        <button id="randomFlip-btn" onclick="toggleRandomFlip()" title="ランダム反転（画像ごとにランダムで反転）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM8 17c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm4 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm4 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/></svg></button>
+        <button id="grid-btn" onclick="toggle('grid')" title="グリッド"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg></button>
+        <button id="mono-btn" onclick="toggle('mono')" title="モノクロ"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm1-17.93c3.95.49 7 3.85 7 7.93s-3.05 7.44-7 7.93V4.07z"/></svg></button>
+        <button id="bw-btn" onclick="toggleBW()" title="2階調（白黒2値化）"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="2" y="2" width="5" height="5"/><rect x="12" y="2" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/><rect x="17" y="7" width="5" height="5"/><rect x="2" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/><rect x="7" y="17" width="5" height="5"/><rect x="17" y="17" width="5" height="5"/></svg></button>
+        
+        <span class="separator">|</span>
+        
+        <button id="pip-btn" onclick="togglePiP()" title="小窓(PiP)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16.01H3V4.98h18v14.03z"/></svg></button>
+        <button id="eye-btn" onclick="toggleEyeHide()" title="5秒後に画像を隠す"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
+        <button class="hard-mode" id="hm-btn" onclick="toggleHardMode()" title="ハードモード"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M13,2.05v9h6L7,22v-9H2L13,2.05z"/></svg></button>
+
+        <div id="manage-popup">
+            <button onclick="toggleFavCurrent()">⭐ お気に入り登録/解除</button>
+            <button onclick="skipCurrent()" class="popup-danger">🗑️ この画像をスキップ</button>
+            <button onclick="clearManageData()">🔄 設定をリセット</button>
+        </div>
+
+        <div id="settings-overlay" onclick="toggleSettingsPanel()"></div>
+        <div id="settings-panel">
+            <div id="settings-header">
+                <span>設定</span>
+                <button id="settings-close-btn" onclick="toggleSettingsPanel()" title="閉じる"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+            </div>
+            <div id="settings-content">
+                <div class="settings-section">
+                    <div class="settings-section-title">休憩リマインダー</div>
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            <span>目の休憩</span>
+                            <span class="settings-desc">設定した間隔のセッション終了時に<br>休憩を促します</span>
+                        </div>
+                        <label class="settings-toggle">
+                            <input type="checkbox" id="break-reminder-toggle" onchange="onBreakReminderToggle(this.checked)">
+                            <span class="settings-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label"><span>休憩インターバル</span></div>
+                        <select id="break-interval-select" class="settings-select" onchange="onBreakIntervalChange(parseInt(this.value))">
+                            <option value="10">10分</option>
+                            <option value="15" selected>15分</option>
+                            <option value="20">20分</option>
+                            <option value="25">25分</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label"><span>休憩時間</span></div>
+                        <select id="break-duration-select" class="settings-select" onchange="onBreakDurationChange(parseInt(this.value))">
+                            <option value="10">10秒</option>
+                            <option value="20" selected>20秒</option>
+                            <option value="30">30秒</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">表示</div>
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            <span>画像を隠すまでの時間</span>
+                            <span class="settings-desc">目隠しモード時、画像が消えるまでの秒数</span>
+                        </div>
+                        <select id="eye-hide-delay-select" class="settings-select" onchange="onEyeHideDelayChange(parseInt(this.value))">
+                            <option value="3">3秒</option>
+                            <option value="5" selected>5秒</option>
+                            <option value="10">10秒</option>
+                            <option value="15">15秒</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            <span>パネル自動非表示</span>
+                            <span class="settings-desc">操作しないとボタンが薄くなるまでの時間</span>
+                        </div>
+                        <select id="focus-idle-delay-select" class="settings-select" onchange="onFocusIdleDelayChange(parseInt(this.value))">
+                            <option value="3">3秒</option>
+                            <option value="5" selected>5秒</option>
+                            <option value="10">10秒</option>
+                            <option value="0">しない</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            <span>タイマー終了フラッシュ</span>
+                            <span class="settings-desc">タイマー終了時の画面端の光る強さ</span>
+                        </div>
+                        <select id="flash-intensity-select" class="settings-select" onchange="onFlashIntensityChange(parseInt(this.value))">
+                            <option value="0">なし</option>
+                            <option value="1">弱</option>
+                            <option value="2" selected>中</option>
+                            <option value="3">強</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label"><span>プログレスバーの太さ</span></div>
+                        <select id="progress-size-select" class="settings-select" onchange="onProgressSizeChange(parseInt(this.value))">
+                            <option value="1">細</option>
+                            <option value="2" selected>中</option>
+                            <option value="3">太</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">サウンド</div>
+                    <div class="settings-row">
+                        <div class="settings-label"><span>タイマー終了音量</span></div>
+                        <select id="sound-volume-select" class="settings-select" onchange="onSoundVolumeChange(parseInt(this.value))">
+                            <option value="0">なし</option>
+                            <option value="1">小</option>
+                            <option value="2" selected>中</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="break-overlay">
+            <div id="break-content">
+                <div id="break-countdown">20</div>
+                <div id="break-message">目を閉じて休んでください</div>
+                <div id="break-sub">20秒後に自動で再開します</div>
+                <button id="break-skip-btn" onclick="endBreak()">スキップ</button>
+            </div>
+        </div>
+        <div id="break-corner">
+            <div id="break-corner-count">20</div>
+            <div id="break-corner-msg">目を休めて</div>
+        </div>
+    </div>
+
+        <audio id="sound-player" src="data:audio/mp3;base64,//u0bAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAsAABlQAAFBQsLEREXFxcdHSIiKCguLi40NDo6QEBFRUVLS1FRV1dXXV1iYmhobm5udHR6eoCAhYWFi4uRkZeXl52doqKoqK6urrS0urrAwMXFxcvL0dHX19fd3eLi6Oju7u709Pr6//8AAAA5TEFNRTMuMTAwAboAAAAALI8AADTAJAKIzQAAwAAAZUASIX6CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//u0bAAABLZrooUYwAIAAA0goAABJRYXH7hagAAAADSDAAAAIZZNPTEHCEDwGTogESQQPJpsQISQQPJpsQISQw8mmxAhkY920Rjf3/Ef//tEf//+IgnphBCT0ygGmYAAiQcLoBpmAAIcHAek0zCCDkyaed7v/2Qw8mTogg4AQPAYWwIAFGQ960RCewQQw9MwBpmAAIkHAaz02iHsmmhh5NNiCDkEDyabECBC/BBDnpsTTMIIOTJpywBmPBOLCQUCYgFAYwHA4AA7XsdnA+keuygbfAwGAezKC6sBIPAw6I+ThUOBYuIAgCgP5ECELZBB5AUBYZgA0CgDBsDDgI/J9AqDljjLAXxACDYGSiEBjoUADCgDDA8+9EnySJkXGKmREDKBQAyQIAMBjQDOCOA04VgNfkcDEB6v+KXEfihBAAVEbQggHuAayNgHDU6BFHAaSDQH47uBtNZgcFVIHOlx9rNJ8ig7E0DTPHAMjA0DKYzA08bACjoBhMEgY+EwGHhQBigDAZ7KIGKxv//JwiDmhom6kJ9E3AymLQNDF4DHAGACAYGUCEBjAKCGAYcFgGLg4CIAAYYFAGMBIAMKP/////pvdJDv///wHBQDEwiAwsAAsqAwIBgGAIH7A20E+BkAG2gyCglwqqp6mIdoQfASAAAEAAPADALJS/huUppS0CMQZsN2cpYYxCZlkZrbsRhrExyWymmylkPyvfO7wy3Kp+xUwlH/UsS/LL8qb8Odw5et95jdmNU2OqarLc9Nfo6T//u0bC4ACGCF1P4vQAAAAA0gwAAAIUoXWfmMAADzr25PAHAAKp2jaysZ7IEkuMdcEKATahGTP9/3p8qEBK5D8MPfK6dsiBZjwctai60ql1aNRr4CUvQil1Jxr9qWSh8UBcuvLka830IznIfUqcqAq2sst5U36y/WVuc3gy+/mioySugnTXdinblIqOPujGMmtQ60RgzXs/1z//+frD/////////////9j8OP+XwkFIy/KNsUCoUyIP/////////////9gLstwsvk0F4I0jGts0ug5Iyu7t7uvuqcgyOJsAAABAED94tbQOAo+25RIn9Tg3YX2rGweJ0swqe7FofrarMTWWuaVsKgL9KKYZv9blV+e31DOIX/rxmhr/3OXQbD33XW1u9T1+Q/QV5iRQw8+X/jc12ntzk3D92XyqBYBbG9DnSfL6pY3CpTOWdMvd9LVnb92JWwZ9GlMvBIzCJDdm7xIryHCmuZ0u+xdyq0szfiVxextFyCGAODBbGWWucqdp+WX0NreO8a2WW7cQdzF++8tRixLOZsMLzJoulDDrxZQJmLNUj2Dy38eV69zVqIxGilX/////////////+GH8nd2N/bz//////////////+jh+HHAem3PNNXvPVaQCgUCi0WgX/////+Z//Yzc3//HzhHF6APB//5988XhINEJnDQr/5897mcuUDAvCcHQjmDP////NSq21UmbV//3c7MZ7swAACb6r3QZDDzrRCcqurljVdxsGFLx3Agf4+NX9//u0bBIBFTxv2f9h4AJsaDsv56QAFMW/YewNkUF0oex9gZY4//6a1T33TV7v7RMzsksKlK2iXgSwpq71vW8WYGi9bVxLiHua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TEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//u0bAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq" preload="auto"></audio>
+
+    <script>
+        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./sw.js').catch(() => {}); }
+
+        let sourceImages = []; let dbFavImages = []; let images = [], currentIndex = 0; let isFavMode = false; 
+        let historyList = [], historyPos = -1, historyUrls = [];
+        let lastShownIndex = -1;
+        let timerSeconds = 30, remaining = 30, isRunning = false, expectedEndTime = 0;
+        let settings = { flipH: false, flipV: false, shuffle: true, grid: false, mono: false, bw: false };
+        let randomFlipEnabled = false;
+        let isMuted = true, bgMode = 0, isImageHidden = false; 
+        let hmActive = false, hmPhase = 0;
+        const hmPhases = { 1: {t: "①暗記", s: 120, h: false}, 2: {t: "②記憶描写", s: 300, h: true}, 3: {t: "③模写", s: 900, h: false}, 4: {t: "④実践", s: 900, h: true} };
+        let currentImageUrl = null, resizeTimer;
+        let imageLoadToken = 0;
+        let animationFrameId; let lastPipUpdateTime = 0;
+        let timerTickId = null;
+        let historyRenderToken = 0;
+        let preloadUrl = null, preloadName = '';
+        let preloadedImage = null;
+        let preloadUrl2 = null, preloadName2 = '';
+        let preloadedImage2 = null;
+        let historyVirtualCleanup = null;
+        let historyResizeTimer = null;
+        let isHistoryPanelOpen = false;
+        let focusIdleTimer = null;
+        let isFocusDimmed = false;
+        let filterFrameQueued = false;
+        let lastTimerText = '';
+        let lastProgressWidth = '';
+        let lastProgressColor = '';
+        let lastImageTransform = '';
+        let lastImageFilter = '';
+        let lastImageOpacity = '';
+        let lastGridDisplay = '';
+
+        let isEyeHideEnabled = false, eyeHideTimeout = null;
+        let showFavsOnly = false;
+        let showHiddenOnly = false;
+
+        let skipList = (function(){ try { return JSON.parse(localStorage.getItem('croquis_skips') || '[]'); } catch(_){ return []; } })();
+        let skipNameSet = new Set(skipList);
+        const settingsKey = 'croquis_ui_settings_v1';
+        let favNameSet = new Set();
+        
+        let pipVideo, pipCanvas, pipCtx, isPiP = false, pipInitialized = false;
+        let documentPipWindow = null; // Document PiP用の変数
+        let pipRenderStamp = '';
+        let pipFlashStartTime = 0; // Video PiP用フラッシュタイムスタンプ
+
+        let db; const dbName = "CroquisAppDB", storeName = "favorites";
+        let saveTimer = null;
+        const hasMediaSession = 'mediaSession' in navigator;
+        const bgColors = ['#1e1e1e', '#000', '#fff'];
+
+        // SVGアイコンの定義
+        const iconPlaySVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M8 5v14l11-7z"/></svg>`;
+        const iconPauseSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+        const iconPrevSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>`;
+        const iconNextSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>`;
+        const iconVolSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`;
+        const iconMuteSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>`;
+
+        const ui = {
+            img: document.getElementById('main-image'), timer: document.getElementById('timer-label'),
+            prog: document.getElementById('progress-bar'), playBtn: document.getElementById('play-btn'),
+            grid: document.getElementById('grid-overlay'), sound: document.getElementById('sound-player'),
+            phase: document.getElementById('phase-label'), hmBtn: document.getElementById('hm-btn'),
+            btnHmShow: document.getElementById('btn-hm-show'), btnHmHide: document.getElementById('btn-hm-hide'),
+            muteBtn: document.getElementById('mute-btn'), pipBtn: document.getElementById('pip-btn'),
+            favIcon: document.getElementById('fav-icon-large'), managePopup: document.getElementById('manage-popup'),
+            eyeBtn: document.getElementById('eye-btn'),
+            hmMini: document.getElementById('hm-step-mini'),
+            historyPanel: document.getElementById('history-panel'),
+            historyContent: document.getElementById('history-content'),
+            historyFilterBtn: document.getElementById('history-filter-btn'),
+            imageCounter: document.getElementById('image-counter'),
+            timeSelect: document.getElementById('time-select')
+        };
+        function updateHmMini() {
+            if (!hmActive) { ui.hmMini.innerText = ''; return; }
+            const active = hmPhase || 1;
+            const parts = ['①','②','③','④'].map(function(mark, idx) {
+                const n = idx + 1;
+                return n === active ? '[' + mark + ']' : mark;
+            });
+            ui.hmMini.innerText = parts.join('');
+        }
+
+        function initDB() {
+            return new Promise((resolve) => {
+                let request = indexedDB.open(dbName, 1);
+                request.onupgradeneeded = function(e) { e.target.result.createObjectStore(storeName, { keyPath: "name" }); };
+                request.onsuccess = function(e) { db = e.target.result; resolve(); };
+                request.onerror = function() { resolve(); };
+            });
+        }
+        function saveFavToDB(name, dataUrl) {
+            if (!db) return;
+            const tx = db.transaction(storeName, "readwrite");
+            tx.onerror = function() {};
+            tx.objectStore(storeName).put({ name: name, data: dataUrl, timestamp: Date.now() });
+        }
+        function deleteFavFromDB(name) {
+            if (!db) return;
+            const tx = db.transaction(storeName, "readwrite");
+            tx.onerror = function() {};
+            tx.objectStore(storeName).delete(name);
+        }
+        function getAllFavsFromDB() {
+            return new Promise((resolve) => {
+                if (!db) { resolve([]); return; }
+                let request = db.transaction(storeName, "readonly").objectStore(storeName).getAll();
+                request.onsuccess = function() { resolve(request.result || []); };
+                request.onerror = function() { resolve([]); };
+            });
+        }
+        let skipSaveTimer = null;
+        function saveSkipList() {
+            if (skipSaveTimer) clearTimeout(skipSaveTimer);
+            skipSaveTimer = setTimeout(function() {
+                try { localStorage.setItem('croquis_skips', JSON.stringify(skipList)); } catch(_) {}
+                skipSaveTimer = null;
+            }, 120);
+        }
+        function rebuildFavNameSet() { favNameSet = new Set(dbFavImages.map(function(f){ return f.name; })); }
+        function rebuildSkipNameSet() { skipNameSet = new Set(skipList); }
+        function hasUnskippedInCurrentPool() {
+            if (isFavMode) return true;
+            if (!images || images.length === 0) return false;
+            for (let i = 0; i < images.length; i++) {
+                const name = images[i] && images[i].name;
+                if (!name || !skipNameSet.has(name)) return true;
+            }
+            return false;
+        }
+
+        function isIOSDevice() {
+            return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
+        }
+        function checkDevice() {
+            if (isIOSDevice()) { ui.pipBtn.style.display = 'none'; }
+        }
+        function syncAppHeight() {
+            const vv = window.visualViewport;
+            const innerH = window.innerHeight || 0;
+            const vvH = vv ? vv.height : 0;
+            const h = (vvH > 0) ? Math.min(innerH || vvH, vvH) : innerH;
+            if (!h) return;
+            document.documentElement.style.setProperty('--app-height', h + 'px');
+
+            const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+            const isIOS = isIOSDevice();
+            let safe = 0;
+            if (isStandalone && isIOS && innerH > 0 && vvH > 0) {
+                safe = Math.max(0, Math.round(innerH - vvH));
+                if (safe > 40) safe = 0;
+            }
+            document.documentElement.style.setProperty('--bottom-safe', safe + 'px');
+        }
+
+        function flushUiSettings() {
+            const payload = {
+                settings: settings,
+                bgMode: bgMode,
+                isMuted: isMuted,
+                isEyeHideEnabled: isEyeHideEnabled,
+                randomFlipEnabled: randomFlipEnabled,
+                breakReminderEnabled: breakReminderEnabled,
+                eyeHideDelay: eyeHideDelay,
+                focusIdleDelay: focusIdleDelay,
+                breakIntervalMin: breakIntervalMin,
+                breakDurationSec: breakDurationSec,
+                flashIntensity: flashIntensity,
+                progressBarSize: progressBarSize,
+                soundVolume: soundVolume
+            };
+            try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (_) {}
+        }
+        function saveUiSettings() {
+            if (saveTimer) clearTimeout(saveTimer);
+            saveTimer = setTimeout(function() {
+                flushUiSettings();
+                saveTimer = null;
+            }, 120);
+        }
+
+        function loadUiSettings() {
+            try {
+                const raw = localStorage.getItem(settingsKey);
+                if (!raw) return;
+                const saved = JSON.parse(raw);
+                if (saved && saved.settings) {
+                    settings.flipH = !!saved.settings.flipH;
+                    settings.flipV = !!saved.settings.flipV;
+                    settings.shuffle = saved.settings.shuffle !== false;
+                    settings.grid = !!saved.settings.grid;
+                    settings.mono = !!saved.settings.mono;
+                    settings.bw = !!saved.settings.bw;
+                }
+                if (saved && typeof saved.bgMode === 'number') bgMode = Math.max(0, Math.min(2, saved.bgMode));
+                if (saved && typeof saved.isMuted === 'boolean') isMuted = saved.isMuted;
+                if (saved && typeof saved.isEyeHideEnabled === 'boolean') isEyeHideEnabled = saved.isEyeHideEnabled;
+                if (saved && typeof saved.randomFlipEnabled === 'boolean') randomFlipEnabled = saved.randomFlipEnabled;
+                if (saved && typeof saved.breakReminderEnabled === 'boolean') {
+                    breakReminderEnabled = saved.breakReminderEnabled;
+                }
+                if (saved && typeof saved.eyeHideDelay === 'number') eyeHideDelay = saved.eyeHideDelay;
+                if (saved && typeof saved.focusIdleDelay === 'number') focusIdleDelay = saved.focusIdleDelay;
+                if (saved && typeof saved.breakIntervalMin === 'number') breakIntervalMin = saved.breakIntervalMin;
+                if (saved && typeof saved.breakDurationSec === 'number') breakDurationSec = saved.breakDurationSec;
+                if (saved && typeof saved.flashIntensity === 'number') flashIntensity = saved.flashIntensity;
+                if (saved && typeof saved.progressBarSize === 'number') progressBarSize = saved.progressBarSize;
+                if (saved && typeof saved.soundVolume === 'number') {
+                    soundVolume = Math.max(0, Math.min(2, saved.soundVolume));
+                    isMuted = (soundVolume === 0);
+                } else if (saved && typeof saved.isMuted === 'boolean') {
+                    // 旧データ互換: isMutedだけ保存されていた場合
+                    isMuted = saved.isMuted;
+                    soundVolume = isMuted ? 0 : 2;
+                }
+            } catch (_) {}
+        }
+
+        function reflectUiSettings() {
+            ['shuffle', 'flipH', 'flipV', 'grid', 'mono'].forEach(function(k) {
+                const btn = document.getElementById(k + '-btn');
+                if (!btn) return;
+                if (settings[k]) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+            if (settings.bw) { const b = document.getElementById('bw-btn'); if(b) b.classList.add('active'); }
+            const breakToggle = document.getElementById('break-reminder-toggle');
+            if (breakToggle) breakToggle.checked = breakReminderEnabled;
+            const eyeSel = document.getElementById('eye-hide-delay-select');
+            if (eyeSel) eyeSel.value = eyeHideDelay;
+            const focusSel = document.getElementById('focus-idle-delay-select');
+            if (focusSel) focusSel.value = focusIdleDelay;
+            const brkIntSel = document.getElementById('break-interval-select');
+            if (brkIntSel) brkIntSel.value = breakIntervalMin;
+            const brkDurSel = document.getElementById('break-duration-select');
+            if (brkDurSel) brkDurSel.value = breakDurationSec;
+            const flashSel = document.getElementById('flash-intensity-select');
+            if (flashSel) flashSel.value = flashIntensity;
+            const progSel = document.getElementById('progress-size-select');
+            if (progSel) { progSel.value = progressBarSize; onProgressSizeChange(progressBarSize); }
+            const sndSel = document.getElementById('sound-volume-select');
+            if (sndSel) sndSel.value = soundVolume;
+            if (isEyeHideEnabled) ui.eyeBtn.classList.add('active');
+            else ui.eyeBtn.classList.remove('active');
+            const rfBtn = document.getElementById('randomFlip-btn');
+            if (rfBtn) {
+                if (randomFlipEnabled) {
+                    rfBtn.classList.add('active');
+                    document.getElementById('flipH-btn').classList.add('flip-disabled');
+                    document.getElementById('flipV-btn').classList.add('flip-disabled');
+                } else {
+                    rfBtn.classList.remove('active');
+                    document.getElementById('flipH-btn').classList.remove('flip-disabled');
+                    document.getElementById('flipV-btn').classList.remove('flip-disabled');
+                }
+            }
+            ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG;
+            document.documentElement.style.setProperty('--bg-color', bgColors[bgMode]);
+        }
+
+        window.onload = async function() {
+            loadUiSettings();
+            checkDevice(); await initDB(); dbFavImages = await getAllFavsFromDB(); rebuildFavNameSet(); initMediaSession();
+            reflectUiSettings();
+            syncAppHeight();
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            window.addEventListener('resize', syncAppHeight, { passive: true });
+            window.addEventListener('orientationchange', function() {
+                syncAppHeight();
+                setTimeout(syncAppHeight, 100);
+                setTimeout(syncAppHeight, 300);
+            }, { passive: true });
+            if (window.visualViewport) window.visualViewport.addEventListener('resize', syncAppHeight, { passive: true });
+            armFocusIdleTimer();
+        };
+
+        function handleVisibilityChange() {
+            if (document.hidden) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+                // PiP中でない場合はtimerTickLoopも停止して電力消費を抑える
+                if (!isPiP && timerTickId) {
+                    clearTimeout(timerTickId); timerTickId = null;
+                }
+            } else {
+                if (isRunning) {
+                    const now = Date.now();
+                    if (expectedEndTime <= now) {
+                        remaining = 0;
+                        updateTimerText(0);
+                        ui.prog.style.width = '0%';
+                        flashScreen();
+                        hmActive ? hmNextPhase() : nextImage();
+                        return;
+                    }
+                    remaining = Math.ceil((expectedEndTime - now) / 1000);
+                    updateTimerText(remaining);
+                    if (!timerTickId) timerTickLoop();
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+                }
+                // スリープ復帰時にDocument PiPが消えていたら自動再接続
+                if (isPiP && !documentPipWindow && 'documentPictureInPicture' in window) {
+                    setTimeout(function() {
+                        if (isPiP && !documentPipWindow) togglePiP();
+                    }, 600);
+                }
+                // Video PiP復帰: document PiP非対応環境でPiPフラグが残っていたら再接続
+                if (isPiP && !documentPipWindow && !('documentPictureInPicture' in window) && pipInitialized) {
+                    setTimeout(function() {
+                        if (isPiP && !document.pictureInPictureElement) {
+                            pipVideo.requestPictureInPicture().catch(function(){
+                                isPiP = false; ui.pipBtn.classList.remove('pip-active');
+                            });
+                        }
+                    }, 600);
+                }
+
+                if (isPiP) updatePiP();
+            }
+        }
+
+        // ---- ユーザー設定値 ----
+        let eyeHideDelay = 5;      // ① 画像を隠すまでの秒数
+        let focusIdleDelay = 5;    // ② フォーカスモードが暗くなるまでの秒数（0=無効）
+        let breakIntervalMin = 15; // ③ 休憩インターバル（分）
+        let breakDurationSec = 20; // ④ 休憩時間（秒）
+        let flashIntensity = 2;    // ⑥ 0=なし 1=弱 2=中 3=強
+        let progressBarSize = 2;   // ⑧ 1=細 2=中 3=太
+        let soundVolume = 2;       // ⑩ 0=なし 1=小 2=中
+
+        // ---- 休憩リマインダー ----
+        let breakReminderEnabled = false;
+        let sessionStartTime = 0;
+        let breakCountdownTimer = null;
+        let breakSeconds = 0;
+
+        function onBreakReminderToggle(enabled) {
+            breakReminderEnabled = enabled;
+            if (enabled) {
+                sessionStartTime = isRunning ? Date.now() : 0;
+            } else {
+                sessionStartTime = 0;
+                // 休憩中なら中断（タイマー再開はしない）
+                if (breakCountdownTimer) {
+                    clearInterval(breakCountdownTimer); breakCountdownTimer = null;
+                    document.getElementById('break-overlay').classList.remove('active');
+                    document.getElementById('break-corner').classList.remove('active');
+                    if (bottomPanelWasHidden) {
+                        document.getElementById('bottom-panel').classList.add('hidden');
+                        bottomPanelWasHidden = false;
+                    }
+                    breakWasRunning = false;
+                }
+            }
+            saveUiSettings();
+        }
+
+        function checkBreakTrigger() {
+            if (!breakReminderEnabled || sessionStartTime === 0) return false;
+            if (hmActive) return false; // ハードモード中は発動しない
+            return (Date.now() - sessionStartTime) >= (breakIntervalMin * 60 * 1000);
+        }
+
+        let breakWasRunning = false;
+        let bottomPanelWasHidden = false;
+
+        function triggerBreak() {
+            sessionStartTime = Date.now();
+            const isLongTimer = timerSeconds >= 60;
+            // タイマーを停止して休憩へ
+            breakWasRunning = isRunning;
+            if (isRunning) stopTimer();
+            // 下パネルが隠れていたら強制表示
+            const bottomPanel = document.getElementById('bottom-panel');
+            bottomPanelWasHidden = bottomPanel.classList.contains('hidden');
+            if (bottomPanelWasHidden) bottomPanel.classList.remove('hidden');
+            // idle-dimを解除
+            setFocusDimmed(false);
+            if (focusIdleTimer) { clearTimeout(focusIdleTimer); focusIdleTimer = null; }
+            if (isLongTimer) { startCornerBreak(); } else { startFullBreak(); }
+        }
+
+        function startFullBreak() {
+            document.getElementById('break-overlay').classList.add('active');
+            breakSeconds = breakDurationSec;
+            document.getElementById('break-countdown').textContent = breakSeconds;
+            clearInterval(breakCountdownTimer);
+            breakCountdownTimer = setInterval(function() {
+                breakSeconds--;
+                document.getElementById('break-countdown').textContent = breakSeconds;
+                if (breakSeconds <= 0) endBreak();
+            }, 1000);
+        }
+
+        function startCornerBreak() {
+            document.getElementById('break-corner').classList.add('active');
+            breakSeconds = breakDurationSec;
+            document.getElementById('break-corner-count').textContent = breakSeconds;
+            clearInterval(breakCountdownTimer);
+            breakCountdownTimer = setInterval(function() {
+                breakSeconds--;
+                document.getElementById('break-corner-count').textContent = breakSeconds;
+                if (breakSeconds <= 0) endCornerBreak();
+            }, 1000);
+        }
+
+        function _finishBreak() {
+            clearInterval(breakCountdownTimer); breakCountdownTimer = null;
+            if (bottomPanelWasHidden) {
+                document.getElementById('bottom-panel').classList.add('hidden');
+                bottomPanelWasHidden = false;
+            }
+            const shouldResume = breakWasRunning;
+            breakWasRunning = false;
+            if (shouldResume) startTimer();
+            armFocusIdleTimer();
+        }
+
+        function endBreak() {
+            document.getElementById('break-overlay').classList.remove('active');
+            document.getElementById('break-corner').classList.remove('active');
+            _finishBreak();
+        }
+
+        function endCornerBreak() {
+            document.getElementById('break-corner').classList.remove('active');
+            _finishBreak();
+        }
+
+        function onFlashIntensityChange(val) {
+            flashIntensity = val; saveUiSettings();
+        }
+        function onProgressSizeChange(val) {
+            progressBarSize = val;
+            const hMap = [0, 2, 4, 7];
+            document.documentElement.style.setProperty('--progress-height', hMap[val] + 'px');
+            saveUiSettings();
+        }
+        function onSoundVolumeChange(val) {
+            soundVolume = val;
+            isMuted = (val === 0);
+            ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG;
+            saveUiSettings();
+        }
+        function onEyeHideDelayChange(val) {
+            eyeHideDelay = val; saveUiSettings();
+        }
+        function onFocusIdleDelayChange(val) {
+            focusIdleDelay = val; armFocusIdleTimer(); saveUiSettings();
+        }
+        function onBreakIntervalChange(val) {
+            breakIntervalMin = val; saveUiSettings();
+        }
+        function onBreakDurationChange(val) {
+            breakDurationSec = val; saveUiSettings();
+        }
+
+        function toggleSettingsPanel() {
+            const panel = document.getElementById('settings-panel');
+            const overlay = document.getElementById('settings-overlay');
+            const isOpen = panel.classList.contains('open');
+            if (isOpen) {
+                panel.classList.remove('open');
+                overlay.classList.remove('open');
+            } else {
+                panel.classList.add('open');
+                overlay.classList.add('open');
+            }
+        }
+
+        function toggleBottomPanel() { document.getElementById('bottom-panel').classList.toggle('hidden'); }
+        function toggleManagePopup() { ui.managePopup.classList.toggle('show'); }
+        function setFocusDimmed(dim) {
+            const panel = document.getElementById('bottom-panel');
+            if (!panel || panel.classList.contains('hidden')) return;
+            if (dim === isFocusDimmed) return;
+            isFocusDimmed = dim;
+            if (dim) panel.classList.add('idle-dim');
+            else panel.classList.remove('idle-dim');
+        }
+        function armFocusIdleTimer() {
+            if (focusIdleTimer) clearTimeout(focusIdleTimer);
+            setFocusDimmed(false);
+            if (focusIdleDelay === 0) return; // 0=無効
+            focusIdleTimer = setTimeout(function() { setFocusDimmed(true); }, focusIdleDelay * 1000);
+        }
+
+        let originalOrder = [];
+
+        function applyLoadedFiles(files) {
+            if (files.length > 0) { 
+                clearPreloadUrl();
+                originalOrder = files.slice();
+                sourceImages = files; if (settings.shuffle) shuffleArray(sourceImages); 
+                images = sourceImages; isFavMode = false; showFavsOnly = false; showHiddenOnly = false;
+                ui.historyFilterBtn.innerText = '全て (履歴)';
+                currentIndex = 0; historyList = [0]; historyPos = 0;
+                loadImage(); resetTimer();
+                updateImageCounter();
+            }
+        }
+
+        function handleFiles(e) {
+            const list = e.target.files;
+            if (!list || list.length === 0) return;
+            const files = [];
+            for (let i = 0; i < list.length; i++) {
+                const f = list[i];
+                if (f && f.type && f.type.startsWith('image/')) files.push(f);
+            }
+            applyLoadedFiles(files);
+            e.target.value = ''; 
+        }
+        function readEntryFile(entry) {
+            return new Promise(function(resolve) {
+                try {
+                    entry.file(function(file) { resolve(file || null); }, function() { resolve(null); });
+                } catch (_) { resolve(null); }
+            });
+        }
+        function readDirEntries(reader) {
+            return new Promise(function(resolve) {
+                const all = [];
+                const loop = function() {
+                    reader.readEntries(function(entries) {
+                        if (!entries || entries.length === 0) { resolve(all); return; }
+                        for (let i = 0; i < entries.length; i++) all.push(entries[i]);
+                        loop();
+                    }, function() { resolve(all); });
+                };
+                loop();
+            });
+        }
+        async function collectImageFilesFromEntry(entry, out) {
+            if (!entry) return;
+            if (entry.isFile) {
+                const file = await readEntryFile(entry);
+                if (file && file.type && file.type.startsWith('image/')) out.push(file);
+                return;
+            }
+            if (entry.isDirectory) {
+                const reader = entry.createReader();
+                const children = await readDirEntries(reader);
+                for (let i = 0; i < children.length; i++) {
+                    await collectImageFilesFromEntry(children[i], out);
+                }
+            }
+        }
+        async function getDroppedImageFiles(dataTransfer) {
+            const out = [];
+            const items = dataTransfer && dataTransfer.items ? dataTransfer.items : null;
+            if (items && items.length > 0) {
+                const entries = [];
+                for (let i = 0; i < items.length; i++) {
+                    const it = items[i];
+                    const entry = it.webkitGetAsEntry ? it.webkitGetAsEntry() : null;
+                    if (entry) { entries.push(entry); }
+                    else {
+                        const f = it.getAsFile ? it.getAsFile() : null;
+                        if (f && f.type && f.type.startsWith('image/')) out.push(f);
+                    }
+                }
+                // 直列処理でフォルダ内の順序を安定させる
+                for (let i = 0; i < entries.length; i++) {
+                    await collectImageFilesFromEntry(entries[i], out);
+                }
+                return out;
+            }
+            const files = dataTransfer && dataTransfer.files ? dataTransfer.files : [];
+            for (let i = 0; i < files.length; i++) {
+                const f = files[i];
+                if (f && f.type && f.type.startsWith('image/')) out.push(f);
+            }
+            return out;
+        }
+        document.getElementById('folder-input').addEventListener('change', handleFiles);
+        document.getElementById('file-input').addEventListener('change', handleFiles);
+        const dropArea = document.getElementById('image-container');
+        dropArea.addEventListener('dragover', function(e) { e.preventDefault(); dropArea.classList.add('drag-over'); }, { passive: false });
+        dropArea.addEventListener('dragleave', function(e) { if (!dropArea.contains(e.relatedTarget)) dropArea.classList.remove('drag-over'); }, { passive: true });
+        dropArea.addEventListener('drop', async function(e) {
+            e.preventDefault();
+            dropArea.classList.remove('drag-over');
+            const files = await getDroppedImageFiles(e.dataTransfer);
+            applyLoadedFiles(files);
+        }, { passive: false });
+
+        function shuffleArray(arr) { for(let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const temp = arr[i]; arr[i] = arr[j]; arr[j] = temp; } }
+
+        function getNextIndexForPreload() {
+            if (!images.length) return -1;
+            if (settings.shuffle) {
+                if (images.length === 1) return 0;
+                let idx, guard = 0;
+                do { idx = Math.floor(Math.random() * images.length); guard++; }
+                while (idx === currentIndex && guard < 16);
+                return idx;
+            }
+            return (currentIndex + 1) % images.length;
+        }
+
+        function clearPreloadUrl() {
+            if (preloadUrl && preloadUrl.startsWith('blob:')) URL.revokeObjectURL(preloadUrl);
+            preloadUrl = null; preloadName = ''; preloadedImage = null;
+            if (preloadUrl2 && preloadUrl2.startsWith('blob:')) URL.revokeObjectURL(preloadUrl2);
+            preloadUrl2 = null; preloadName2 = ''; preloadedImage2 = null;
+        }
+
+        function updatePreloadQueue() {
+            if (images.length === 0) return;
+            const firstIdx = getNextIndexForPreload();
+            if (firstIdx < 0 || !images[firstIdx]) return;
+            let secondIdx = -1;
+            if (images.length > 1) {
+                if (settings.shuffle) {
+                    let guard = 0;
+                    secondIdx = Math.floor(Math.random() * images.length);
+                    while ((secondIdx === firstIdx || secondIdx === currentIndex) && guard < 16) {
+                        secondIdx = Math.floor(Math.random() * images.length);
+                        guard++;
+                    }
+                } else {
+                    secondIdx = (firstIdx + 1) % images.length;
+                }
+            }
+
+            const firstItem = images[firstIdx];
+            const firstName = firstItem.name || '';
+            if (!(preloadName === firstName && preloadUrl)) {
+                if (preloadUrl && preloadUrl.startsWith('blob:')) URL.revokeObjectURL(preloadUrl);
+                preloadName = firstName;
+                preloadedImage = null;
+                preloadUrl = firstItem.data ? firstItem.data : URL.createObjectURL(firstItem);
+                const img1 = new Image();
+                img1.onload = function() {
+                    preloadedImage = img1;
+                    // デコードを事前に完了させてスワイプ時の遅延を減らす
+                    if (img1.decode) img1.decode().catch(function(){});
+                };
+                img1.onerror = function() { preloadedImage = null; };
+                img1.src = preloadUrl;
+            }
+
+            if (secondIdx >= 0 && images[secondIdx]) {
+                const secondItem = images[secondIdx];
+                const secondName = secondItem.name || '';
+                if (!(preloadName2 === secondName && preloadUrl2)) {
+                    if (preloadUrl2 && preloadUrl2.startsWith('blob:')) URL.revokeObjectURL(preloadUrl2);
+                    preloadName2 = secondName;
+                    preloadedImage2 = null;
+                    preloadUrl2 = secondItem.data ? secondItem.data : URL.createObjectURL(secondItem);
+                    const img2 = new Image();
+                    img2.onload = function() {
+                        preloadedImage2 = img2;
+                        if (img2.decode) img2.decode().catch(function(){});
+                    };
+                    img2.onerror = function() { preloadedImage2 = null; };
+                    img2.src = preloadUrl2;
+                }
+            } else {
+                if (preloadUrl2 && preloadUrl2.startsWith('blob:')) URL.revokeObjectURL(preloadUrl2);
+                preloadUrl2 = null; preloadName2 = ''; preloadedImage2 = null;
+            }
+        }
+
+        function loadImage(skipDepth, skipPreload) {
+            if(images.length === 0) { ui.img.style.display = 'none'; ui.favIcon.style.display = 'none'; updateImageCounter(); return; }
+            const item = images[currentIndex];
+            if(!item) return;
+            const loadToken = ++imageLoadToken;
+
+            if (randomFlipEnabled) {
+                const r = Math.floor(Math.random() * 4);
+                settings.flipH = (r === 1 || r === 3);
+                settings.flipV = (r === 2 || r === 3);
+            }
+
+            if(!isFavMode && skipNameSet.has(item.name)) {
+                if (hasUnskippedInCurrentPool() && (skipDepth || 0) < images.length) {
+                    setTimeout(function(){ nextImage(true); }, 10);
+                    return;
+                }
+            }
+
+            isImageHidden = false;
+            const isFav = isFavMode ? true : favNameSet.has(item.name);
+            ui.favIcon.style.display = isFav ? 'block' : 'none';
+
+            ui.img.onload = function() {
+                if (loadToken !== imageLoadToken) return;
+                ui.img.style.display = 'block';
+                applyFilters(); clearTimeout(eyeHideTimeout);
+                if (isEyeHideEnabled && !hmActive) { eyeHideTimeout = setTimeout(function() { isImageHidden = true; applyFilters(); }, eyeHideDelay * 1000); }
+            };
+            ui.img.onerror = function() {
+                if (loadToken !== imageLoadToken) return;
+                if (images.length > 1) nextImage();
+            };
+
+            let newUrl;
+            if (item.data) {
+                newUrl = item.data;
+            } else if (preloadName === item.name && preloadUrl) {
+                // deocde完了前でもURLを流用（createObjectURL節約）
+                newUrl = preloadUrl; preloadUrl = null; preloadedImage = null; preloadName = '';
+            } else if (preloadName2 === item.name && preloadUrl2) {
+                newUrl = preloadUrl2; preloadUrl2 = null; preloadedImage2 = null; preloadName2 = '';
+            } else {
+                newUrl = URL.createObjectURL(item);
+            }
+            // 前のURLを解放（ただしプリロードURLと同じなら解放しない）
+            if (currentImageUrl && currentImageUrl.startsWith('blob:') && currentImageUrl !== newUrl) {
+                URL.revokeObjectURL(currentImageUrl);
+            }
+            currentImageUrl = newUrl;
+
+            ui.img.src = currentImageUrl;
+            updateMediaSession();
+            if (!skipPreload) updatePreloadQueue();
+            updateImageCounter();
+        }
+
+        function applyFilters() {
+            let transform = '';
+            if(settings.flipH) transform += 'scaleX(-1) ';
+            if(settings.flipV) transform += 'scaleY(-1) ';
+            let nextFilter = 'none';
+            if (settings.bw) nextFilter = 'grayscale(1) contrast(10)';
+            else if (settings.mono) nextFilter = 'grayscale(100%)';
+            const nextOpacity = isImageHidden ? '0' : '1';
+            if (transform !== lastImageTransform) { ui.img.style.transform = transform; lastImageTransform = transform; }
+            if (nextFilter !== lastImageFilter) { ui.img.style.filter = nextFilter; lastImageFilter = nextFilter; }
+            if (nextOpacity !== lastImageOpacity) { ui.img.style.opacity = nextOpacity; lastImageOpacity = nextOpacity; }
+            
+            if(settings.grid && !isImageHidden && ui.img.complete) {
+                if (lastGridDisplay !== 'block') { ui.grid.style.display = 'block'; lastGridDisplay = 'block'; }
+            } else {
+                if (lastGridDisplay !== 'none') { ui.grid.style.display = 'none'; lastGridDisplay = 'none'; }
+            }
+            
+            if (isPiP) updatePiP();
+        }
+        function applyFiltersDeferred() {
+            if (filterFrameQueued) return;
+            filterFrameQueued = true;
+            requestAnimationFrame(function() {
+                filterFrameQueued = false;
+                applyFilters();
+            });
+        }
+
+        window.addEventListener('resize', function() { clearTimeout(resizeTimer); resizeTimer = setTimeout(applyFiltersDeferred, 100); });
+        
+        function toggle(key) { 
+            settings[key] = !settings[key]; const btn = document.getElementById(key + '-btn');
+            if(btn) { if(settings[key]) { btn.classList.add("active"); } else { btn.classList.remove("active"); } }
+            if (key === 'mono' && settings.mono && settings.bw) {
+                settings.bw = false;
+                const bwBtn = document.getElementById('bw-btn');
+                if (bwBtn) bwBtn.classList.remove('active');
+            }
+            if (key === 'shuffle') {
+                const currentItem = images[currentIndex];
+                if (isFavMode) {
+                    // お気に入りモードでもシャッフル
+                    if (settings.shuffle) { shuffleArray(dbFavImages); images = dbFavImages; }
+                    else { dbFavImages.sort(function(a,b){ return a.name < b.name ? -1 : 1; }); images = dbFavImages; }
+                } else if (sourceImages.length > 0) {
+                    if (settings.shuffle) { shuffleArray(sourceImages); }
+                    else { if (originalOrder.length === sourceImages.length) sourceImages = originalOrder.slice(); }
+                    images = sourceImages;
+                }
+                if (currentItem) {
+                    const newIdx = images.findIndex(function(f){ return f.name === currentItem.name; });
+                    if (newIdx > -1) currentIndex = newIdx;
+                }
+            }
+            saveUiSettings();
+            applyFiltersDeferred(); 
+        }
+
+        function toggleRandomFlip() {
+            randomFlipEnabled = !randomFlipEnabled;
+            const btn = document.getElementById('randomFlip-btn');
+            if (randomFlipEnabled) {
+                btn.classList.add('active');
+                // ランダム反転ON時は手動flipボタンを非活性化
+                document.getElementById('flipH-btn').classList.add('flip-disabled');
+                document.getElementById('flipV-btn').classList.add('flip-disabled');
+            } else {
+                btn.classList.remove('active');
+                document.getElementById('flipH-btn').classList.remove('flip-disabled');
+                document.getElementById('flipV-btn').classList.remove('flip-disabled');
+                // OFF時は反転をリセット
+                settings.flipH = false; settings.flipV = false;
+                const hBtn = document.getElementById('flipH-btn'); if(hBtn) hBtn.classList.remove('active');
+                const vBtn = document.getElementById('flipV-btn'); if(vBtn) vBtn.classList.remove('active');
+                applyFiltersDeferred();
+            }
+            saveUiSettings();
+        }
+
+        function toggleBW() {
+            settings.bw = !settings.bw;
+            const bwBtn = document.getElementById('bw-btn');
+            if (settings.bw) {
+                bwBtn.classList.add('active');
+                // monoと排他
+                if (settings.mono) {
+                    settings.mono = false;
+                    const monoBtn = document.getElementById('mono-btn');
+                    if (monoBtn) monoBtn.classList.remove('active');
+                }
+            } else {
+                bwBtn.classList.remove('active');
+            }
+            applyFiltersDeferred();
+            saveUiSettings();
+        }
+
+        function toggleEyeHide() {
+            isEyeHideEnabled = !isEyeHideEnabled;
+            if (isEyeHideEnabled) {
+                ui.eyeBtn.classList.add("active");
+            } else {
+                ui.eyeBtn.classList.remove("active");
+                clearTimeout(eyeHideTimeout);
+                isImageHidden = false;
+                applyFiltersDeferred();
+            }
+            saveUiSettings();
+        }
+
+        function toggleFavCurrent() {
+            if(images.length === 0) return;
+            const item = images[currentIndex]; const fname = item.name;
+            if (isFavMode) {
+                dbFavImages = dbFavImages.filter(function(f){ return f.name !== fname; });
+                rebuildFavNameSet();
+                deleteFavFromDB(fname); ui.managePopup.classList.remove('show');
+                if (dbFavImages.length === 0) {
+                    alert("お気に入りが空になりました。通常モードに戻ります。");
+                    isFavMode = false; showFavsOnly = false; showHiddenOnly = false; images = sourceImages;
+                    ui.historyFilterBtn.innerText = '全て (履歴)';
+                    currentIndex = 0; historyList = [0]; historyPos = 0; loadImage();
+                } else {
+                    currentIndex = Math.min(currentIndex, dbFavImages.length - 1);
+                    historyList = [currentIndex]; historyPos = 0;
+                    loadImage();
+                }
+                updateImageCounter();
+                renderHistoryThumbs();
+            } else {
+                const foundIdx = dbFavImages.findIndex(function(f){ return f.name === fname; });
+                if(foundIdx > -1) {
+                    dbFavImages.splice(foundIdx, 1); rebuildFavNameSet(); deleteFavFromDB(fname);
+                    ui.favIcon.style.display = 'none';
+                    if (isHistoryPanelOpen && showFavsOnly) renderHistoryThumbs();
+                }
+                else {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const dataUrl = e.target.result; dbFavImages.push({ name: fname, data: dataUrl }); rebuildFavNameSet(); saveFavToDB(fname, dataUrl);
+                        ui.favIcon.style.display = 'block';
+                        if (isHistoryPanelOpen && showFavsOnly) renderHistoryThumbs();
+                    };
+                    reader.readAsDataURL(item);
+                }
+                ui.managePopup.classList.remove('show');
+            }
+        }
+
+        function skipCurrent() {
+            if (images.length === 0 || isFavMode) return;
+            const item = images[currentIndex];
+            if (!item || !item.name) return;
+            const fname = item.name;
+            if (!skipNameSet.has(fname)) {
+                skipList.push(fname);
+                rebuildSkipNameSet();
+                saveSkipList();
+            }
+            ui.managePopup.classList.remove('show'); nextImage();
+        }
+
+        function clearManageData() {
+            if(!confirm("お気に入り画像データ、スキップ設定をすべて削除して初期化しますか？")) return;
+            skipList = []; dbFavImages = []; localStorage.removeItem('croquis_skips');
+            rebuildFavNameSet();
+            rebuildSkipNameSet();
+            if (db) { const tx = db.transaction(storeName, "readwrite"); tx.onerror = function(){}; tx.objectStore(storeName).clear(); }
+            ui.favIcon.style.display = 'none'; ui.managePopup.classList.remove('show');
+            isFavMode = false; showFavsOnly = false; showHiddenOnly = false; ui.historyFilterBtn.innerText = '全て (履歴)';
+            if (sourceImages.length > 0) {
+                images = sourceImages; currentIndex = 0; historyList = [0]; historyPos = 0; loadImage();
+            } else {
+                images = []; currentIndex = 0; historyList = []; historyPos = -1;
+            }
+            updateImageCounter();
+            if(isHistoryPanelOpen) renderHistoryThumbs();
+            alert("データを完全にリセットしました。");
+        }
+
+        function pickShuffledIndex(excludeA, excludeB, maxGuard) {
+            if (images.length === 1) return 0;
+            if (images.length === 2) return excludeA === 0 ? 1 : 0;
+            let candidate, guard = 0;
+            do { candidate = Math.floor(Math.random() * images.length); guard++; }
+            while ((candidate === excludeA || candidate === excludeB) && guard < maxGuard);
+            return candidate;
+        }
+
+        function nextImage(isSkipping = false) { 
+            if(images.length === 0) return; 
+            if(hmActive && !isSkipping) exitHardMode(); 
+            clearTimeout(timerTickId); timerTickId = null;
+            cancelAnimationFrame(animationFrameId); animationFrameId = null;
+            const prevIndex = currentIndex;
+            
+            if (!isSkipping) {
+                if (historyPos < historyList.length - 1) { historyPos++; currentIndex = historyList[historyPos]; } 
+                else {
+                    currentIndex = settings.shuffle
+                        ? pickShuffledIndex(prevIndex, lastShownIndex, 12)
+                        : (currentIndex + 1) % images.length;
+                    historyList.push(currentIndex);
+                    if (historyList.length > 100) { historyList.shift(); historyPos = historyList.length - 1; }
+                    else { historyPos++; }
+                }
+            } else {
+                currentIndex = settings.shuffle
+                    ? pickShuffledIndex(prevIndex, -1, 8)
+                    : (currentIndex + 1) % images.length;
+            }
+            lastShownIndex = prevIndex;
+            updatePreloadQueue(); // インデックス確定後すぐに先読み開始
+            loadImage(0, true); remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
+            if (isRunning) {
+                expectedEndTime = Date.now() + (remaining * 1000);
+                timerTickLoop();
+                if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+            } else { updateTimerText(remaining); ui.prog.style.width = '100%'; lastProgressWidth = '100%'; }
+            if(!isSkipping) { playSound(); }
+            // 休憩リマインダーチェック（タイマー終了で自動進んだときのみ）
+            if (!isSkipping && checkBreakTrigger()) {
+                stopTimer();
+                triggerBreak();
+            }
+            if(isHistoryPanelOpen) renderHistoryThumbs();
+        }
+
+        function prevImage() { 
+            if (historyPos > 0 && !hmActive) {
+                clearTimeout(timerTickId); timerTickId = null;
+                cancelAnimationFrame(animationFrameId); animationFrameId = null;
+                historyPos--; currentIndex = historyList[historyPos];
+                loadImage(); resetTimer();
+                if(isHistoryPanelOpen) renderHistoryThumbs();
+            } 
+        }
+
+        function toggleHistoryPanel() {
+            const panel = ui.historyPanel;
+            if (isHistoryPanelOpen) {
+                historyRenderToken++;
+                isHistoryPanelOpen = false;
+                panel.classList.remove('open');
+                clearHistoryThumbs();
+            } else {
+                isHistoryPanelOpen = true;
+                panel.classList.add('open');
+                renderHistoryThumbs();
+            }
+        }
+
+        function toggleHistoryFilter() {
+            if (!showFavsOnly && !showHiddenOnly) {
+                showFavsOnly = true; showHiddenOnly = false;
+            } else if (showFavsOnly) {
+                showFavsOnly = false; showHiddenOnly = true;
+                if (sourceImages.length > 0 && isFavMode) {
+                    isFavMode = false; images = sourceImages;
+                    currentIndex = Math.min(0, sourceImages.length - 1);
+                    historyList = [currentIndex]; historyPos = 0; loadImage(); resetTimer();
+                }
+            } else {
+                showFavsOnly = false; showHiddenOnly = false;
+                if (sourceImages.length > 0 && isFavMode) {
+                    isFavMode = false; images = sourceImages;
+                    currentIndex = Math.min(0, sourceImages.length - 1);
+                    historyList = [currentIndex]; historyPos = 0; loadImage(); resetTimer();
+                }
+            }
+            ui.historyFilterBtn.innerText = showFavsOnly ? '★ お気に入り' : (showHiddenOnly ? '非表示' : '全て (履歴)');
+            updateImageCounter();
+            renderHistoryThumbs();
+        }
+        function unhideByName(name) {
+            if (!name || !skipNameSet.has(name)) return;
+            skipList = skipList.filter(function(n){ return n !== name; });
+            rebuildSkipNameSet();
+            saveSkipList();
+            renderHistoryThumbs();
+        }
+
+        function clearHistoryThumbs() {
+            if (historyVirtualCleanup) { historyVirtualCleanup(); historyVirtualCleanup = null; }
+            const content = ui.historyContent;
+            content.innerHTML = '';
+            content.style.display = 'grid';
+            content.style.position = '';
+            content.style.overflowY = 'auto';
+            content.style.alignContent = 'start';
+            historyUrls.forEach(function(url) { URL.revokeObjectURL(url); });
+            historyUrls = [];
+        }
+
+        function mountVirtualHistory(items, buildNode) {
+            const content = ui.historyContent;
+            const cols = window.innerWidth <= 440 ? 3 : 2;
+            const gap = 8;
+            const paddingX = 20;
+            const usable = Math.max(1, content.clientWidth - paddingX);
+            const tile = Math.floor((usable - (gap * (cols - 1))) / cols);
+            const rowHeight = tile + gap;
+            const totalRows = Math.ceil(items.length / cols);
+            const layer = document.createElement('div');
+            layer.style.position = 'relative';
+            layer.style.height = (totalRows * rowHeight) + 'px';
+            layer.style.width = '100%';
+            content.innerHTML = '';
+            content.style.display = 'block';
+            content.style.position = 'relative';
+            content.appendChild(layer);
+            let lastStart = -1;
+            let lastEnd = -1;
+            let scrollRafId = 0;
+
+            const renderVisible = function() {
+                const viewTop = content.scrollTop;
+                const viewBottom = viewTop + content.clientHeight;
+                const startRow = Math.max(0, Math.floor(viewTop / rowHeight) - 2);
+                const endRow = Math.min(totalRows, Math.ceil(viewBottom / rowHeight) + 2);
+                const start = startRow * cols;
+                const end = Math.min(items.length, endRow * cols);
+                if (start === lastStart && end === lastEnd) return;
+                lastStart = start;
+                lastEnd = end;
+                layer.innerHTML = '';
+                for (let i = start; i < end; i++) {
+                    const col = i % cols;
+                    const row = Math.floor(i / cols);
+                    const node = buildNode(items[i], i);
+                    node.style.position = 'absolute';
+                    node.style.left = (col * (tile + gap)) + 'px';
+                    node.style.top = (row * rowHeight) + 'px';
+                    node.style.width = tile + 'px';
+                    node.style.height = tile + 'px';
+                    layer.appendChild(node);
+                }
+            };
+
+            const onScroll = function() { renderVisible(); };
+            const onScrollRaf = function() {
+                if (scrollRafId) return;
+                scrollRafId = requestAnimationFrame(function() {
+                    scrollRafId = 0;
+                    renderVisible();
+                });
+            };
+            const onResize = function() {
+                if (historyResizeTimer) clearTimeout(historyResizeTimer);
+                historyResizeTimer = setTimeout(function() {
+                    historyResizeTimer = null;
+                    renderHistoryThumbs();
+                }, 80);
+            };
+            content.addEventListener('scroll', onScrollRaf, { passive: true });
+            window.addEventListener('resize', onResize);
+            renderVisible();
+
+            historyVirtualCleanup = function() {
+                content.removeEventListener('scroll', onScrollRaf);
+                window.removeEventListener('resize', onResize);
+                if (scrollRafId) {
+                    cancelAnimationFrame(scrollRafId);
+                    scrollRafId = 0;
+                }
+                if (historyResizeTimer) {
+                    clearTimeout(historyResizeTimer);
+                    historyResizeTimer = null;
+                }
+            };
+        }
+
+        let renderHistoryRafId = 0;
+        function renderHistoryThumbs() {
+            if (renderHistoryRafId) cancelAnimationFrame(renderHistoryRafId);
+            renderHistoryRafId = requestAnimationFrame(function() {
+                renderHistoryRafId = 0;
+                _renderHistoryThumbsImpl();
+            });
+        }
+        function _renderHistoryThumbsImpl() {
+            const token = ++historyRenderToken;
+            const content = ui.historyContent; clearHistoryThumbs();
+            const isMobileHistory = window.innerWidth <= 440;
+            if (showHiddenOnly) {
+                const hiddenEntries = [];
+                const seen = new Set();
+                for (let i = 0; i < skipList.length; i++) {
+                    const name = skipList[i];
+                    if (!name || seen.has(name)) continue;
+                    seen.add(name);
+                    let fileItem = null;
+                    for (let j = 0; j < sourceImages.length; j++) {
+                        const it = sourceImages[j];
+                        if (it && it.name === name) { fileItem = it; break; }
+                    }
+                    hiddenEntries.push({ name: name, file: fileItem });
+                }
+                if (hiddenEntries.length === 0) { content.innerHTML = '<div style="grid-column:span 2; text-align:center; color:#666; font-size:0.8rem; padding:20px 0;">非表示はありません</div>'; return; }
+                mountVirtualHistory(hiddenEntries, function(entry) {
+                    if (token !== historyRenderToken) return document.createElement('div');
+                    const thumbDiv = document.createElement('div'); thumbDiv.style.position = 'relative';
+                    const imgEl = document.createElement('img');
+                    imgEl.className = 'history-thumb';
+                    if (entry.file) {
+                        const url = URL.createObjectURL(entry.file);
+                        historyUrls.push(url);
+                        imgEl.src = url;
+                    }
+                    const btn = document.createElement('button');
+                    btn.innerText = '表示解除';
+                    btn.style.position = 'absolute';
+                    btn.style.left = '4px';
+                    btn.style.right = '4px';
+                    btn.style.bottom = '4px';
+                    btn.style.padding = '4px 0';
+                    btn.style.fontSize = '0.7rem';
+                    btn.style.minWidth = 'auto';
+                    btn.style.backgroundColor = 'rgba(0, 212, 255, 0.92)';
+                    btn.style.color = '#001018';
+                    btn.style.fontWeight = 'bold';
+                    btn.style.border = '1px solid rgba(255,255,255,0.18)';
+                    btn.onclick = function(ev) { ev.stopPropagation(); unhideByName(entry.name); };
+                    thumbDiv.appendChild(imgEl);
+                    thumbDiv.appendChild(btn);
+                    return thumbDiv;
+                });
+            } else if (showFavsOnly) {
+                if (dbFavImages.length === 0) { content.innerHTML = '<div style="grid-column:span 2; text-align:center; color:#666; font-size:0.8rem; padding:20px 0;">★画像がありません</div>'; return; }
+                mountVirtualHistory(dbFavImages, function(item, idx) {
+                    if (token !== historyRenderToken) return document.createElement('div');
+                    const thumbDiv = document.createElement('div'); thumbDiv.style.position = 'relative';
+                    const imgEl = document.createElement('img');
+                    imgEl.src = item.data;
+                    imgEl.className = 'history-thumb' + (isFavMode && currentIndex === idx ? ' current' : '');
+                    imgEl.onclick = (function(index) { return function() {
+                        isFavMode = true; images = dbFavImages; currentIndex = index; historyList = [index]; historyPos = 0;
+                        if (hmActive) exitHardMode(); loadImage(); resetTimer();
+                        if(isMobileHistory) toggleHistoryPanel(); renderHistoryThumbs();
+                    }; })(idx);
+                    thumbDiv.appendChild(imgEl);
+                    const badge = document.createElement('div'); badge.className = 'fav-badge'; badge.innerText = '★';
+                    thumbDiv.appendChild(badge);
+                    return thumbDiv;
+                });
+            } else {
+                const currentPool = isFavMode ? dbFavImages : sourceImages; const start = Math.max(0, historyList.length - 100);
+                const entries = [];
+                for (let i = historyList.length - 1; i >= start; i--) {
+                    const imgIndex = historyList[i]; const item = currentPool[imgIndex];
+                    if(item) entries.push({ historyIndex: i, item: item });
+                }
+                if(entries.length === 0) { content.innerHTML = '<div style="grid-column:span 2; text-align:center; color:#666; font-size:0.8rem; padding:20px 0;">履歴がありません</div>'; return; }
+                const thumbBlobUrlCache = new Map();
+                mountVirtualHistory(entries, function(entry) {
+                    if (token !== historyRenderToken) return document.createElement('div');
+                    const i = entry.historyIndex; const item = entry.item;
+                    const thumbDiv = document.createElement('div'); thumbDiv.style.position = 'relative';
+                    const imgEl = document.createElement('img');
+                    if (item.data) { imgEl.src = item.data; }
+                    else {
+                        let url = thumbBlobUrlCache.get(item);
+                        if (!url) {
+                            url = URL.createObjectURL(item);
+                            thumbBlobUrlCache.set(item, url);
+                            historyUrls.push(url);
+                        }
+                        imgEl.src = url;
+                    }
+                    imgEl.className = 'history-thumb' + (i === historyPos ? ' current' : '');
+                    imgEl.onclick = (function(idx) { return function() { historyPos = idx; currentIndex = historyList[historyPos]; if (hmActive) exitHardMode(); loadImage(); resetTimer(); if(isMobileHistory) toggleHistoryPanel(); renderHistoryThumbs(); }; })(i);
+                    thumbDiv.appendChild(imgEl);
+                    const isFav = isFavMode ? true : favNameSet.has(item.name);
+                    if(isFav) { const badge = document.createElement('div'); badge.className = 'fav-badge'; badge.innerText = '★'; thumbDiv.appendChild(badge); }
+                    return thumbDiv;
+                });
+            }
+        }
+
+        function toggleTimer() { if(images.length > 0) isRunning ? stopTimer() : startTimer(); }
+        let audioPrewarmed = false;
+        function startTimer() { 
+            isRunning = true; ui.playBtn.innerHTML = iconPauseSVG; ui.playBtn.classList.remove("accent"); 
+            expectedEndTime = Date.now() + (remaining * 1000);
+            if (breakReminderEnabled && sessionStartTime === 0) sessionStartTime = Date.now();
+            clearTimeout(timerTickId); timerTickId = null;
+            cancelAnimationFrame(animationFrameId); animationFrameId = null;
+            timerTickLoop();
+            if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+            updateMediaSession();
+            if(isPiP) {
+                if (pipVideo && pipVideo.paused) pipVideo.play().catch(function(){}); 
+                updatePiP();
+            }
+            if (!isMuted && ui.sound && !audioPrewarmed) {
+                audioPrewarmed = true;
+                ui.sound.volume = 0; ui.sound.play().then(function() { ui.sound.pause(); ui.sound.currentTime = 0; ui.sound.volume = 1; }).catch(function(){});
+            }
+        }
+        function stopTimer() { 
+            isRunning = false; ui.playBtn.innerHTML = iconPlaySVG; ui.playBtn.classList.add("accent");
+            clearTimeout(timerTickId); timerTickId = null;
+            cancelAnimationFrame(animationFrameId); animationFrameId = null;
+            ui.timer.classList.remove('urgent');
+            updateMediaSession();
+            if (isPiP) updatePiP(); 
+        }
+        
+        // バックグラウンドでも動作するタイマー進行ループ（250ms間隔）
+        function timerTickLoop() {
+            if (!isRunning) return;
+            const now = Date.now();
+            const remainMs = expectedEndTime - now;
+            if (remainMs <= 0) {
+                remaining = 0;
+                updateTimerText(0);
+                clearTimeout(timerTickId); timerTickId = null;
+                cancelAnimationFrame(animationFrameId); animationFrameId = null;
+                flashScreen();
+                hmActive ? hmNextPhase() : nextImage();
+                return;
+            }
+            const nextRemaining = Math.ceil(remainMs / 1000);
+            const secondChanged = (nextRemaining !== remaining);
+            if (secondChanged) {
+                remaining = nextRemaining;
+                updateTimerText(remaining);
+                // 残り10秒以下でタイマー文字をハイライト
+                if (remaining <= 10) { ui.timer.classList.add('urgent'); }
+                else { ui.timer.classList.remove('urgent'); }
+            }
+            // PiP中かつバックグラウンドのときは残り秒が変わったときだけ再描画
+            if (isPiP && document.hidden && secondChanged) {
+                pipRenderStamp = ''; updatePiP();
+            }
+            timerTickId = setTimeout(timerTickLoop, 250);
+        }
+
+        // フォアグラウンド専用のなめらか描画ループ（requestAnimationFrame）
+        function updateSmoothTimerRAF() {
+            if (!isRunning || document.hidden) { animationFrameId = null; return; }
+            const now = Date.now(); const remainMs = expectedEndTime - now;
+            const nextRemaining = Math.ceil(remainMs / 1000);
+            if (remainMs <= 0) {
+                // timerTickLoopに処理を任せる（二重発火防止）
+                animationFrameId = null; return;
+            }
+            if (nextRemaining !== remaining) { remaining = nextRemaining; updateTimerText(remaining); }
+            const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
+            const nextWidth = ((remainMs / totalMs) * 100) + '%';
+            if (nextWidth !== lastProgressWidth) { ui.prog.style.width = nextWidth; lastProgressWidth = nextWidth; }
+            const nextColor = remaining <= 5 ? 'var(--accent-urgent)' : 'var(--accent)';
+            if (nextColor !== lastProgressColor) { ui.prog.style.backgroundColor = nextColor; lastProgressColor = nextColor; }
+            if (isPiP && (now - lastPipUpdateTime > 66)) { updatePiP(); lastPipUpdateTime = now; }
+            animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+        }
+
+        window.addEventListener('beforeunload', function() {
+            if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; flushUiSettings(); }
+            if (skipSaveTimer) {
+                clearTimeout(skipSaveTimer); skipSaveTimer = null;
+                try { localStorage.setItem('croquis_skips', JSON.stringify(skipList)); } catch(_) {}
+            }
+            clearTimeout(timerTickId); timerTickId = null;
+            cancelAnimationFrame(animationFrameId); animationFrameId = null;
+            clearPreloadUrl();
+            clearPreloadUrl();
+            if (currentImageUrl && currentImageUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(currentImageUrl);
+                currentImageUrl = null;
+            }
+            historyUrls.forEach(function(url) { URL.revokeObjectURL(url); });
+            historyUrls = [];
+        });
+        
+        function resetTimer() { 
+            clearTimeout(timerTickId); timerTickId = null;
+            cancelAnimationFrame(animationFrameId); animationFrameId = null;
+            ui.timer.classList.remove('urgent');
+            remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
+            if (isRunning) {
+                expectedEndTime = Date.now() + (remaining * 1000);
+                timerTickLoop();
+                if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+            } else {
+                updateTimerText(remaining);
+                if (lastProgressWidth !== '100%') { ui.prog.style.width = '100%'; lastProgressWidth = '100%'; }
+                if (lastProgressColor !== 'var(--accent)') { ui.prog.style.backgroundColor = 'var(--accent)'; lastProgressColor = 'var(--accent)'; }
+                if (isPiP) updatePiP();
+            }
+        }
+        function setTimer(sec) { 
+            if (hmActive) exitHardMode();
+            timerSeconds = sec;
+            if (ui.timeSelect) ui.timeSelect.value = sec;
+            resetTimer();
+        }
+        
+        function updateTimerText(sec) { 
+            let m = Math.floor(sec / 60); let s = sec % 60;
+            const txt = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
+            if (txt !== lastTimerText) { ui.timer.innerText = txt; lastTimerText = txt; }
+        }
+
+        function updateImageCounter() {
+            const el = ui.imageCounter;
+            if (!el) return;
+            const pool = isFavMode ? dbFavImages : sourceImages;
+            if (!pool || pool.length === 0) { el.textContent = ''; return; }
+            el.textContent = (historyPos + 1) + ' / ' + pool.length;
+        }
+        
+        function toggleMute() {
+            isMuted = !isMuted;
+            soundVolume = isMuted ? 0 : 2;
+            ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG;
+            const sv = document.getElementById('sound-volume-select');
+            if (sv) sv.value = soundVolume;
+            saveUiSettings();
+        }
+        function playSound() {
+            if (soundVolume === 0 || !ui.sound) return;
+            const volMap = [0, 0.4, 1.0];
+            ui.sound.volume = volMap[soundVolume];
+            ui.sound.currentTime = 0;
+            ui.sound.play().catch(function(){});
+        }
+
+        function flashScreen() {
+            if (flashIntensity === 0) return; // なし
+            const alphaMap = [0, 0.25, 0.45, 0.7];
+            const blurMap  = [0, 40,   60,   80 ];
+            const alpha = alphaMap[flashIntensity];
+            const blur  = blurMap[flashIntensity];
+            const el = imgContainer;
+            if (!el) return;
+            // CSSカスタムプロパティで動的に強度を適用
+            el.style.setProperty('--flash-alpha', alpha);
+            el.style.setProperty('--flash-blur', blur + 'px');
+            el.classList.remove('timer-flash');
+            void el.offsetWidth;
+            el.classList.add('timer-flash');
+            el.addEventListener('animationend', function() {
+                el.classList.remove('timer-flash');
+            }, { once: true });
+
+            // Document PiP側を光らせる
+            if (documentPipWindow) {
+                try {
+                    const pipDoc = documentPipWindow.document;
+                    const container = pipDoc.getElementById('canvas-container');
+                    if (container) {
+                        const alphaMap = [0, 0.25, 0.45, 0.7];
+                        const blurMap  = [0, 40,   60,   80 ];
+                        container.style.setProperty('--flash-alpha', alphaMap[flashIntensity]);
+                        container.style.setProperty('--flash-blur', blurMap[flashIntensity] + 'px');
+                        container.classList.remove('timer-flash');
+                        void container.offsetWidth;
+                        container.classList.add('timer-flash');
+                        container.addEventListener('animationend', function() {
+                            container.classList.remove('timer-flash');
+                        }, { once: true });
+                    }
+                } catch(e) {}
+            }
+
+            // Video PiP側を光らせる（Canvas描画でフェード）
+            if (isPiP && !documentPipWindow && pipInitialized) {
+                pipFlashStartTime = Date.now();
+                animatePipFlash();
+            }
+        }
+
+        function animatePipFlash() {
+            if (!isPiP || !pipCanvas || !pipCtx || documentPipWindow) return;
+            const elapsed = Date.now() - pipFlashStartTime;
+            const duration = 700;
+            if (elapsed >= duration) {
+                // フラッシュ終了後に通常描画を1回実行
+                pipRenderStamp = '';
+                updatePiP();
+                return;
+            }
+            const alpha = 0.45 * (1 - elapsed / duration);
+            const ratio = ui.img.naturalWidth / ui.img.naturalHeight;
+            const baseWidth = Math.max(ui.img.naturalWidth, 2560);
+            pipCanvas.width = baseWidth; pipCanvas.height = baseWidth / ratio;
+            drawToCanvas(pipCanvas, pipCtx, true);
+            // Canvas周囲にグローを描画
+            const w = pipCanvas.width, h = pipCanvas.height;
+            const glowSize = Math.round(w * 0.06);
+            const grad = pipCtx.createLinearGradient(0, 0, glowSize, 0);
+            grad.addColorStop(0, `rgba(0,212,255,${alpha})`);
+            grad.addColorStop(1, 'rgba(0,212,255,0)');
+            // 左辺
+            pipCtx.fillStyle = grad; pipCtx.fillRect(0, 0, glowSize, h);
+            // 右辺
+            pipCtx.save(); pipCtx.translate(w, 0); pipCtx.scale(-1, 1);
+            pipCtx.fillStyle = grad; pipCtx.fillRect(0, 0, glowSize, h); pipCtx.restore();
+            // 上辺
+            const gradT = pipCtx.createLinearGradient(0, 0, 0, glowSize);
+            gradT.addColorStop(0, `rgba(0,212,255,${alpha})`);
+            gradT.addColorStop(1, 'rgba(0,212,255,0)');
+            pipCtx.fillStyle = gradT; pipCtx.fillRect(0, 0, w, glowSize);
+            // 下辺
+            pipCtx.save(); pipCtx.translate(0, h); pipCtx.scale(1, -1);
+            pipCtx.fillStyle = gradT; pipCtx.fillRect(0, 0, w, glowSize); pipCtx.restore();
+
+            requestAnimationFrame(animatePipFlash);
+        }
+        function cycleBg() { 
+            bgMode = (bgMode + 1) % 3; 
+            document.documentElement.style.setProperty('--bg-color', bgColors[bgMode]); 
+            saveUiSettings();
+            if (isPiP) {
+                pipRenderStamp = '';
+                updatePiP();
+            }
+        }
+        
+        function toggleHardMode() { hmActive ? exitHardMode() : startHardMode(); }
+        function startHardMode() { 
+            if(images.length === 0) return; 
+            hmActive = true; ui.hmBtn.classList.add("active");
+            setHmPhase(1);
+            startTimer();
+            updateHmMini();
+        }
+        function exitHardMode() { 
+            hmActive = false; ui.hmBtn.classList.remove("active"); ui.phase.innerText = ""; 
+            isImageHidden = false; ui.btnHmShow.style.display = 'none'; ui.btnHmHide.style.display = 'none'; 
+            updateHmMini(); applyFilters();
+            stopTimer();
+            remaining = timerSeconds;
+            updateTimerText(remaining);
+            ui.prog.style.width = '100%'; lastProgressWidth = '100%';
+            if (lastProgressColor !== 'var(--accent)') { ui.prog.style.backgroundColor = 'var(--accent)'; lastProgressColor = 'var(--accent)'; }
+            if (isPiP) updatePiP();
+        }
+        function setHmPhase(p) { hmPhase = p; ui.phase.innerText = hmPhases[p].t; remaining = hmPhases[p].s; isImageHidden = hmPhases[p].h; updateHmMini(); applyFilters(); playSound(); resetTimer(); }
+        function hmNextPhase() { if(hmPhase < 4) { setHmPhase(hmPhase + 1); } else { stopTimer(); ui.phase.innerText = "完了"; ui.btnHmShow.style.display = 'block'; ui.btnHmHide.style.display = 'block'; playSound(); } }
+
+        function initMediaSession() {
+            if (hasMediaSession) {
+                navigator.mediaSession.setActionHandler('play', function() { startTimer(); }); navigator.mediaSession.setActionHandler('pause', function() { stopTimer(); });
+                navigator.mediaSession.setActionHandler('previoustrack', function() { prevImage(); }); navigator.mediaSession.setActionHandler('nexttrack', function() { nextImage(); });
+            }
+        }
+        function updateMediaSession() {
+            if (hasMediaSession && images.length > 0) {
+                const item = images[currentIndex];
+                const title = item ? item.name : 'Croquis App';
+                const artist = '残り: ' + lastTimerText;
+                const album = isFavMode ? '★ お気に入り' : '通常再生';
+                const stamp = title + '|' + album + '|' + (isRunning ? '1' : '0');
+                if (updateMediaSession.lastStamp === stamp) return;
+                updateMediaSession.lastStamp = stamp;
+                navigator.mediaSession.metadata = new MediaMetadata({ title: title, artist: artist, album: album });
+                navigator.mediaSession.playbackState = isRunning ? "playing" : "paused";
+            }
+        }
+
+        function initPiP() {
+            if(pipInitialized) return true;
+            try {
+                pipVideo = document.createElement('video'); pipVideo.muted = true; pipVideo.playsInline = true;
+                pipVideo.style.position = 'fixed'; pipVideo.style.left = '-9999px'; pipVideo.style.opacity = '0'; pipVideo.style.pointerEvents = 'none';
+                document.body.appendChild(pipVideo); pipCanvas = document.createElement('canvas'); pipCtx = pipCanvas.getContext('2d', { alpha: false });
+                
+                pipVideo.addEventListener('play', function() { if (isPiP && !isRunning) startTimer(); });
+                pipVideo.addEventListener('pause', function() { if (isPiP && isRunning) stopTimer(); });
+                pipVideo.addEventListener('leavepictureinpicture', function() { if(!documentPipWindow) { isPiP = false; ui.pipBtn.classList.remove('pip-active'); } });
+                pipVideo.addEventListener('enterpictureinpicture', function() {
+                    isPiP = true; ui.pipBtn.classList.add('pip-active'); updatePiP();
+                });
+                pipInitialized = true; return true;
+            } catch(e) { return false; }
+        }
+
+        async function togglePiP() {
+            if (images.length === 0) { alert("画像を読み込んでください"); return; }
+            
+            // 1. 新技術 Document Picture-in-Picture API によるクリック可能な完全なUI実装
+            if ('documentPictureInPicture' in window) {
+                if (documentPipWindow) { documentPipWindow.close(); return; }
+                try {
+                    const nw = ui.img.naturalWidth, nh = ui.img.naturalHeight;
+                    const ratio = (nw && nh) ? nw / nh : 4 / 3;
+                    const pipWidth = Math.max(400, Math.min(800, window.innerWidth * 0.8));
+                    const pipHeight = (pipWidth / ratio) + 60;
+                    
+                    documentPipWindow = await documentPictureInPicture.requestWindow({ width: Math.round(pipWidth), height: Math.round(pipHeight) });
+                    
+                    const pipDoc = documentPipWindow.document;
+                    const currentBg = bgMode === 0 ? '#1e1e1e' : (bgMode === 1 ? '#000' : '#fff');
+                    
+                    pipDoc.body.innerHTML = `
+                        <style>
+                            body { margin:0; background-color:${currentBg}; display:flex; flex-direction:column; height:100vh; overflow:hidden; color:#fff; font-family:sans-serif; user-select:none; }
+                            #canvas-container { flex:1; display:flex; justify-content:center; align-items:center; position:relative; overflow:hidden; background-color: transparent; }
+                            #canvas-container::after { content:''; position:absolute; inset:0; pointer-events:none; opacity:0; box-shadow:inset 0 0 var(--flash-blur, 60px) 12px rgba(0,212,255,var(--flash-alpha, 0.45)); }
+                            #canvas-container.timer-flash::after { animation: timerFlash 0.7s ease-out forwards; }
+                            @keyframes timerFlash { 0% { opacity:1; } 100% { opacity:0; } }
+                            canvas { max-width:100%; max-height:100%; object-fit:contain; }
+                            #controls { height:60px; background-color:#111; display:flex; justify-content:center; align-items:center; gap:25px; border-top:1px solid #333; }
+                            button { background-color:#222; border:none; color:#ddd; cursor:pointer; display:flex; justify-content:center; align-items:center; width:44px; height:44px; border-radius:50%; transition:background 0.2s; outline:none; touch-action:none; -webkit-user-select:none; user-select:none; }
+                            button:hover { background-color:#444; }
+                            button:active { transform: scale(0.95); }
+                            svg { width:24px; height:24px; fill:currentColor; pointer-events:none; }
+                            #pip-play-btn.paused { color: #00d4ff; border: 1px solid #00d4ff; background-color: #1a1a1a; }
+                        </style>
+                        <div id="canvas-container"><canvas></canvas></div>
+                        <div id="controls">
+                            <button id="pip-prev-btn" title="戻る">${iconPrevSVG}</button>
+                            <button id="pip-play-btn" class="${isRunning ? '' : 'paused'}" title="再生/一時停止">${isRunning ? iconPauseSVG : iconPlaySVG}</button>
+                            <button id="pip-next-btn" title="次へ">${iconNextSVG}</button>
+                        </div>
+                    `;
+                    
+                    // onclick は pointerup と二重発火するため削除し、pointer系イベントのみで制御
+                    // pointerId でトラッキングして確実に1回だけ実行
+                    function addPipBtnHandler(id, fn) {
+                        const btn = pipDoc.getElementById(id);
+                        if (!btn) return;
+                        let activePointerId = null;
+
+                        btn.addEventListener('pointerdown', function(e) {
+                            e.preventDefault();
+                            btn.setPointerCapture(e.pointerId);
+                            activePointerId = e.pointerId;
+                        }, { passive: false });
+
+                        btn.addEventListener('pointerup', function(e) {
+                            if (activePointerId === e.pointerId) {
+                                activePointerId = null;
+                                // ボタン領域内でのpointerupのみ実行
+                                const rect = btn.getBoundingClientRect();
+                                if (e.clientX >= rect.left && e.clientX <= rect.right &&
+                                    e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                                    fn();
+                                }
+                            }
+                        });
+
+                        btn.addEventListener('pointercancel', function(e) {
+                            if (activePointerId === e.pointerId) activePointerId = null;
+                        });
+                    }
+                    addPipBtnHandler('pip-prev-btn', function(){ prevImage(); });
+                    addPipBtnHandler('pip-play-btn', function(){ toggleTimer(); });
+                    addPipBtnHandler('pip-next-btn', function(){ nextImage(); });
+                    
+                    function onPipPageHide() { documentPipWindow = null; isPiP = false; ui.pipBtn.classList.remove('pip-active'); }
+                    documentPipWindow.addEventListener('pagehide', onPipPageHide);
+                    
+                    isPiP = true; ui.pipBtn.classList.add('pip-active'); updatePiP();
+                    return;
+                } catch(e) { console.warn("Document PiP failed. Falling back to Video PiP", e); }
+            }
+
+            // 2. 非対応ブラウザ（iOS/Safariなど）へのVideo PiPフォールバック
+            if (!initPiP() || typeof pipCanvas.captureStream !== 'function') { alert("お使いの環境はPiP機能に対応していません。"); return; }
+            if (document.pictureInPictureElement) { await document.exitPictureInPicture().catch(function(){}); } 
+            else {
+                try {
+                    if (!pipVideo.srcObject) { pipVideo.srcObject = pipCanvas.captureStream(1); }
+                    isPiP = true; updatePiP(); 
+                    if(isRunning) { await pipVideo.play(); } else { pipVideo.pause(); }
+                    await pipVideo.requestPictureInPicture(); updateMediaSession();
+                } catch (error) { isPiP = false; }
+            }
+        }
+
+        function drawToCanvas(canvas, ctx, drawOverlay) {
+            const nw = ui.img.naturalWidth, nh = ui.img.naturalHeight;
+            if (!nw || !nh) return;
+            const ratio = nw / nh;
+            const maxW = canvas === pipCanvas ? 2560 : 1200;
+            const baseWidth = Math.min(Math.max(nw, maxW), maxW);
+            const targetH = Math.round(baseWidth / ratio);
+            if (canvas.width !== baseWidth || canvas.height !== targetH) {
+                canvas.width = baseWidth; canvas.height = targetH;
+            }
+            ctx.fillStyle = bgMode === 0 ? '#1e1e1e' : (bgMode === 1 ? '#000' : '#fff'); ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            if(!isImageHidden) {
+                ctx.translate(canvas.width/2, canvas.height/2);
+                if(settings.flipH) ctx.scale(-1, 1); if(settings.flipV) ctx.scale(1, -1);
+                if (settings.bw) ctx.filter = 'grayscale(1) contrast(10)';
+                else if(settings.mono) ctx.filter = 'grayscale(100%)';
+                ctx.drawImage(ui.img, -canvas.width/2, -canvas.height/2, canvas.width, canvas.height);
+                if(settings.grid) {
+                    ctx.filter = 'none'; ctx.strokeStyle = 'rgba(128,128,128,0.4)'; ctx.lineWidth = Math.max(2, canvas.width / 200);
+                    ctx.beginPath(); 
+                    ctx.moveTo(-canvas.width/6, -canvas.height/2); ctx.lineTo(-canvas.width/6, canvas.height/2);
+                    ctx.moveTo(canvas.width/6, -canvas.height/2); ctx.lineTo(canvas.width/6, canvas.height/2);
+                    ctx.moveTo(-canvas.width/2, -canvas.height/6); ctx.lineTo(canvas.width/2, -canvas.height/6);
+                    ctx.moveTo(-canvas.width/2, canvas.height/6); ctx.lineTo(canvas.width/2, canvas.height/6);
+                    ctx.stroke();
+                }
+            }
+            ctx.restore();
+            if (drawOverlay) {
+                const barHeight = Math.max(4, canvas.height * 0.015); const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000; 
+                const remainMs = isRunning ? Math.max(0, expectedEndTime - Date.now()) : (remaining * 1000);
+                const progWidth = (remainMs / totalMs) * canvas.width;
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
+                const barColor = remaining <= 10 ? '#5be7ff' : '#00d4ff';
+                ctx.fillStyle = barColor; ctx.fillRect(0, canvas.height - barHeight, progWidth, barHeight);
+
+                const fontSize = Math.max(16, canvas.height * 0.04);
+                ctx.font = "bold " + fontSize + "px sans-serif"; ctx.textBaseline = 'top'; ctx.textAlign = 'right';
+                let sec = Math.ceil(remainMs / 1000); let m = Math.floor(sec / 60); let s = sec % 60; const timeText = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
+                
+                ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 6; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+                ctx.fillStyle = remaining <= 10 ? '#5be7ff' : '#00d4ff';
+                ctx.fillText(timeText, canvas.width - 20, 20);
+                ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+            }
+        }
+
+        function updatePiP() {
+            if (!isPiP || !ui.img.complete || ui.img.naturalWidth === 0) return;
+            const stamp = [
+                currentIndex, remaining, isRunning ? 1 : 0, isImageHidden ? 1 : 0,
+                settings.flipH ? 1 : 0, settings.flipV ? 1 : 0, settings.grid ? 1 : 0, settings.mono ? 1 : 0, settings.bw ? 1 : 0,
+                hmActive ? hmPhase : 0, bgMode
+            ].join('|');
+            if (pipRenderStamp === stamp) return;
+            pipRenderStamp = stamp;
+            
+            if (documentPipWindow) {
+                const canvas = documentPipWindow.document.querySelector('canvas');
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    drawToCanvas(canvas, ctx, true); 
+                }
+                const playBtn = documentPipWindow.document.getElementById('pip-play-btn');
+                if (playBtn) {
+                    playBtn.innerHTML = isRunning ? iconPauseSVG : iconPlaySVG;
+                    if(isRunning) { playBtn.classList.remove('paused'); } 
+                    else { playBtn.classList.add('paused'); }
+                }
+            } else if (pipInitialized && pipVideo) {
+                drawToCanvas(pipCanvas, pipCtx, true);
+            }
+        }
+
+        let pointerStartX = 0; let pointerStartY = 0; let lastTapTime = 0; const imgContainer = document.getElementById('image-container');
+        let prevLongPressTimer = null, nextLongPressTimer = null;
+        let prevLongPressHandled = false, nextLongPressHandled = false;
+        let prevPressStartX = 0, prevPressStartY = 0, nextPressStartX = 0, nextPressStartY = 0;
+        function handlePrevButtonClick(e) {
+            if (prevLongPressHandled) { prevLongPressHandled = false; if (e) e.preventDefault(); return; }
+            prevImage();
+        }
+        function handleNextButtonClick(e) {
+            if (nextLongPressHandled) { nextLongPressHandled = false; if (e) e.preventDefault(); return; }
+            nextImage();
+        }
+        function onPressStart(btn, which, startX, startY) {
+            const delay = 450;
+            if (which === 'next') { nextPressStartX = startX; nextPressStartY = startY; }
+            else { prevPressStartX = startX; prevPressStartY = startY; }
+            const timer = setTimeout(function() {
+                if (which === 'next') { nextLongPressHandled = true; skipCurrent(); }
+                else if (which === 'prev') {
+                    prevLongPressHandled = true;
+                    if (images.length === 0 || isFavMode) return;
+                    const fname = images[currentIndex] && images[currentIndex].name;
+                    if (!fname || !skipNameSet.has(fname)) return;
+                    skipList = skipList.filter(function(n){ return n !== fname; });
+                    rebuildSkipNameSet();
+                    saveSkipList();
+                    alert("この画像のスキップを解除しました");
+                }
+            }, delay);
+            if (which === 'next') nextLongPressTimer = timer;
+            else prevLongPressTimer = timer;
+        }
+        function onPressEnd(which) {
+            if (which === 'next' && nextLongPressTimer) { clearTimeout(nextLongPressTimer); nextLongPressTimer = null; }
+            if (which === 'prev' && prevLongPressTimer) { clearTimeout(prevLongPressTimer); prevLongPressTimer = null; }
+        }
+        (function bindLongPressButtons(){
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            if (!prevBtn || !nextBtn) return;
+            prevBtn.addEventListener('pointerdown', function(e){ onPressStart(prevBtn, 'prev', e.clientX, e.clientY); }, { passive: true });
+            prevBtn.addEventListener('pointerup', function(){ onPressEnd('prev'); }, { passive: true });
+            prevBtn.addEventListener('pointerleave', function(){ onPressEnd('prev'); }, { passive: true });
+            prevBtn.addEventListener('pointercancel', function(){ onPressEnd('prev'); }, { passive: true });
+            nextBtn.addEventListener('pointerdown', function(e){ onPressStart(nextBtn, 'next', e.clientX, e.clientY); }, { passive: true });
+            nextBtn.addEventListener('pointerup', function(){ onPressEnd('next'); }, { passive: true });
+            nextBtn.addEventListener('pointerleave', function(){ onPressEnd('next'); }, { passive: true });
+            nextBtn.addEventListener('pointercancel', function(){ onPressEnd('next'); }, { passive: true });
+        })();
+        document.addEventListener('pointermove', function(e) {
+            const moveThreshold = 14;
+            if (nextLongPressTimer) {
+                if (Math.abs(e.clientX - nextPressStartX) > moveThreshold || Math.abs(e.clientY - nextPressStartY) > moveThreshold) onPressEnd('next');
+            }
+            if (prevLongPressTimer) {
+                if (Math.abs(e.clientX - prevPressStartX) > moveThreshold || Math.abs(e.clientY - prevPressStartY) > moveThreshold) onPressEnd('prev');
+            }
+        }, { passive: true });
+        imgContainer.addEventListener('pointerup', function(e) {
+            const pointerEndX = e.clientX; const pointerEndY = e.clientY;
+            const diffX = pointerStartX - pointerEndX;
+            const diffY = pointerStartY - pointerEndY;
+            const threshold = 50;
+            if (Math.abs(diffX) > threshold && Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX > 0) { nextImage(); } else { if (!hmActive) prevImage(); } lastTapTime = 0;
+            } else if (Math.abs(diffY) <= 10 && Math.abs(diffX) <= threshold) {
+                const currentTime = Date.now(); const tapLength = currentTime - lastTapTime;
+                if (tapLength < 300 && tapLength > 0) { toggleTimer(); lastTapTime = 0; e.preventDefault(); }
+                else { lastTapTime = currentTime; }
+            }
+        }, { passive: false });
+        document.addEventListener('keydown', function(e) {
+            armFocusIdleTimer();
+            if (document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'INPUT') return;
+            if (e.code === 'Escape') {
+                if (ui.managePopup.classList.contains('show')) { ui.managePopup.classList.remove('show'); return; }
+                if (document.getElementById('settings-panel').classList.contains('open')) { toggleSettingsPanel(); return; }
+                if (isHistoryPanelOpen) { toggleHistoryPanel(); return; }
+            }
+            if (e.code === 'Space') { e.preventDefault(); toggleTimer(); } 
+            else if (e.code === 'ArrowRight') { nextImage(); } 
+            else if (e.code === 'ArrowLeft') { prevImage(); }
+        });
+        document.addEventListener('pointerdown', function(e) {
+            pointerStartX = e.clientX; pointerStartY = e.clientY; armFocusIdleTimer();
+            if (!e.target.closest('#manage-popup') && !e.target.closest('#manage-btn')) { ui.managePopup.classList.remove('show'); }
+        }, { passive: true });
+    </script>
+</body>
+</html>
 <!DOCTYPE html><!DOCTYPE html>
 <html lang="ja"><!DOCTYPE html>
 <html lang="ja">
