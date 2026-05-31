@@ -84,7 +84,7 @@
             opacity: 0; z-index: 20;
         }
         #image-container.timer-flash::after {
-            box-shadow: inset 0 0 60px 12px rgba(0, 212, 255, 0.45);
+            box-shadow: inset 0 0 var(--flash-blur, 60px) 12px rgba(0, 212, 255, var(--flash-alpha, 0.45));
             animation: timerFlash 0.7s ease-out forwards;
         }
         @keyframes timerFlash {
@@ -96,7 +96,7 @@
         #grid-overlay { position: absolute; pointer-events: none; display: none; inset: 0; border: none; background-image: linear-gradient(to right, rgba(128,128,128,0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(128,128,128,0.4) 1px, transparent 1px); background-size: 33.33% 33.33%; z-index: 5; }
         #fav-icon-large { position: absolute; top: 10px; right: 10px; font-size: 2rem; color: gold; display: none; text-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 10; pointer-events: none; }
         
-        #progress-container { width: 100%; height: 4px; background-color: #222; }
+        #progress-container { width: 100%; height: var(--progress-height, 4px); background-color: #222; }
         #progress-bar { width: 100%; height: 100%; background-color: var(--accent); transition: background-color 0.3s; }
         #timer-label.urgent { color: var(--accent-urgent); animation: urgentPulse 1s ease-in-out infinite; }
         @keyframes urgentPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
@@ -133,36 +133,61 @@
 
         #settings-panel {
             display: none; position: fixed; top: 0; right: 0; bottom: 0;
-            width: min(320px, 88vw); background-color: #1a1a1a; border-left: 1px solid #333;
+            width: min(300px, 90vw); background-color: var(--panel-bg); border-left: 1px solid var(--border-color);
             z-index: 200; flex-direction: column; overflow: hidden;
-            box-shadow: -4px 0 20px rgba(0,0,0,0.5);
+            box-shadow: -6px 0 24px rgba(0,0,0,0.6);
             transform: translateX(100%); transition: transform 0.25s ease;
         }
         #settings-panel.open { display: flex; transform: translateX(0); }
         #settings-header {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 16px; border-bottom: 1px solid #333; flex-shrink: 0;
-            font-size: 1rem; font-weight: bold; color: #ddd;
+            padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0;
+            font-size: 0.85rem; font-weight: bold; color: var(--accent); letter-spacing: 1px; text-transform: uppercase;
         }
-        #settings-header button { background: none; border: none; color: #aaa; padding: 4px; cursor: pointer; border-radius: 4px; }
-        #settings-header button:hover { color: #fff; background-color: #333; }
-        #settings-content { flex: 1; overflow-y: auto; padding: 12px; }
-        #settings-overlay {
-            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);
-            z-index: 199;
+        #settings-header button {
+            background: none; border: none; color: #666; padding: 4px; cursor: pointer; border-radius: 4px;
+            display: flex; align-items: center; justify-content: center;
         }
+        #settings-header button:hover { color: #ccc; background-color: #333; }
+        #settings-content { flex: 1; overflow-y: auto; padding: 10px 12px; }
+        #settings-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 199; }
         #settings-overlay.open { display: block; }
-        .settings-section { margin-bottom: 20px; }
-        .settings-section-title { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #2a2a2a; }
-        .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
-        .settings-label { flex: 1; font-size: 0.88rem; color: #ccc; line-height: 1.4; }
-        .settings-desc { display: block; font-size: 0.75rem; color: #666; margin-top: 3px; }
-        .settings-toggle { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+
+        .settings-section { margin-bottom: 6px; }
+        .settings-section-title {
+            font-size: 0.7rem; color: #555; letter-spacing: 1.5px; text-transform: uppercase;
+            padding: 10px 0 6px; border-bottom: 1px solid #2a2a2a; margin-bottom: 4px;
+        }
+        .settings-row {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 10px; padding: 9px 0; border-bottom: 1px solid #222;
+        }
+        .settings-row:last-child { border-bottom: none; }
+        .settings-label { flex: 1; font-size: 0.84rem; color: #bbb; line-height: 1.4; }
+        .settings-desc { display: block; font-size: 0.72rem; color: #555; margin-top: 2px; }
+
+        /* トグルスイッチ：既存ボタンの active スタイルに合わせる */
+        .settings-toggle { position: relative; display: inline-block; width: 42px; height: 22px; flex-shrink: 0; }
         .settings-toggle input { opacity: 0; width: 0; height: 0; }
-        .settings-toggle-slider { position: absolute; inset: 0; background: #444; border-radius: 24px; cursor: pointer; transition: background 0.2s; }
-        .settings-toggle-slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
-        .settings-toggle input:checked + .settings-toggle-slider { background: var(--accent); }
-        .settings-toggle input:checked + .settings-toggle-slider::before { transform: translateX(20px); }
+        .settings-toggle-slider {
+            position: absolute; inset: 0; background: #333; border-radius: 22px;
+            cursor: pointer; transition: background 0.2s; border: 1px solid #444;
+        }
+        .settings-toggle-slider::before {
+            content: ''; position: absolute; width: 16px; height: 16px;
+            left: 2px; top: 2px; background: #666; border-radius: 50%; transition: transform 0.2s, background 0.2s;
+        }
+        .settings-toggle input:checked + .settings-toggle-slider { background: #1a3a3f; border-color: var(--accent); }
+        .settings-toggle input:checked + .settings-toggle-slider::before { transform: translateX(20px); background: var(--accent); }
+
+        /* セレクト：既存ボタンに合わせる */
+        .settings-select {
+            appearance: none; -webkit-appearance: none;
+            background-color: var(--btn-bg); border: 1px solid #444; color: #ddd;
+            border-radius: 4px; padding: 5px 10px; font-size: 0.82rem; cursor: pointer;
+            text-align: center; min-width: 64px;
+        }
+        .settings-select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
 
         /* 全画面休憩オーバーレイ */
         #break-overlay {
@@ -323,12 +348,91 @@
                     <div class="settings-row">
                         <div class="settings-label">
                             <span>15分ごとに目の休憩</span>
-                            <span class="settings-desc">15分作業後のセッション終了時に<br>20秒間の休憩を促します</span>
+                            <span class="settings-desc">設定した間隔のセッション終了時に<br>休憩を促します</span>
                         </div>
                         <label class="settings-toggle">
                             <input type="checkbox" id="break-reminder-toggle" onchange="onBreakReminderToggle(this.checked)">
                             <span class="settings-toggle-slider"></span>
                         </label>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label"><span>③ 休憩インターバル</span></div>
+                        <select id="break-interval-select" class="settings-select" onchange="onBreakIntervalChange(parseInt(this.value))">
+                            <option value="10">10分</option>
+                            <option value="15" selected>15分</option>
+                            <option value="20">20分</option>
+                            <option value="25">25分</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label"><span>④ 休憩時間</span></div>
+                        <select id="break-duration-select" class="settings-select" onchange="onBreakDurationChange(parseInt(this.value))">
+                            <option value="10">10秒</option>
+                            <option value="20" selected>20秒</option>
+                            <option value="30">30秒</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">🖼️ 表示</div>
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            <span>① 画像を隠すまでの時間</span>
+                            <span class="settings-desc">目隠しモード時、画像が消えるまでの秒数</span>
+                        </div>
+                        <select id="eye-hide-delay-select" class="settings-select" onchange="onEyeHideDelayChange(parseInt(this.value))">
+                            <option value="3">3秒</option>
+                            <option value="5" selected>5秒</option>
+                            <option value="10">10秒</option>
+                            <option value="15">15秒</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            <span>② パネル自動非表示まで</span>
+                            <span class="settings-desc">操作しないとボタンが薄くなるまでの時間</span>
+                        </div>
+                        <select id="focus-idle-delay-select" class="settings-select" onchange="onFocusIdleDelayChange(parseInt(this.value))">
+                            <option value="3">3秒</option>
+                            <option value="5" selected>5秒</option>
+                            <option value="10">10秒</option>
+                            <option value="0">しない</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            <span>⑥ タイマー終了フラッシュ</span>
+                            <span class="settings-desc">タイマー終了時の画面端の光る強さ</span>
+                        </div>
+                        <select id="flash-intensity-select" class="settings-select" onchange="onFlashIntensityChange(parseInt(this.value))">
+                            <option value="0">なし</option>
+                            <option value="1">弱</option>
+                            <option value="2" selected>中</option>
+                            <option value="3">強</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            <span>⑧ プログレスバーの太さ</span>
+                        </div>
+                        <select id="progress-size-select" class="settings-select" onchange="onProgressSizeChange(parseInt(this.value))">
+                            <option value="1">細</option>
+                            <option value="2" selected>中</option>
+                            <option value="3">太</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">🔊 サウンド</div>
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            <span>⑩ タイマー終了音量</span>
+                        </div>
+                        <select id="sound-volume-select" class="settings-select" onchange="onSoundVolumeChange(parseInt(this.value))">
+                            <option value="0">なし</option>
+                            <option value="1">小</option>
+                            <option value="2" selected>中</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -517,7 +621,14 @@
                 isMuted: isMuted,
                 isEyeHideEnabled: isEyeHideEnabled,
                 randomFlipEnabled: randomFlipEnabled,
-                breakReminderEnabled: breakReminderEnabled
+                breakReminderEnabled: breakReminderEnabled,
+                eyeHideDelay: eyeHideDelay,
+                focusIdleDelay: focusIdleDelay,
+                breakIntervalMin: breakIntervalMin,
+                breakDurationSec: breakDurationSec,
+                flashIntensity: flashIntensity,
+                progressBarSize: progressBarSize,
+                soundVolume: soundVolume
             };
             try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (_) {}
         }
@@ -549,6 +660,13 @@
                 if (saved && typeof saved.breakReminderEnabled === 'boolean') {
                     breakReminderEnabled = saved.breakReminderEnabled;
                 }
+                if (saved && typeof saved.eyeHideDelay === 'number') eyeHideDelay = saved.eyeHideDelay;
+                if (saved && typeof saved.focusIdleDelay === 'number') focusIdleDelay = saved.focusIdleDelay;
+                if (saved && typeof saved.breakIntervalMin === 'number') breakIntervalMin = saved.breakIntervalMin;
+                if (saved && typeof saved.breakDurationSec === 'number') breakDurationSec = saved.breakDurationSec;
+                if (saved && typeof saved.flashIntensity === 'number') flashIntensity = saved.flashIntensity;
+                if (saved && typeof saved.progressBarSize === 'number') progressBarSize = saved.progressBarSize;
+                if (saved && typeof saved.soundVolume === 'number') { soundVolume = saved.soundVolume; isMuted = (soundVolume === 0); }
             } catch (_) {}
         }
 
@@ -562,6 +680,20 @@
             if (settings.bw) { const b = document.getElementById('bw-btn'); if(b) b.classList.add('active'); }
             const breakToggle = document.getElementById('break-reminder-toggle');
             if (breakToggle) breakToggle.checked = breakReminderEnabled;
+            const eyeSel = document.getElementById('eye-hide-delay-select');
+            if (eyeSel) eyeSel.value = eyeHideDelay;
+            const focusSel = document.getElementById('focus-idle-delay-select');
+            if (focusSel) focusSel.value = focusIdleDelay;
+            const brkIntSel = document.getElementById('break-interval-select');
+            if (brkIntSel) brkIntSel.value = breakIntervalMin;
+            const brkDurSel = document.getElementById('break-duration-select');
+            if (brkDurSel) brkDurSel.value = breakDurationSec;
+            const flashSel = document.getElementById('flash-intensity-select');
+            if (flashSel) flashSel.value = flashIntensity;
+            const progSel = document.getElementById('progress-size-select');
+            if (progSel) { progSel.value = progressBarSize; onProgressSizeChange(progressBarSize); }
+            const sndSel = document.getElementById('sound-volume-select');
+            if (sndSel) sndSel.value = soundVolume;
             if (isEyeHideEnabled) ui.eyeBtn.classList.add('active');
             else ui.eyeBtn.classList.remove('active');
             const rfBtn = document.getElementById('randomFlip-btn');
@@ -642,44 +774,42 @@
             }
         }
 
+        // ---- ユーザー設定値 ----
+        let eyeHideDelay = 5;      // ① 画像を隠すまでの秒数
+        let focusIdleDelay = 5;    // ② フォーカスモードが暗くなるまでの秒数（0=無効）
+        let breakIntervalMin = 15; // ③ 休憩インターバル（分）
+        let breakDurationSec = 20; // ④ 休憩時間（秒）
+        let flashIntensity = 2;    // ⑥ 0=なし 1=弱 2=中 3=強
+        let progressBarSize = 2;   // ⑧ 1=細 2=中 3=太
+        let soundVolume = 2;       // ⑩ 0=なし 1=小 2=中
+
         // ---- 休憩リマインダー ----
         let breakReminderEnabled = false;
-        let sessionStartTime = 0;        // セッション開始時刻
-        let breakCountdownTimer = null;  // 20秒カウントダウン用
+        let sessionStartTime = 0;
+        let breakCountdownTimer = null;
         let breakSeconds = 0;
-        const BREAK_INTERVAL_MS = 15 * 60 * 1000; // 15分
-        const BREAK_DURATION = 20;                 // 休憩秒数
-        const LONG_TIMER_THRESHOLD = 60;           // これ以上の秒数は長尺とみなす
 
         function onBreakReminderToggle(enabled) {
             breakReminderEnabled = enabled;
-            if (enabled) {
-                sessionStartTime = Date.now();
-            } else {
-                sessionStartTime = 0;
-                endBreak();
-            }
+            if (enabled) { sessionStartTime = Date.now(); }
+            else { sessionStartTime = 0; endBreak(); }
             saveUiSettings();
         }
 
         function checkBreakTrigger() {
             if (!breakReminderEnabled || sessionStartTime === 0) return false;
-            return (Date.now() - sessionStartTime) >= BREAK_INTERVAL_MS;
+            return (Date.now() - sessionStartTime) >= (breakIntervalMin * 60 * 1000);
         }
 
         function triggerBreak() {
-            sessionStartTime = Date.now(); // 15分カウントをリセット
-            const isLongTimer = timerSeconds >= LONG_TIMER_THRESHOLD;
-            if (isLongTimer) {
-                startCornerBreak();
-            } else {
-                startFullBreak();
-            }
+            sessionStartTime = Date.now();
+            const isLongTimer = timerSeconds >= 60;
+            if (isLongTimer) { startCornerBreak(); } else { startFullBreak(); }
         }
 
         function startFullBreak() {
             document.getElementById('break-overlay').classList.add('active');
-            breakSeconds = BREAK_DURATION;
+            breakSeconds = breakDurationSec;
             document.getElementById('break-countdown').textContent = breakSeconds;
             clearInterval(breakCountdownTimer);
             breakCountdownTimer = setInterval(function() {
@@ -691,7 +821,7 @@
 
         function startCornerBreak() {
             document.getElementById('break-corner').classList.add('active');
-            breakSeconds = BREAK_DURATION;
+            breakSeconds = breakDurationSec;
             document.getElementById('break-corner-count').textContent = breakSeconds;
             clearInterval(breakCountdownTimer);
             breakCountdownTimer = setInterval(function() {
@@ -710,6 +840,34 @@
         function endCornerBreak() {
             clearInterval(breakCountdownTimer); breakCountdownTimer = null;
             document.getElementById('break-corner').classList.remove('active');
+        }
+
+        function onFlashIntensityChange(val) {
+            flashIntensity = val; saveUiSettings();
+        }
+        function onProgressSizeChange(val) {
+            progressBarSize = val;
+            const hMap = [0, 2, 4, 7];
+            document.documentElement.style.setProperty('--progress-height', hMap[val] + 'px');
+            saveUiSettings();
+        }
+        function onSoundVolumeChange(val) {
+            soundVolume = val;
+            isMuted = (val === 0);
+            ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG;
+            saveUiSettings();
+        }
+        function onEyeHideDelayChange(val) {
+            eyeHideDelay = val; saveUiSettings();
+        }
+        function onFocusIdleDelayChange(val) {
+            focusIdleDelay = val; armFocusIdleTimer(); saveUiSettings();
+        }
+        function onBreakIntervalChange(val) {
+            breakIntervalMin = val; saveUiSettings();
+        }
+        function onBreakDurationChange(val) {
+            breakDurationSec = val; saveUiSettings();
         }
 
         function toggleSettingsPanel() {
@@ -738,7 +896,8 @@
         function armFocusIdleTimer() {
             if (focusIdleTimer) clearTimeout(focusIdleTimer);
             setFocusDimmed(false);
-            focusIdleTimer = setTimeout(function() { setFocusDimmed(true); }, 5000);
+            if (focusIdleDelay === 0) return; // 0=無効
+            focusIdleTimer = setTimeout(function() { setFocusDimmed(true); }, focusIdleDelay * 1000);
         }
 
         let originalOrder = [];
@@ -946,7 +1105,7 @@
                 if (loadToken !== imageLoadToken) return;
                 ui.img.style.display = 'block';
                 applyFilters(); clearTimeout(eyeHideTimeout);
-                if (isEyeHideEnabled && !hmActive) { eyeHideTimeout = setTimeout(function() { isImageHidden = true; applyFilters(); }, 5000); }
+                if (isEyeHideEnabled && !hmActive) { eyeHideTimeout = setTimeout(function() { isImageHidden = true; applyFilters(); }, eyeHideDelay * 1000); }
             };
             ui.img.onerror = function() {
                 if (loadToken !== imageLoadToken) return;
@@ -1589,12 +1748,33 @@
             el.textContent = (historyPos + 1) + ' / ' + pool.length;
         }
         
-        function toggleMute() { isMuted = !isMuted; ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG; saveUiSettings(); }
-        function playSound() { if(!isMuted && ui.sound) { ui.sound.currentTime = 0; ui.sound.play().catch(function(){}); } }
+        function toggleMute() {
+            isMuted = !isMuted;
+            soundVolume = isMuted ? 0 : 2;
+            ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG;
+            const sv = document.getElementById('sound-volume-select');
+            if (sv) sv.value = soundVolume;
+            saveUiSettings();
+        }
+        function playSound() {
+            if (soundVolume === 0 || !ui.sound) return;
+            const volMap = [0, 0.4, 1.0];
+            ui.sound.volume = volMap[soundVolume];
+            ui.sound.currentTime = 0;
+            ui.sound.play().catch(function(){});
+        }
 
         function flashScreen() {
+            if (flashIntensity === 0) return; // なし
+            const alphaMap = [0, 0.25, 0.45, 0.7];
+            const blurMap  = [0, 40,   60,   80 ];
+            const alpha = alphaMap[flashIntensity];
+            const blur  = blurMap[flashIntensity];
             const el = imgContainer;
             if (!el) return;
+            // CSSカスタムプロパティで動的に強度を適用
+            el.style.setProperty('--flash-alpha', alpha);
+            el.style.setProperty('--flash-blur', blur + 'px');
             el.classList.remove('timer-flash');
             void el.offsetWidth;
             el.classList.add('timer-flash');
@@ -1608,6 +1788,10 @@
                     const pipDoc = documentPipWindow.document;
                     const container = pipDoc.getElementById('canvas-container');
                     if (container) {
+                        const alphaMap = [0, 0.25, 0.45, 0.7];
+                        const blurMap  = [0, 40,   60,   80 ];
+                        container.style.setProperty('--flash-alpha', alphaMap[flashIntensity]);
+                        container.style.setProperty('--flash-blur', blurMap[flashIntensity] + 'px');
                         container.classList.remove('timer-flash');
                         void container.offsetWidth;
                         container.classList.add('timer-flash');
@@ -1752,7 +1936,7 @@
                         <style>
                             body { margin:0; background-color:${currentBg}; display:flex; flex-direction:column; height:100vh; overflow:hidden; color:#fff; font-family:sans-serif; user-select:none; }
                             #canvas-container { flex:1; display:flex; justify-content:center; align-items:center; position:relative; overflow:hidden; background-color: transparent; }
-                            #canvas-container::after { content:''; position:absolute; inset:0; pointer-events:none; opacity:0; box-shadow:inset 0 0 60px 12px rgba(0,212,255,0.45); }
+                            #canvas-container::after { content:''; position:absolute; inset:0; pointer-events:none; opacity:0; box-shadow:inset 0 0 var(--flash-blur, 60px) 12px rgba(0,212,255,var(--flash-alpha, 0.45)); }
                             #canvas-container.timer-flash::after { animation: timerFlash 0.7s ease-out forwards; }
                             @keyframes timerFlash { 0% { opacity:1; } 100% { opacity:0; } }
                             canvas { max-width:100%; max-height:100%; object-fit:contain; }
