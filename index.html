@@ -130,6 +130,63 @@
         }
         #manage-popup.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
         #manage-popup button { justify-content: flex-start; gap: 8px; padding: 10px; font-size: 0.9rem; }
+
+        #settings-panel {
+            display: none; position: fixed; top: 0; right: 0; bottom: 0;
+            width: min(320px, 88vw); background-color: #1a1a1a; border-left: 1px solid #333;
+            z-index: 200; flex-direction: column; overflow: hidden;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.5);
+            transform: translateX(100%); transition: transform 0.25s ease;
+        }
+        #settings-panel.open { display: flex; transform: translateX(0); }
+        #settings-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px; border-bottom: 1px solid #333; flex-shrink: 0;
+            font-size: 1rem; font-weight: bold; color: #ddd;
+        }
+        #settings-header button { background: none; border: none; color: #aaa; padding: 4px; cursor: pointer; border-radius: 4px; }
+        #settings-header button:hover { color: #fff; background-color: #333; }
+        #settings-content { flex: 1; overflow-y: auto; padding: 12px; }
+        #settings-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+            z-index: 199;
+        }
+        #settings-overlay.open { display: block; }
+        .settings-section { margin-bottom: 20px; }
+        .settings-section-title { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #2a2a2a; }
+        .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+        .settings-label { flex: 1; font-size: 0.88rem; color: #ccc; line-height: 1.4; }
+        .settings-desc { display: block; font-size: 0.75rem; color: #666; margin-top: 3px; }
+        .settings-toggle { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+        .settings-toggle input { opacity: 0; width: 0; height: 0; }
+        .settings-toggle-slider { position: absolute; inset: 0; background: #444; border-radius: 24px; cursor: pointer; transition: background 0.2s; }
+        .settings-toggle-slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+        .settings-toggle input:checked + .settings-toggle-slider { background: var(--accent); }
+        .settings-toggle input:checked + .settings-toggle-slider::before { transform: translateX(20px); }
+
+        /* 全画面休憩オーバーレイ */
+        #break-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.96);
+            z-index: 500; flex-direction: column; align-items: center; justify-content: center;
+        }
+        #break-overlay.active { display: flex; }
+        #break-content { text-align: center; }
+        #break-countdown { font-size: 5rem; font-weight: bold; color: var(--accent); line-height: 1; margin-bottom: 16px; }
+        #break-message { font-size: 1.4rem; color: #eee; margin-bottom: 8px; }
+        #break-sub { font-size: 0.9rem; color: #666; margin-bottom: 32px; }
+        #break-skip-btn { background: #333; border: 1px solid #555; color: #aaa; padding: 10px 24px; border-radius: 20px; cursor: pointer; font-size: 0.9rem; transition: background 0.2s; }
+        #break-skip-btn:hover { background: #444; color: #fff; }
+
+        /* コーナー表示（長尺タイマー用） */
+        #break-corner {
+            display: none; position: fixed; bottom: 80px; right: 12px;
+            background: rgba(0,0,0,0.75); border: 1px solid var(--accent);
+            border-radius: 10px; padding: 8px 14px; z-index: 400;
+            text-align: center; pointer-events: none;
+        }
+        #break-corner.active { display: block; }
+        #break-corner-count { font-size: 1.6rem; font-weight: bold; color: var(--accent); line-height: 1; }
+        #break-corner-msg { font-size: 0.72rem; color: #aaa; margin-top: 2px; }
         .popup-danger { color: #ff5555 !important; }
 
         @media (max-width: 440px) {
@@ -170,6 +227,7 @@
     <div id="top-panel">
         <div class="top-left">
             <button class="icon-btn" onclick="toggleHistoryPanel()" title="履歴"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg></button>
+            <button class="icon-btn" id="settings-btn" onclick="toggleSettingsPanel()" title="設定"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a6.97 6.97 0 0 0-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54a7.32 7.32 0 0 0-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54a7.32 7.32 0 0 0 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></button>
             <div id="image-counter"></div>
             <div id="phase-label"></div>
             <div id="hm-step-mini"></div>
@@ -251,6 +309,42 @@
             <button onclick="toggleFavCurrent()">⭐ お気に入り登録/解除</button>
             <button onclick="skipCurrent()" class="popup-danger">🗑️ この画像をスキップ</button>
             <button onclick="clearManageData()">🔄 設定をリセット</button>
+        </div>
+
+        <div id="settings-overlay" onclick="toggleSettingsPanel()"></div>
+        <div id="settings-panel">
+            <div id="settings-header">
+                <span>設定</span>
+                <button id="settings-close-btn" onclick="toggleSettingsPanel()" title="閉じる"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+            </div>
+            <div id="settings-content">
+                <div class="settings-section">
+                    <div class="settings-section-title">👁️ 休憩リマインダー</div>
+                    <div class="settings-row">
+                        <div class="settings-label">
+                            <span>15分ごとに目の休憩</span>
+                            <span class="settings-desc">15分作業後のセッション終了時に<br>20秒間の休憩を促します</span>
+                        </div>
+                        <label class="settings-toggle">
+                            <input type="checkbox" id="break-reminder-toggle" onchange="onBreakReminderToggle(this.checked)">
+                            <span class="settings-toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="break-overlay">
+            <div id="break-content">
+                <div id="break-countdown">20</div>
+                <div id="break-message">目を閉じて休んでください</div>
+                <div id="break-sub">20秒後に自動で再開します</div>
+                <button id="break-skip-btn" onclick="endBreak()">スキップ</button>
+            </div>
+        </div>
+        <div id="break-corner">
+            <div id="break-corner-count">20</div>
+            <div id="break-corner-msg">目を休めて</div>
         </div>
     </div>
 
@@ -422,7 +516,8 @@
                 bgMode: bgMode,
                 isMuted: isMuted,
                 isEyeHideEnabled: isEyeHideEnabled,
-                randomFlipEnabled: randomFlipEnabled
+                randomFlipEnabled: randomFlipEnabled,
+                breakReminderEnabled: breakReminderEnabled
             };
             try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (_) {}
         }
@@ -451,6 +546,9 @@
                 if (saved && typeof saved.isMuted === 'boolean') isMuted = saved.isMuted;
                 if (saved && typeof saved.isEyeHideEnabled === 'boolean') isEyeHideEnabled = saved.isEyeHideEnabled;
                 if (saved && typeof saved.randomFlipEnabled === 'boolean') randomFlipEnabled = saved.randomFlipEnabled;
+                if (saved && typeof saved.breakReminderEnabled === 'boolean') {
+                    breakReminderEnabled = saved.breakReminderEnabled;
+                }
             } catch (_) {}
         }
 
@@ -462,6 +560,8 @@
                 else btn.classList.remove('active');
             });
             if (settings.bw) { const b = document.getElementById('bw-btn'); if(b) b.classList.add('active'); }
+            const breakToggle = document.getElementById('break-reminder-toggle');
+            if (breakToggle) breakToggle.checked = breakReminderEnabled;
             if (isEyeHideEnabled) ui.eyeBtn.classList.add('active');
             else ui.eyeBtn.classList.remove('active');
             const rfBtn = document.getElementById('randomFlip-btn');
@@ -539,6 +639,89 @@
                 }
 
                 if (isPiP) updatePiP();
+            }
+        }
+
+        // ---- 休憩リマインダー ----
+        let breakReminderEnabled = false;
+        let sessionStartTime = 0;        // セッション開始時刻
+        let breakCountdownTimer = null;  // 20秒カウントダウン用
+        let breakSeconds = 0;
+        const BREAK_INTERVAL_MS = 15 * 60 * 1000; // 15分
+        const BREAK_DURATION = 20;                 // 休憩秒数
+        const LONG_TIMER_THRESHOLD = 60;           // これ以上の秒数は長尺とみなす
+
+        function onBreakReminderToggle(enabled) {
+            breakReminderEnabled = enabled;
+            if (enabled) {
+                sessionStartTime = Date.now();
+            } else {
+                sessionStartTime = 0;
+                endBreak();
+            }
+            saveUiSettings();
+        }
+
+        function checkBreakTrigger() {
+            if (!breakReminderEnabled || sessionStartTime === 0) return false;
+            return (Date.now() - sessionStartTime) >= BREAK_INTERVAL_MS;
+        }
+
+        function triggerBreak() {
+            sessionStartTime = Date.now(); // 15分カウントをリセット
+            const isLongTimer = timerSeconds >= LONG_TIMER_THRESHOLD;
+            if (isLongTimer) {
+                startCornerBreak();
+            } else {
+                startFullBreak();
+            }
+        }
+
+        function startFullBreak() {
+            document.getElementById('break-overlay').classList.add('active');
+            breakSeconds = BREAK_DURATION;
+            document.getElementById('break-countdown').textContent = breakSeconds;
+            clearInterval(breakCountdownTimer);
+            breakCountdownTimer = setInterval(function() {
+                breakSeconds--;
+                document.getElementById('break-countdown').textContent = breakSeconds;
+                if (breakSeconds <= 0) endBreak();
+            }, 1000);
+        }
+
+        function startCornerBreak() {
+            document.getElementById('break-corner').classList.add('active');
+            breakSeconds = BREAK_DURATION;
+            document.getElementById('break-corner-count').textContent = breakSeconds;
+            clearInterval(breakCountdownTimer);
+            breakCountdownTimer = setInterval(function() {
+                breakSeconds--;
+                document.getElementById('break-corner-count').textContent = breakSeconds;
+                if (breakSeconds <= 0) endCornerBreak();
+            }, 1000);
+        }
+
+        function endBreak() {
+            clearInterval(breakCountdownTimer); breakCountdownTimer = null;
+            document.getElementById('break-overlay').classList.remove('active');
+            endCornerBreak();
+        }
+
+        function endCornerBreak() {
+            clearInterval(breakCountdownTimer); breakCountdownTimer = null;
+            document.getElementById('break-corner').classList.remove('active');
+        }
+
+        function toggleSettingsPanel() {
+            const panel = document.getElementById('settings-panel');
+            const overlay = document.getElementById('settings-overlay');
+            const isOpen = panel.classList.contains('open');
+            if (isOpen) {
+                panel.classList.remove('open');
+                overlay.classList.remove('open');
+            } else {
+                panel.classList.add('open');
+                overlay.classList.add('open');
             }
         }
 
@@ -1014,6 +1197,11 @@
                 if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
             } else { updateTimerText(remaining); ui.prog.style.width = '100%'; lastProgressWidth = '100%'; }
             if(!isSkipping) { playSound(); }
+            // 休憩リマインダーチェック（タイマー終了で自動進んだときのみ）
+            if (!isSkipping && checkBreakTrigger()) {
+                stopTimer();
+                triggerBreak();
+            }
             if(isHistoryPanelOpen) renderHistoryThumbs();
         }
 
@@ -1273,6 +1461,7 @@
         function startTimer() { 
             isRunning = true; ui.playBtn.innerHTML = iconPauseSVG; ui.playBtn.classList.remove("accent"); 
             expectedEndTime = Date.now() + (remaining * 1000);
+            if (breakReminderEnabled && sessionStartTime === 0) sessionStartTime = Date.now();
             clearTimeout(timerTickId); timerTickId = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
             timerTickLoop();
@@ -1788,6 +1977,7 @@
             if (document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'INPUT') return;
             if (e.code === 'Escape') {
                 if (ui.managePopup.classList.contains('show')) { ui.managePopup.classList.remove('show'); return; }
+                if (document.getElementById('settings-panel').classList.contains('open')) { toggleSettingsPanel(); return; }
                 if (isHistoryPanelOpen) { toggleHistoryPanel(); return; }
             }
             if (e.code === 'Space') { e.preventDefault(); toggleTimer(); } 
