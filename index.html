@@ -188,6 +188,20 @@
             text-align: center; min-width: 64px;
         }
         .settings-select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+        .settings-row-col { flex-direction: column; align-items: flex-start; gap: 8px; }
+        .settings-slider-wrap { display: flex; align-items: center; gap: 8px; width: 100%; }
+        .settings-slider {
+            -webkit-appearance: none; appearance: none;
+            flex: 1; height: 4px; background: #444; border-radius: 2px; outline: none; cursor: pointer;
+        }
+        .settings-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 18px; height: 18px;
+            border-radius: 50%; background: var(--accent); cursor: pointer; border: none;
+        }
+        .settings-slider::-moz-range-thumb {
+            width: 18px; height: 18px; border-radius: 50%; background: var(--accent); cursor: pointer; border: none;
+        }
+        #bw-contrast-val { font-size: 0.82rem; color: var(--accent); min-width: 22px; text-align: right; }
 
         /* 全画面休憩オーバーレイ */
         #break-overlay {
@@ -419,6 +433,18 @@
                             <option value="3">太</option>
                         </select>
                     </div>
+                    <div class="settings-row settings-row-col">
+                        <div class="settings-label">
+                            <span>2階調のコントラスト</span>
+                            <span class="settings-desc">値が高いほどくっきりした白黒になります</span>
+                        </div>
+                        <div class="settings-slider-wrap">
+                            <input type="range" id="bw-contrast-slider" class="settings-slider"
+                                min="1" max="20" step="1" value="10"
+                                oninput="onBwContrastChange(parseInt(this.value))">
+                            <span id="bw-contrast-val">10</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="settings-section">
                     <div class="settings-section-title">サウンド</div>
@@ -624,7 +650,8 @@
                 breakDurationSec: breakDurationSec,
                 flashIntensity: flashIntensity,
                 progressBarSize: progressBarSize,
-                soundVolume: soundVolume
+                soundVolume: soundVolume,
+                bwContrast: bwContrast
             };
             try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (_) {}
         }
@@ -659,7 +686,7 @@
                 if (saved && typeof saved.eyeHideDelay === 'number') eyeHideDelay = saved.eyeHideDelay;
                 if (saved && typeof saved.focusIdleDelay === 'number') focusIdleDelay = saved.focusIdleDelay;
                 if (saved && typeof saved.breakIntervalMin === 'number') breakIntervalMin = saved.breakIntervalMin;
-                if (saved && typeof saved.breakDurationSec === 'number') breakDurationSec = saved.breakDurationSec;
+                if (saved && typeof saved.bwContrast === 'number') bwContrast = Math.max(1, Math.min(20, saved.bwContrast));
                 if (saved && typeof saved.flashIntensity === 'number') flashIntensity = saved.flashIntensity;
                 if (saved && typeof saved.progressBarSize === 'number') progressBarSize = saved.progressBarSize;
                 if (saved && typeof saved.soundVolume === 'number') {
@@ -697,6 +724,10 @@
             if (progSel) { progSel.value = progressBarSize; onProgressSizeChange(progressBarSize); }
             const sndSel = document.getElementById('sound-volume-select');
             if (sndSel) sndSel.value = soundVolume;
+            const bwSlider = document.getElementById('bw-contrast-slider');
+            if (bwSlider) { bwSlider.value = bwContrast; }
+            const bwVal = document.getElementById('bw-contrast-val');
+            if (bwVal) bwVal.textContent = bwContrast;
             if (isEyeHideEnabled) ui.eyeBtn.classList.add('active');
             else ui.eyeBtn.classList.remove('active');
             const rfBtn = document.getElementById('randomFlip-btn');
@@ -785,6 +816,7 @@
         let flashIntensity = 2;    // ⑥ 0=なし 1=弱 2=中 3=強
         let progressBarSize = 2;   // ⑧ 1=細 2=中 3=太
         let soundVolume = 2;       // ⑩ 0=なし 1=小 2=中
+        let bwContrast = 10;       // 2階調コントラスト強度（1〜20）
 
         // ---- 休憩リマインダー ----
         let breakReminderEnabled = false;
@@ -885,6 +917,13 @@
             _finishBreak();
         }
 
+        function onBwContrastChange(val) {
+            bwContrast = val;
+            const label = document.getElementById('bw-contrast-val');
+            if (label) label.textContent = val;
+            if (settings.bw) applyFiltersDeferred();
+            saveUiSettings();
+        }
         function onFlashIntensityChange(val) {
             flashIntensity = val; saveUiSettings();
         }
@@ -1228,7 +1267,7 @@
             if(settings.flipH) transform += 'scaleX(-1) ';
             if(settings.flipV) transform += 'scaleY(-1) ';
             let nextFilter = 'none';
-            if (settings.bw) nextFilter = 'grayscale(1) contrast(10)';
+            if (settings.bw) nextFilter = 'grayscale(1) contrast(' + bwContrast + ')';
             else if (settings.mono) nextFilter = 'grayscale(100%)';
             const nextOpacity = isImageHidden ? '0' : '1';
             if (transform !== lastImageTransform) { ui.img.style.transform = transform; lastImageTransform = transform; }
@@ -2118,7 +2157,7 @@
             if(!isImageHidden) {
                 ctx.translate(canvas.width/2, canvas.height/2);
                 if(settings.flipH) ctx.scale(-1, 1); if(settings.flipV) ctx.scale(1, -1);
-                if (settings.bw) ctx.filter = 'grayscale(1) contrast(10)';
+                if (settings.bw) ctx.filter = 'grayscale(1) contrast(' + bwContrast + ')';
                 else if(settings.mono) ctx.filter = 'grayscale(100%)';
                 ctx.drawImage(ui.img, -canvas.width/2, -canvas.height/2, canvas.width, canvas.height);
                 if(settings.grid) {
