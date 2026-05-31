@@ -77,7 +77,7 @@
         .history-thumb.current { border-color: var(--accent); }
         .fav-badge { position: absolute; top: 2px; right: 2px; color: gold; font-size: 12px; pointer-events: none; }
 
-        #image-container { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; padding: 10px; overflow: hidden; touch-action: none; }
+        #image-container { flex: 1; position: relative; display: flex; justify-content: center; align-items: center; padding: 10px; overflow: hidden; touch-action: none; isolation: isolate; }
         #image-container::after {
             content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: 2px;
             box-shadow: inset 0 0 0 0 transparent;
@@ -94,7 +94,7 @@
         #canvas-area { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
         #main-image { max-width: 100%; max-height: 100%; object-fit: contain; display: none; will-change: transform; contain: layout style; }
         #grid-overlay { position: absolute; pointer-events: none; display: none; inset: 0; border: none; background-image: linear-gradient(to right, rgba(128,128,128,0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(128,128,128,0.4) 1px, transparent 1px); background-size: 33.33% 33.33%; z-index: 5; }
-        #fav-icon-large { position: absolute; top: 10px; right: 10px; font-size: 2rem; color: gold; display: none; text-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 10; pointer-events: none; }
+        #fav-icon-large { position: absolute; top: 10px; right: 10px; font-size: 2rem; color: gold; display: none; text-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 5; pointer-events: none; }
         
         #progress-container { width: 100%; height: var(--progress-height, 4px); background-color: #222; }
         #progress-bar { width: 100%; height: 100%; background-color: var(--accent); transition: background-color 0.3s; }
@@ -1068,6 +1068,10 @@
             if (images.length === 0) return;
             const firstIdx = getNextIndexForPreload();
             if (firstIdx < 0 || !images[firstIdx]) return;
+            const firstItem = images[firstIdx];
+            const firstName = firstItem.name || '';
+
+            // 両スロットが既に同じ画像をプリロード済みなら早期リターン
             let secondIdx = -1;
             if (images.length > 1) {
                 if (settings.shuffle) {
@@ -1082,8 +1086,6 @@
                 }
             }
 
-            const firstItem = images[firstIdx];
-            const firstName = firstItem.name || '';
             if (!(preloadName === firstName && preloadUrl)) {
                 if (preloadUrl && preloadUrl.startsWith('blob:')) URL.revokeObjectURL(preloadUrl);
                 preloadName = firstName;
@@ -1092,7 +1094,6 @@
                 const img1 = new Image();
                 img1.onload = function() {
                     preloadedImage = img1;
-                    // デコードを事前に完了させてスワイプ時の遅延を減らす
                     if (img1.decode) img1.decode().catch(function(){});
                 };
                 img1.onerror = function() { preloadedImage = null; };
@@ -1121,6 +1122,8 @@
             }
         }
 
+        let pendingTimerStart = false; // 画像読み込み完了後にタイマー開始するフラグ
+
         function loadImage(skipDepth, skipPreload) {
             if(images.length === 0) { ui.img.style.display = 'none'; ui.favIcon.style.display = 'none'; updateImageCounter(); return; }
             const item = images[currentIndex];
@@ -1144,16 +1147,27 @@
             const isFav = isFavMode ? true : favNameSet.has(item.name);
             ui.favIcon.style.display = isFav ? 'block' : 'none';
 
-            ui.img.onload = function() {
-                if (loadToken !== imageLoadToken) return;
-                ui.img.style.display = 'block';
-                applyFilters(); clearTimeout(eyeHideTimeout);
-                if (isEyeHideEnabled && !hmActive) { eyeHideTimeout = setTimeout(function() { isImageHidden = true; applyFilters(); }, eyeHideDelay * 1000); }
-            };
-            ui.img.onerror = function() {
-                if (loadToken !== imageLoadToken) return;
-                if (images.length > 1) nextImage();
-            };
+            ui.img.onload = null;
+            ui.img.onerror = null;
+            if (!('decode' in ui.img)) {
+                // decode非対応ブラウザのみonload/onerrorを使う
+                ui.img.onload = function() {
+                    if (loadToken !== imageLoadToken) return;
+                    ui.img.style.display = 'block';
+                    applyFilters(); clearTimeout(eyeHideTimeout);
+                    if (isEyeHideEnabled && !hmActive) { eyeHideTimeout = setTimeout(function() { isImageHidden = true; applyFilters(); }, eyeHideDelay * 1000); }
+                    if (pendingTimerStart) {
+                        pendingTimerStart = false;
+                        timerTickLoop();
+                        if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+                    }
+                };
+                ui.img.onerror = function() {
+                    if (loadToken !== imageLoadToken) return;
+                    pendingTimerStart = false;
+                    if (images.length > 1) nextImage();
+                };
+            }
 
             let newUrl;
             if (item.data) {
@@ -1172,7 +1186,38 @@
             }
             currentImageUrl = newUrl;
 
-            ui.img.src = currentImageUrl;
+            // decodeが使える環境では、デコード完了後に表示＆タイマー開始
+            if ('decode' in ui.img) {
+                ui.img.src = currentImageUrl;
+                ui.img.decode().then(function() {
+                    if (loadToken !== imageLoadToken) return;
+                    ui.img.style.display = 'block';
+                    applyFilters(); clearTimeout(eyeHideTimeout);
+                    if (isEyeHideEnabled && !hmActive) { eyeHideTimeout = setTimeout(function() { isImageHidden = true; applyFilters(); }, eyeHideDelay * 1000); }
+                    if (pendingTimerStart) {
+                        pendingTimerStart = false;
+                        timerTickLoop();
+                        if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+                    }
+                }).catch(function() {
+                    // decodeが失敗した場合はonloadに任せる
+                    if (loadToken !== imageLoadToken) return;
+                    pendingTimerStart = false;
+                    if (images.length > 1) nextImage();
+                });
+            } else {
+                // decode非対応ブラウザはonloadで処理（従来の動作）
+                ui.img.src = currentImageUrl;
+                if (ui.img.complete && ui.img.naturalWidth > 0) {
+                    ui.img.style.display = 'block';
+                    applyFilters();
+                    if (pendingTimerStart) {
+                        pendingTimerStart = false;
+                        timerTickLoop();
+                        if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+                    }
+                }
+            }
             updateMediaSession();
             if (!skipPreload) updatePreloadQueue();
             updateImageCounter();
@@ -1391,16 +1436,22 @@
                     : (currentIndex + 1) % images.length;
             }
             lastShownIndex = prevIndex;
-            updatePreloadQueue(); // インデックス確定後すぐに先読み開始
-            loadImage(0, true); remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
+            updatePreloadQueue();
+            pendingTimerStart = false; // 前の pending をクリア
+            remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds;
             if (isRunning) {
+                // タイマーは画像onload後に開始（pendingTimerStartフラグで制御）
                 expectedEndTime = Date.now() + (remaining * 1000);
-                timerTickLoop();
-                if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
-            } else { updateTimerText(remaining); ui.prog.style.width = '100%'; lastProgressWidth = '100%'; }
+                pendingTimerStart = true;
+            } else {
+                updateTimerText(remaining);
+                ui.prog.style.width = '100%'; lastProgressWidth = '100%';
+            }
+            loadImage(0, true);
             if(!isSkipping) { playSound(); }
-            // 休憩リマインダーチェック（タイマー終了で自動進んだときのみ）
+            // 休憩リマインダーチェック
             if (!isSkipping && checkBreakTrigger()) {
+                pendingTimerStart = false;
                 stopTimer();
                 triggerBreak();
             }
