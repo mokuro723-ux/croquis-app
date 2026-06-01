@@ -98,6 +98,30 @@
         
         #progress-container { width: 100%; height: var(--progress-height, 4px); background-color: #222; }
         #progress-bar { width: 100%; height: 100%; background-color: var(--accent); transition: background-color 0.3s; }
+
+        #bw-bar-wrap {
+            width: 100%; height: 0; overflow: hidden;
+            transition: height 0.2s ease;
+            background-color: rgba(0,0,0,0.6);
+        }
+        #bw-bar-wrap.visible { height: 32px; }
+        #bw-bar-inner {
+            display: flex; align-items: center; gap: 8px;
+            padding: 0 12px; height: 32px;
+        }
+        #bw-bar-label { font-size: 0.7rem; color: #888; white-space: nowrap; }
+        #bw-bar-val { font-size: 0.78rem; color: var(--accent); min-width: 20px; text-align: right; }
+        #bw-bar-slider {
+            -webkit-appearance: none; appearance: none; flex: 1;
+            height: 3px; background: #444; border-radius: 2px; outline: none; cursor: pointer;
+        }
+        #bw-bar-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 16px; height: 16px;
+            border-radius: 50%; background: var(--accent); cursor: pointer; border: none;
+        }
+        #bw-bar-slider::-moz-range-thumb {
+            width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; border: none;
+        }
         #timer-label.urgent { color: var(--accent-urgent); animation: urgentPulse 1s ease-in-out infinite; }
         @keyframes urgentPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         
@@ -301,6 +325,14 @@
         </div>
     </div>
 
+    <div id="bw-bar-wrap">
+        <div id="bw-bar-inner">
+            <span id="bw-bar-label">コントラスト</span>
+            <input type="range" id="bw-bar-slider" min="1" max="20" step="1" value="10"
+                oninput="onBwContrastChange(parseInt(this.value))">
+            <span id="bw-bar-val">10</span>
+        </div>
+    </div>
     <div id="progress-container"><div id="progress-bar"></div></div>
 
     <div id="bottom-panel">
@@ -708,7 +740,10 @@
                 if (settings[k]) btn.classList.add('active');
                 else btn.classList.remove('active');
             });
-            if (settings.bw) { const b = document.getElementById('bw-btn'); if(b) b.classList.add('active'); }
+            if (settings.bw) {
+                const b = document.getElementById('bw-btn'); if(b) b.classList.add('active');
+                const bbar = document.getElementById('bw-bar-wrap'); if(bbar) bbar.classList.add('visible');
+            }
             const breakToggle = document.getElementById('break-reminder-toggle');
             if (breakToggle) breakToggle.checked = breakReminderEnabled;
             const eyeSel = document.getElementById('eye-hide-delay-select');
@@ -729,6 +764,10 @@
             if (bwSlider) { bwSlider.value = bwContrast; }
             const bwVal = document.getElementById('bw-contrast-val');
             if (bwVal) bwVal.textContent = bwContrast;
+            const bwBarSlider = document.getElementById('bw-bar-slider');
+            if (bwBarSlider) bwBarSlider.value = bwContrast;
+            const bwBarVal = document.getElementById('bw-bar-val');
+            if (bwBarVal) bwBarVal.textContent = bwContrast;
             if (isEyeHideEnabled) ui.eyeBtn.classList.add('active');
             else ui.eyeBtn.classList.remove('active');
             const rfBtn = document.getElementById('randomFlip-btn');
@@ -920,11 +959,14 @@
 
         function onBwContrastChange(val) {
             bwContrast = val;
-            // 設定パネル内スライダーと同期
             const sl = document.getElementById('bw-contrast-slider');
             if (sl) sl.value = val;
             const lbl = document.getElementById('bw-contrast-val');
             if (lbl) lbl.textContent = val;
+            const bsl = document.getElementById('bw-bar-slider');
+            if (bsl) bsl.value = val;
+            const bval = document.getElementById('bw-bar-val');
+            if (bval) bval.textContent = val;
             if (settings.bw) applyFiltersDeferred();
             saveUiSettings();
         }
@@ -1349,6 +1391,7 @@
         function toggleBW() {
             settings.bw = !settings.bw;
             const bwBtn = document.getElementById('bw-btn');
+            const bwBar = document.getElementById('bw-bar-wrap');
             if (settings.bw) {
                 bwBtn.classList.add('active');
                 if (settings.mono) {
@@ -1356,8 +1399,10 @@
                     const monoBtn = document.getElementById('mono-btn');
                     if (monoBtn) monoBtn.classList.remove('active');
                 }
+                if (bwBar) bwBar.classList.add('visible');
             } else {
                 bwBtn.classList.remove('active');
+                if (bwBar) bwBar.classList.remove('visible');
             }
             applyFiltersDeferred();
             saveUiSettings();
