@@ -42,7 +42,7 @@
             z-index: 100; 
             border-bottom: 1px solid var(--border-color); 
         }
-        .top-left { display: flex; align-items: center; gap: 10px; flex: 1; max-width: 150px; height: 36px; }
+        .top-left { display: flex; align-items: center; gap: 6px; flex: 1; max-width: 180px; height: 36px; }
         .top-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: 1; max-width: 150px; height: 36px; }
         #image-counter { color: #666; font-size: 0.72rem; white-space: nowrap; letter-spacing: 0.5px; }
         
@@ -122,8 +122,8 @@
         #bw-bar-slider::-moz-range-thumb {
             width: 16px; height: 16px; border-radius: 50%; background: var(--accent); cursor: pointer; border: none;
         }
-        #timer-label.urgent { color: var(--accent-urgent); animation: urgentPulse 1s ease-in-out infinite; }
-        @keyframes urgentPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        #timer-label.urgent { color: var(--accent-urgent); animation: urgentPulse 1s ease-in-out infinite; will-change: opacity; }
+        @keyframes urgentPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
         
         #bottom-panel { position: relative; background-color: var(--panel-bg); padding: 10px; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--bottom-gap); border-top: 1px solid var(--border-color); transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease; max-height: 250px; opacity: 1; overflow: visible; padding-bottom: calc(10px + var(--bottom-safe)); will-change: opacity; }
         #bottom-panel.hidden { max-height: 0; padding-top: 0; padding-bottom: 0; border-top: 0px solid transparent; opacity: 0; overflow: hidden; }
@@ -146,11 +146,14 @@
         .text-btn { font-size: 0.8rem; padding: 6px 10px; min-width: auto; font-weight: bold; }
 
         #manage-popup {
-            position: absolute; bottom: calc(60px + env(safe-area-inset-bottom, 0px)); left: 10px; background-color: rgba(30, 30, 30, 0.95);
-            border: 1px solid var(--border-color); border-radius: 6px; padding: 8px;
-            display: flex; flex-direction: column; gap: 5px; z-index: 150;
-            opacity: 0; pointer-events: none; transform: translateY(10px); transition: opacity 0.2s ease, transform 0.2s ease;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            position: fixed; bottom: calc(var(--bottom-safe) + 80px); left: 10px;
+            background-color: rgba(22, 22, 22, 0.97);
+            border: 1px solid var(--border-color); border-radius: 8px; padding: 6px;
+            display: flex; flex-direction: column; gap: 4px; z-index: 150;
+            opacity: 0; pointer-events: none; transform: translateY(8px);
+            transition: opacity 0.18s ease, transform 0.18s ease;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            min-width: 180px;
         }
         #manage-popup.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
         #manage-popup button { justify-content: flex-start; gap: 8px; padding: 10px; font-size: 0.9rem; }
@@ -261,7 +264,7 @@
                 --bottom-btn-min: 34px;
             }
             #top-panel { padding: 0 8px 12px 8px; }
-            .top-left, .top-right { max-width: 110px; gap: 4px; height: 36px; }
+            .top-left, .top-right { max-width: 130px; gap: 4px; height: 36px; }
             .icon-btn { padding: 3px; }
             .svg-icon { width: 18px; height: 18px; }
             #timer-label { font-size: 1.5rem; letter-spacing: 1px; bottom: 12px; }
@@ -518,7 +521,7 @@
         let timerSeconds = 30, remaining = 30, isRunning = false, expectedEndTime = 0;
         let settings = { flipH: false, flipV: false, shuffle: true, grid: false, mono: false, bw: false };
         let randomFlipEnabled = false;
-        let isMuted = true, bgMode = 0, isImageHidden = false; 
+        let isMuted = false, bgMode = 0, isImageHidden = false; 
         let hmActive = false, hmPhase = 0;
         const hmPhases = { 1: {t: "①暗記", s: 120, h: false}, 2: {t: "②記憶描写", s: 300, h: true}, 3: {t: "③模写", s: 900, h: false}, 4: {t: "④実践", s: 900, h: true} };
         let currentImageUrl = null, resizeTimer;
@@ -710,7 +713,6 @@
                     settings.bw = !!saved.settings.bw;
                 }
                 if (saved && typeof saved.bgMode === 'number') bgMode = Math.max(0, Math.min(2, saved.bgMode));
-                if (saved && typeof saved.isMuted === 'boolean') isMuted = saved.isMuted;
                 if (saved && typeof saved.isEyeHideEnabled === 'boolean') isEyeHideEnabled = saved.isEyeHideEnabled;
                 if (saved && typeof saved.randomFlipEnabled === 'boolean') randomFlipEnabled = saved.randomFlipEnabled;
                 if (saved && typeof saved.breakReminderEnabled === 'boolean') {
