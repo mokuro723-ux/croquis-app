@@ -159,13 +159,16 @@
         #manage-popup button { justify-content: flex-start; gap: 8px; padding: 10px; font-size: 0.9rem; }
 
         #settings-panel {
-            display: none; position: fixed; top: 0; right: 0; bottom: 0;
+            position: fixed; top: 0; right: 0; bottom: 0;
             width: min(300px, 90vw); background-color: var(--panel-bg); border-left: 1px solid var(--border-color);
-            z-index: 200; flex-direction: column; overflow: hidden;
+            z-index: 300; display: flex; flex-direction: column; overflow: hidden;
             box-shadow: -6px 0 24px rgba(0,0,0,0.6);
-            transform: translateX(100%); transition: transform 0.25s ease;
+            transform: translateX(110%); transition: transform 0.25s ease;
+            visibility: hidden; pointer-events: none;
         }
-        #settings-panel.open { display: flex; transform: translateX(0); }
+        #settings-panel.open { transform: translateX(0); visibility: visible; pointer-events: auto; }
+        #settings-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 299; }
+        #settings-overlay.open { display: block; }
         #settings-header {
             display: flex; align-items: center; justify-content: space-between;
             padding: 12px 14px; border-bottom: 1px solid var(--border-color); flex-shrink: 0;
@@ -1007,9 +1010,13 @@
             if (isOpen) {
                 panel.classList.remove('open');
                 overlay.classList.remove('open');
+                armFocusIdleTimer(); // 閉じたら通常のidle-dimを再開
             } else {
                 panel.classList.add('open');
                 overlay.classList.add('open');
+                // 開いている間はidle-dimタイマーを停止
+                if (focusIdleTimer) { clearTimeout(focusIdleTimer); focusIdleTimer = null; }
+                setFocusDimmed(false);
             }
         }
 
@@ -1026,7 +1033,9 @@
         function armFocusIdleTimer() {
             if (focusIdleTimer) clearTimeout(focusIdleTimer);
             setFocusDimmed(false);
-            if (focusIdleDelay === 0) return; // 0=無効
+            if (focusIdleDelay === 0) return;
+            // 設定パネルが開いている間はidle-dimしない
+            if (document.getElementById('settings-panel').classList.contains('open')) return;
             focusIdleTimer = setTimeout(function() { setFocusDimmed(true); }, focusIdleDelay * 1000);
         }
 
