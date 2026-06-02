@@ -666,11 +666,13 @@
         function hasUnskippedInCurrentPool() {
             if (isFavMode) return true;
             if (!images || images.length === 0) return false;
+            // スキップ数が画像数未満なら未スキップが存在する
+            let skipped = 0;
             for (let i = 0; i < images.length; i++) {
-                const name = images[i] && images[i].name;
-                if (!name || !skipNameSet.has(name)) return true;
+                if (images[i] && skipNameSet.has(images[i].name)) skipped++;
+                if (skipped < images.length) return true; // 早期終了
             }
-            return false;
+            return skipped < images.length;
         }
 
         function isIOSDevice() {
@@ -1240,7 +1242,9 @@
             }
         }
 
-        let pendingTimerStart = false; // 画像読み込み完了後にタイマー開始するフラグ
+        const supportsImageDecode = 'decode' in document.createElement('img');
+
+        let pendingTimerStart = false;
 
         function loadImage(skipDepth, skipPreload) {
             if(images.length === 0) { ui.img.style.display = 'none'; ui.favIcon.style.display = 'none'; updateImageCounter(); return; }
@@ -1267,7 +1271,7 @@
 
             ui.img.onload = null;
             ui.img.onerror = null;
-            if (!('decode' in ui.img)) {
+            if (!supportsImageDecode) {
                 // decode非対応ブラウザのみonload/onerrorを使う
                 ui.img.onload = function() {
                     if (loadToken !== imageLoadToken) return;
@@ -1305,7 +1309,7 @@
             currentImageUrl = newUrl;
 
             // decodeが使える環境では、デコード完了後に表示＆タイマー開始
-            if ('decode' in ui.img) {
+            if (supportsImageDecode) {
                 ui.img.src = currentImageUrl;
                 ui.img.decode().then(function() {
                     if (loadToken !== imageLoadToken) return;
@@ -1981,15 +1985,15 @@
             ui.sound.play().catch(function(){});
         }
 
+        const FLASH_ALPHA_MAP = [0, 0.25, 0.45, 0.7];
+        const FLASH_BLUR_MAP  = [0, 40,   60,   80 ];
+
         function flashScreen() {
-            if (flashIntensity === 0) return; // なし
-            const alphaMap = [0, 0.25, 0.45, 0.7];
-            const blurMap  = [0, 40,   60,   80 ];
-            const alpha = alphaMap[flashIntensity];
-            const blur  = blurMap[flashIntensity];
+            if (flashIntensity === 0) return;
+            const alpha = FLASH_ALPHA_MAP[flashIntensity];
+            const blur  = FLASH_BLUR_MAP[flashIntensity];
             const el = imgContainer;
             if (!el) return;
-            // CSSカスタムプロパティで動的に強度を適用
             el.style.setProperty('--flash-alpha', alpha);
             el.style.setProperty('--flash-blur', blur + 'px');
             el.classList.remove('timer-flash');
@@ -1999,16 +2003,13 @@
                 el.classList.remove('timer-flash');
             }, { once: true });
 
-            // Document PiP側を光らせる
             if (documentPipWindow) {
                 try {
                     const pipDoc = documentPipWindow.document;
                     const container = pipDoc.getElementById('canvas-container');
                     if (container) {
-                        const alphaMap = [0, 0.25, 0.45, 0.7];
-                        const blurMap  = [0, 40,   60,   80 ];
-                        container.style.setProperty('--flash-alpha', alphaMap[flashIntensity]);
-                        container.style.setProperty('--flash-blur', blurMap[flashIntensity] + 'px');
+                        container.style.setProperty('--flash-alpha', alpha);
+                        container.style.setProperty('--flash-blur', blur + 'px');
                         container.classList.remove('timer-flash');
                         void container.offsetWidth;
                         container.classList.add('timer-flash');
@@ -2019,7 +2020,6 @@
                 } catch(e) {}
             }
 
-            // Video PiP側を光らせる（Canvas描画でフェード）
             if (isPiP && !documentPipWindow && pipInitialized) {
                 pipFlashStartTime = Date.now();
                 animatePipFlash();
@@ -2031,30 +2031,23 @@
             const elapsed = Date.now() - pipFlashStartTime;
             const duration = 700;
             if (elapsed >= duration) {
-                // フラッシュ終了後に通常描画を1回実行
                 pipRenderStamp = '';
                 updatePiP();
                 return;
             }
-            const alpha = 0.45 * (1 - elapsed / duration);
-            const ratio = ui.img.naturalWidth / ui.img.naturalHeight;
-            const baseWidth = Math.max(ui.img.naturalWidth, 2560);
-            pipCanvas.width = baseWidth; pipCanvas.height = baseWidth / ratio;
+            const flashAlpha = FLASH_ALPHA_MAP[flashIntensity] * (1 - elapsed / duration);
             drawToCanvas(pipCanvas, pipCtx, true);
             // Canvas周囲にグローを描画
             const w = pipCanvas.width, h = pipCanvas.height;
             const glowSize = Math.round(w * 0.06);
             const grad = pipCtx.createLinearGradient(0, 0, glowSize, 0);
-            grad.addColorStop(0, `rgba(0,212,255,${alpha})`);
+            grad.addColorStop(0, `rgba(0,212,255,${flashAlpha})`);
             grad.addColorStop(1, 'rgba(0,212,255,0)');
-            // 左辺
             pipCtx.fillStyle = grad; pipCtx.fillRect(0, 0, glowSize, h);
-            // 右辺
             pipCtx.save(); pipCtx.translate(w, 0); pipCtx.scale(-1, 1);
             pipCtx.fillStyle = grad; pipCtx.fillRect(0, 0, glowSize, h); pipCtx.restore();
-            // 上辺
             const gradT = pipCtx.createLinearGradient(0, 0, 0, glowSize);
-            gradT.addColorStop(0, `rgba(0,212,255,${alpha})`);
+            gradT.addColorStop(0, `rgba(0,212,255,${flashAlpha})`);
             gradT.addColorStop(1, 'rgba(0,212,255,0)');
             pipCtx.fillStyle = gradT; pipCtx.fillRect(0, 0, w, glowSize);
             // 下辺
