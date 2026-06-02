@@ -236,27 +236,45 @@
 
         /* 全画面休憩オーバーレイ */
         #break-overlay {
-            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.96);
+            display: none; position: fixed; inset: 0;
+            background: #000;
             z-index: 500; flex-direction: column; align-items: center; justify-content: center;
         }
-        #break-overlay.active { display: flex; }
-        #break-content { text-align: center; }
-        #break-countdown { font-size: 5rem; font-weight: bold; color: var(--accent); line-height: 1; margin-bottom: 16px; }
-        #break-message { font-size: 1.4rem; color: #eee; margin-bottom: 8px; }
-        #break-sub { font-size: 0.9rem; color: #666; margin-bottom: 32px; }
-        #break-skip-btn { background: #333; border: 1px solid #555; color: #aaa; padding: 10px 24px; border-radius: 20px; cursor: pointer; font-size: 0.9rem; transition: background 0.2s; }
-        #break-skip-btn:hover { background: #444; color: #fff; }
+        #break-overlay.active { display: flex; animation: breakFadeIn 0.4s ease; }
+        @keyframes breakFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        #break-content { text-align: center; padding: 20px; }
+        #break-icon { font-size: 3rem; margin-bottom: 16px; animation: breakBlink 1.5s ease-in-out 3; }
+        @keyframes breakBlink { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.3; transform:scale(0.85); } }
+        #break-countdown {
+            font-size: 7rem; font-weight: bold; color: var(--accent);
+            line-height: 1; margin-bottom: 20px;
+            text-shadow: 0 0 40px rgba(0,212,255,0.6);
+            animation: countPulse 1s ease-in-out infinite;
+        }
+        @keyframes countPulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.04); } }
+        #break-message { font-size: 1.6rem; font-weight: bold; color: #fff; margin-bottom: 10px; letter-spacing: 1px; }
+        #break-sub { font-size: 0.95rem; color: #555; margin-bottom: 40px; }
+        #break-skip-btn {
+            background: transparent; border: 1px solid #444; color: #555;
+            padding: 10px 28px; border-radius: 20px; cursor: pointer;
+            font-size: 0.85rem; transition: border-color 0.2s, color 0.2s;
+        }
+        #break-skip-btn:hover { border-color: #888; color: #aaa; }
 
         /* コーナー表示（長尺タイマー用） */
         #break-corner {
             display: none; position: fixed; bottom: calc(var(--bottom-safe) + 100px); right: 12px;
-            background: rgba(0,0,0,0.85); border: 1px solid var(--accent);
-            border-radius: 10px; padding: 8px 14px; z-index: 400;
+            background: rgba(0,0,0,0.92); border: 2px solid var(--accent);
+            border-radius: 12px; padding: 12px 18px; z-index: 400;
             text-align: center; pointer-events: none;
+            box-shadow: 0 0 20px rgba(0,212,255,0.3);
         }
-        #break-corner.active { display: block; }
-        #break-corner-count { font-size: 1.6rem; font-weight: bold; color: var(--accent); line-height: 1; }
-        #break-corner-msg { font-size: 0.72rem; color: #aaa; margin-top: 2px; }
+        #break-corner.active { display: block; animation: cornerAppear 0.3s ease; }
+        @keyframes cornerAppear { from { opacity:0; transform:scale(0.8) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        #break-corner-icon { font-size: 1.4rem; margin-bottom: 4px; }
+        #break-corner-count { font-size: 2.4rem; font-weight: bold; color: var(--accent); line-height: 1; animation: countPulse 1s ease-in-out infinite; }
+        #break-corner-msg { font-size: 0.75rem; color: #aaa; margin-top: 4px; letter-spacing: 0.5px; }
         .popup-danger { color: #ff5555 !important; }
 
         @media (max-width: 440px) {
@@ -501,13 +519,16 @@
 
         <div id="break-overlay">
             <div id="break-content">
+                <div id="break-icon">👁️</div>
                 <div id="break-countdown">20</div>
                 <div id="break-message">目を閉じて休んでください</div>
                 <div id="break-sub">20秒後に自動で再開します</div>
                 <button id="break-skip-btn" onclick="endBreak()">スキップ</button>
             </div>
         </div>
+
         <div id="break-corner">
+            <div id="break-corner-icon">👁️</div>
             <div id="break-corner-count">20</div>
             <div id="break-corner-msg">目を休めて</div>
         </div>
@@ -591,7 +612,8 @@
             historyContent: document.getElementById('history-content'),
             historyFilterBtn: document.getElementById('history-filter-btn'),
             imageCounter: document.getElementById('image-counter'),
-            timeSelect: document.getElementById('time-select')
+            timeSelect: document.getElementById('time-select'),
+            bottomPanel: document.getElementById('bottom-panel')
         };
         function updateHmMini() {
             if (!hmActive) { ui.hmMini.innerText = ''; return; }
@@ -724,6 +746,7 @@
                 if (saved && typeof saved.eyeHideDelay === 'number') eyeHideDelay = saved.eyeHideDelay;
                 if (saved && typeof saved.focusIdleDelay === 'number') focusIdleDelay = saved.focusIdleDelay;
                 if (saved && typeof saved.breakIntervalMin === 'number') breakIntervalMin = saved.breakIntervalMin;
+                if (saved && typeof saved.breakDurationSec === 'number') breakDurationSec = saved.breakDurationSec;
                 if (saved && typeof saved.bwContrast === 'number') bwContrast = Math.max(1, Math.min(20, saved.bwContrast));
                 if (saved && typeof saved.flashIntensity === 'number') flashIntensity = saved.flashIntensity;
                 if (saved && typeof saved.progressBarSize === 'number') progressBarSize = saved.progressBarSize;
@@ -828,6 +851,7 @@
                     }
                     remaining = Math.ceil((expectedEndTime - now) / 1000);
                     updateTimerText(remaining);
+                    // バックグラウンドで止まっていた場合は再起動
                     if (!timerTickId) timerTickLoop();
                     cancelAnimationFrame(animationFrameId);
                     animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
@@ -881,7 +905,7 @@
                     document.getElementById('break-overlay').classList.remove('active');
                     document.getElementById('break-corner').classList.remove('active');
                     if (bottomPanelWasHidden) {
-                        document.getElementById('bottom-panel').classList.add('hidden');
+                        ui.bottomPanel.classList.add('hidden');
                         bottomPanelWasHidden = false;
                     }
                     breakWasRunning = false;
@@ -902,16 +926,14 @@
         function triggerBreak() {
             sessionStartTime = Date.now();
             const isLongTimer = timerSeconds >= 60;
-            // タイマーを停止して休憩へ
             breakWasRunning = isRunning;
             if (isRunning) stopTimer();
-            // 下パネルが隠れていたら強制表示
-            const bottomPanel = document.getElementById('bottom-panel');
+            const bottomPanel = ui.bottomPanel;
             bottomPanelWasHidden = bottomPanel.classList.contains('hidden');
             if (bottomPanelWasHidden) bottomPanel.classList.remove('hidden');
-            // idle-dimを解除
             setFocusDimmed(false);
             if (focusIdleTimer) { clearTimeout(focusIdleTimer); focusIdleTimer = null; }
+            playSound();
             if (isLongTimer) { startCornerBreak(); } else { startFullBreak(); }
         }
 
@@ -942,7 +964,7 @@
         function _finishBreak() {
             clearInterval(breakCountdownTimer); breakCountdownTimer = null;
             if (bottomPanelWasHidden) {
-                document.getElementById('bottom-panel').classList.add('hidden');
+                ui.bottomPanel.classList.add('hidden');
                 bottomPanelWasHidden = false;
             }
             const shouldResume = breakWasRunning;
@@ -1020,10 +1042,10 @@
             }
         }
 
-        function toggleBottomPanel() { document.getElementById('bottom-panel').classList.toggle('hidden'); }
+        function toggleBottomPanel() { ui.bottomPanel.classList.toggle('hidden'); }
         function toggleManagePopup() { ui.managePopup.classList.toggle('show'); }
         function setFocusDimmed(dim) {
-            const panel = document.getElementById('bottom-panel');
+            const panel = ui.bottomPanel;
             if (!panel || panel.classList.contains('hidden')) return;
             if (dim === isFocusDimmed) return;
             isFocusDimmed = dim;
@@ -1504,7 +1526,10 @@
 
         function pickShuffledIndex(excludeA, excludeB, maxGuard) {
             if (images.length === 1) return 0;
-            if (images.length === 2) return excludeA === 0 ? 1 : 0;
+            if (images.length === 2) {
+                const other = excludeA === 0 ? 1 : 0;
+                return (other !== excludeB) ? other : excludeA;
+            }
             let candidate, guard = 0;
             do { candidate = Math.floor(Math.random() * images.length); guard++; }
             while ((candidate === excludeA || candidate === excludeB) && guard < maxGuard);
