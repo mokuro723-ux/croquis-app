@@ -1358,13 +1358,21 @@
             if (nextOpacity !== lastImageOpacity) { ui.img.style.opacity = nextOpacity; lastImageOpacity = nextOpacity; }
             
             if(settings.grid && !isImageHidden && ui.img.complete && ui.img.naturalWidth > 0) {
-                const imgRect = ui.img.getBoundingClientRect();
-                const conRect = imgContainer.getBoundingClientRect();
+                // object-fit:containで表示される実際のサイズを数式で計算
+                const conW = imgContainer.clientWidth  - 20; // padding 10px * 2
+                const conH = imgContainer.clientHeight - 20;
+                const natW = ui.img.naturalWidth;
+                const natH = ui.img.naturalHeight;
+                const scale = Math.min(conW / natW, conH / natH);
+                const dispW = Math.round(natW * scale);
+                const dispH = Math.round(natH * scale);
+                const offL  = Math.round((conW - dispW) / 2) + 10; // +padding
+                const offT  = Math.round((conH - dispH) / 2) + 10;
                 if (lastGridDisplay !== 'block') { ui.grid.style.display = 'block'; lastGridDisplay = 'block'; }
-                ui.grid.style.left   = Math.round(imgRect.left - conRect.left) + 'px';
-                ui.grid.style.top    = Math.round(imgRect.top  - conRect.top)  + 'px';
-                ui.grid.style.width  = Math.round(imgRect.width)  + 'px';
-                ui.grid.style.height = Math.round(imgRect.height) + 'px';
+                ui.grid.style.left   = offL + 'px';
+                ui.grid.style.top    = offT + 'px';
+                ui.grid.style.width  = dispW + 'px';
+                ui.grid.style.height = dispH + 'px';
             } else {
                 if (lastGridDisplay !== 'none') { ui.grid.style.display = 'none'; lastGridDisplay = 'none'; }
             }
