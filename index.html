@@ -1063,7 +1063,16 @@
             focusIdleTimer = setTimeout(function() { setFocusDimmed(true); }, focusIdleDelay * 1000);
         }
 
-        let originalOrder = [];
+        // #image-containerのpaddingをキャッシュ（変わらないため）
+        let _gridPadL = null, _gridPadT = null, _gridPadR = null, _gridPadB = null;
+        function getContainerPadding() {
+            if (_gridPadL !== null) return;
+            const s = window.getComputedStyle(imgContainer);
+            _gridPadL = parseFloat(s.paddingLeft)   || 0;
+            _gridPadR = parseFloat(s.paddingRight)  || 0;
+            _gridPadT = parseFloat(s.paddingTop)    || 0;
+            _gridPadB = parseFloat(s.paddingBottom) || 0;
+        }
 
         function applyLoadedFiles(files) {
             if (files.length > 0) { 
@@ -1358,16 +1367,16 @@
             if (nextOpacity !== lastImageOpacity) { ui.img.style.opacity = nextOpacity; lastImageOpacity = nextOpacity; }
             
             if(settings.grid && !isImageHidden && ui.img.complete && ui.img.naturalWidth > 0) {
-                // object-fit:containで表示される実際のサイズを数式で計算
-                const conW = imgContainer.clientWidth  - 20; // padding 10px * 2
-                const conH = imgContainer.clientHeight - 20;
+                getContainerPadding();
+                const conW = imgContainer.clientWidth  - _gridPadL - _gridPadR;
+                const conH = imgContainer.clientHeight - _gridPadT - _gridPadB;
                 const natW = ui.img.naturalWidth;
                 const natH = ui.img.naturalHeight;
                 const scale = Math.min(conW / natW, conH / natH);
                 const dispW = Math.round(natW * scale);
                 const dispH = Math.round(natH * scale);
-                const offL  = Math.round((conW - dispW) / 2) + 10; // +padding
-                const offT  = Math.round((conH - dispH) / 2) + 10;
+                const offL  = Math.round((conW - dispW) / 2) + _gridPadL;
+                const offT  = Math.round((conH - dispH) / 2) + _gridPadT;
                 if (lastGridDisplay !== 'block') { ui.grid.style.display = 'block'; lastGridDisplay = 'block'; }
                 ui.grid.style.left   = offL + 'px';
                 ui.grid.style.top    = offT + 'px';
