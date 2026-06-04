@@ -1292,6 +1292,7 @@
                         timerTickLoop();
                         if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
                     }
+                    if (settings.grid) requestAnimationFrame(function(){ requestAnimationFrame(function(){ applyFilters(); }); });
                 };
                 ui.img.onerror = function() {
                     if (loadToken !== imageLoadToken) return;
@@ -1330,6 +1331,8 @@
                         timerTickLoop();
                         if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
                     }
+                    // グリッドをレイアウト確定後に再計算
+                    if (settings.grid) requestAnimationFrame(function(){ requestAnimationFrame(function(){ applyFilters(); }); });
                 }).catch(function() {
                     // decodeが失敗した場合はonloadに任せる
                     if (loadToken !== imageLoadToken) return;
@@ -1367,16 +1370,13 @@
             if (nextOpacity !== lastImageOpacity) { ui.img.style.opacity = nextOpacity; lastImageOpacity = nextOpacity; }
             
             if(settings.grid && !isImageHidden && ui.img.complete && ui.img.naturalWidth > 0) {
-                getContainerPadding();
-                const conW = imgContainer.clientWidth  - _gridPadL - _gridPadR;
-                const conH = imgContainer.clientHeight - _gridPadT - _gridPadB;
-                const natW = ui.img.naturalWidth;
-                const natH = ui.img.naturalHeight;
-                const scale = Math.min(conW / natW, conH / natH);
-                const dispW = Math.round(natW * scale);
-                const dispH = Math.round(natH * scale);
-                const offL  = Math.round((conW - dispW) / 2) + _gridPadL;
-                const offT  = Math.round((conH - dispH) / 2) + _gridPadT;
+                // img要素のclientWidth/Heightは object-fit:contain 後の実際の表示サイズそのもの
+                const dispW = ui.img.clientWidth;
+                const dispH = ui.img.clientHeight;
+                const conRect = imgContainer.getBoundingClientRect();
+                const imgRect = ui.img.getBoundingClientRect();
+                const offL = Math.round(imgRect.left - conRect.left);
+                const offT = Math.round(imgRect.top  - conRect.top);
                 if (lastGridDisplay !== 'block') { ui.grid.style.display = 'block'; lastGridDisplay = 'block'; }
                 ui.grid.style.left   = offL + 'px';
                 ui.grid.style.top    = offT + 'px';
@@ -1394,6 +1394,10 @@
             requestAnimationFrame(function() {
                 filterFrameQueued = false;
                 applyFilters();
+                // グリッドはレイアウト確定後に再計算
+                if (settings.grid) {
+                    requestAnimationFrame(function() { applyFilters(); });
+                }
             });
         }
 
