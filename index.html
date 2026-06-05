@@ -1292,7 +1292,7 @@
                         timerTickLoop();
                         if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
                     }
-                    if (settings.grid) requestAnimationFrame(function(){ requestAnimationFrame(function(){ applyFilters(); }); });
+                    requestAnimationFrame(function(){ updateGridOverlay(); });
                 };
                 ui.img.onerror = function() {
                     if (loadToken !== imageLoadToken) return;
@@ -1332,7 +1332,7 @@
                         if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
                     }
                     // グリッドをレイアウト確定後に再計算
-                    if (settings.grid) requestAnimationFrame(function(){ requestAnimationFrame(function(){ applyFilters(); }); });
+                    requestAnimationFrame(function(){ updateGridOverlay(); });
                 }).catch(function() {
                     // decodeが失敗した場合はonloadに任せる
                     if (loadToken !== imageLoadToken) return;
@@ -1369,22 +1369,7 @@
             if (nextFilter !== lastImageFilter) { ui.img.style.filter = nextFilter; lastImageFilter = nextFilter; }
             if (nextOpacity !== lastImageOpacity) { ui.img.style.opacity = nextOpacity; lastImageOpacity = nextOpacity; }
             
-            if(settings.grid && !isImageHidden && ui.img.complete && ui.img.naturalWidth > 0) {
-                // img要素のclientWidth/Heightは object-fit:contain 後の実際の表示サイズそのもの
-                const dispW = ui.img.clientWidth;
-                const dispH = ui.img.clientHeight;
-                const conRect = imgContainer.getBoundingClientRect();
-                const imgRect = ui.img.getBoundingClientRect();
-                const offL = Math.round(imgRect.left - conRect.left);
-                const offT = Math.round(imgRect.top  - conRect.top);
-                if (lastGridDisplay !== 'block') { ui.grid.style.display = 'block'; lastGridDisplay = 'block'; }
-                ui.grid.style.left   = offL + 'px';
-                ui.grid.style.top    = offT + 'px';
-                ui.grid.style.width  = dispW + 'px';
-                ui.grid.style.height = dispH + 'px';
-            } else {
-                if (lastGridDisplay !== 'none') { ui.grid.style.display = 'none'; lastGridDisplay = 'none'; }
-            }
+            updateGridOverlay();
             
             if (isPiP) updatePiP();
         }
@@ -1394,12 +1379,48 @@
             requestAnimationFrame(function() {
                 filterFrameQueued = false;
                 applyFilters();
-                // グリッドはレイアウト確定後に再計算
-                if (settings.grid) {
-                    requestAnimationFrame(function() { applyFilters(); });
-                }
             });
         }
+
+        // ── グリッドオーバーレイ位置計算（applyFiltersから完全分離）──
+        function updateGridOverlay() {
+            if (!settings.grid || isImageHidden || !ui.img.complete || !ui.img.naturalWidth) {
+                if (lastGridDisplay !== 'none') { ui.grid.style.display = 'none'; lastGridDisplay = 'none'; }
+                return;
+            }
+            const canvasArea = document.getElementById('canvas-area');
+            const cs = window.getComputedStyle(canvasArea);
+            const padL = parseFloat(cs.paddingLeft)  || 0;
+            const padR = parseFloat(cs.paddingRight) || 0;
+            const padT = parseFloat(cs.paddingTop)   || 0;
+            const padB = parseFloat(cs.paddingBottom)|| 0;
+            const conW = canvasArea.clientWidth  - padL - padR;
+            const conH = canvasArea.clientHeight - padT - padB;
+            const natW = ui.img.naturalWidth;
+            const natH = ui.img.naturalHeight;
+            if (!conW || !conH || !natW || !natH) {
+                if (lastGridDisplay !== 'none') { ui.grid.style.display = 'none'; lastGridDisplay = 'none'; }
+                return;
+            }
+            const scale  = Math.min(conW / natW, conH / natH);
+            const dispW  = Math.round(natW * scale);
+            const dispH  = Math.round(natH * scale);
+            const offL   = Math.round((conW - dispW) / 2 + padL);
+            const offT   = Math.round((conH - dispH) / 2 + padT);
+            if (lastGridDisplay !== 'block') { ui.grid.style.display = 'block'; lastGridDisplay = 'block'; }
+            ui.grid.style.left   = offL + 'px';
+            ui.grid.style.top    = offT + 'px';
+            ui.grid.style.width  = dispW + 'px';
+            ui.grid.style.height = dispH + 'px';
+        }
+
+        // canvas-area のリサイズを監視して自動更新
+        (function() {
+            const canvasArea = document.getElementById('canvas-area');
+            if (typeof ResizeObserver !== 'undefined') {
+                new ResizeObserver(function() { updateGridOverlay(); }).observe(canvasArea);
+            }
+        })();
 
         window.addEventListener('resize', function() { clearTimeout(resizeTimer); resizeTimer = setTimeout(applyFiltersDeferred, 100); });
         
