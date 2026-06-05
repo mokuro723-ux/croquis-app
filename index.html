@@ -539,41 +539,104 @@
     <script>
         if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./sw.js').catch(() => {}); }
 
-        let sourceImages = []; let dbFavImages = []; let images = [], currentIndex = 0; let isFavMode = false; 
-        let historyList = [], historyPos = -1, historyUrls = [];
+        // ── タイミング定数 ────────────────────────────────────────
+        const TIMING = {
+            TICK_INTERVAL_MS:     250,   // timerTickLoop 間隔
+            SAVE_DEBOUNCE_MS:     120,   // 設定保存デバウンス
+            RESIZE_DEBOUNCE_MS:   100,   // リサイズデバウンス
+            ORIENTATION_DELAY_MS: 300,   // 画面回転後の再計算遅延
+            FLASH_DURATION_MS:    700,   // フラッシュアニメーション長
+            PIP_MIN_INTERVAL_MS:   66,   // PiP最小更新間隔（≒15fps）
+            LONG_PRESS_DELAY_MS:  450,   // 長押し判定閾値（ms）
+            SWIPE_THRESHOLD_PX:    50,   // スワイプ判定距離
+            MOVE_THRESHOLD_PX:     14,   // 長押しキャンセル移動閾値
+            DOUBLE_TAP_MS:        300,   // ダブルタップ判定
+            EYE_HIDE_PRELOAD_MAX:  16,   // プリロードシャッフルガード
+            BW_CONTRAST_MIN:        1,   // 2階調コントラスト最小値
+            BW_CONTRAST_MAX:       20,   // 2階調コントラスト最大値
+            VOLUME_MAX:             2,   // 音量最大値
+            BG_MODE_MAX:            3,   // 背景色モード数
+            SAFE_INSET_MAX_PX:     40,   // iOS safe-area 上限
+        };
+
+        // ── 画像・履歴 ──────────────────────────────────────────
+        let sourceImages = [];
+        let dbFavImages  = [];
+        let images       = [];
+        let currentIndex = 0;
+        let isFavMode    = false;
+        let originalOrder = [];
+        let historyList  = [];
+        let historyPos   = -1;
+        let historyUrls  = [];
         let lastShownIndex = -1;
-        let timerSeconds = 30, remaining = 30, isRunning = false, expectedEndTime = 0;
+
+        // ── タイマー状態 ─────────────────────────────────────────
+        let timerSeconds    = 30;
+        let remaining       = 30;
+        let isRunning       = false;
+        let expectedEndTime = 0;
+
+        // ── ビュー設定（トグルフラグ）───────────────────────────
         let settings = { flipH: false, flipV: false, shuffle: true, grid: false, mono: false, bw: false };
         let randomFlipEnabled = false;
-        let isMuted = false, bgMode = 0, isImageHidden = false; 
-        let hmActive = false, hmPhase = 0;
-        const hmPhases = { 1: {t: "①暗記", s: 120, h: false}, 2: {t: "②記憶描写", s: 300, h: true}, 3: {t: "③模写", s: 900, h: false}, 4: {t: "④実践", s: 900, h: true} };
-        let currentImageUrl = null, resizeTimer;
-        let imageLoadToken = 0;
-        let animationFrameId; let lastPipUpdateTime = 0;
-        let timerTickId = null;
-        let historyRenderToken = 0;
-        let preloadUrl = null, preloadName = '';
-        let preloadedImage = null;
-        let preloadUrl2 = null, preloadName2 = '';
-        let preloadedImage2 = null;
-        let historyVirtualCleanup = null;
-        let historyResizeTimer = null;
-        let isHistoryPanelOpen = false;
-        let focusIdleTimer = null;
-        let isFocusDimmed = false;
-        let filterFrameQueued = false;
-        let lastTimerText = '';
-        let lastProgressWidth = '';
-        let lastProgressColor = '';
-        let lastImageTransform = '';
-        let lastImageFilter = '';
-        let lastImageOpacity = '';
-        let lastGridDisplay = '';
+        let isMuted       = false;
+        let bgMode        = 0;
+        let isImageHidden = false;
 
-        let isEyeHideEnabled = false, eyeHideTimeout = null;
-        let showFavsOnly = false;
+        // ── ハードモード ─────────────────────────────────────────
+        let hmActive = false;
+        let hmPhase  = 0;
+        const hmPhases = {
+            1: { t: "①暗記",   s: 120,  h: false },
+            2: { t: "②記憶描写", s: 300,  h: true  },
+            3: { t: "③模写",   s: 900,  h: false },
+            4: { t: "④実践",   s: 900,  h: true  },
+        };
+
+        // ── 画像読み込み・プリロード ──────────────────────────────
+        let currentImageUrl  = null;
+        let imageLoadToken   = 0;
+        let preloadUrl       = null;
+        let preloadName      = '';
+        let preloadedImage   = null;
+        let preloadUrl2      = null;
+        let preloadName2     = '';
+        let preloadedImage2  = null;
+
+        // ── アニメーション・レンダリング ──────────────────────────
+        let animationFrameId   = null;
+        let lastPipUpdateTime  = 0;
+        let timerTickId        = null;
+        let filterFrameQueued  = false;
+        let resizeTimer;
+
+        // ── DOM差分キャッシュ（不要な再描画を防ぐ） ───────────────
+        let lastTimerText      = '';
+        let lastProgressWidth  = '';
+        let lastProgressColor  = '';
+        let lastImageTransform = '';
+        let lastImageFilter    = '';
+        let lastImageOpacity   = '';
+        let lastGridDisplay    = '';
+
+        // ── 履歴パネル ───────────────────────────────────────────
+        let historyRenderToken    = 0;
+        let historyVirtualCleanup = null;
+        let historyResizeTimer    = null;
+        let isHistoryPanelOpen    = false;
+        let renderHistoryRafId    = null;
+
+        // ── フォーカス・目隠し ────────────────────────────────────
+        let isEyeHideEnabled = false;
+        let eyeHideTimeout   = null;
+        let focusIdleTimer   = null;
+        let isFocusDimmed    = false;
+
+        // ── フィルター表示フラグ ──────────────────────────────────
+        let showFavsOnly   = false;
         let showHiddenOnly = false;
+
 
         let skipList = (function(){ try { return JSON.parse(localStorage.getItem('croquis_skips') || '[]'); } catch(_){ return []; } })();
         let skipNameSet = new Set(skipList);
@@ -599,22 +662,102 @@
         const iconMuteSVG = `<svg viewBox="0 0 24 24" class="svg-icon"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>`;
 
         const ui = {
-            img: document.getElementById('main-image'), timer: document.getElementById('timer-label'),
-            prog: document.getElementById('progress-bar'), playBtn: document.getElementById('play-btn'),
-            grid: document.getElementById('grid-overlay'), sound: document.getElementById('sound-player'),
-            phase: document.getElementById('phase-label'), hmBtn: document.getElementById('hm-btn'),
-            btnHmShow: document.getElementById('btn-hm-show'), btnHmHide: document.getElementById('btn-hm-hide'),
-            muteBtn: document.getElementById('mute-btn'), pipBtn: document.getElementById('pip-btn'),
-            favIcon: document.getElementById('fav-icon-large'), managePopup: document.getElementById('manage-popup'),
-            eyeBtn: document.getElementById('eye-btn'),
-            hmMini: document.getElementById('hm-step-mini'),
-            historyPanel: document.getElementById('history-panel'),
-            historyContent: document.getElementById('history-content'),
+            // ── コア要素 ──────────────────────────────────────────
+            img:              document.getElementById('main-image'),
+            timer:            document.getElementById('timer-label'),
+            prog:             document.getElementById('progress-bar'),
+            playBtn:          document.getElementById('play-btn'),
+            grid:             document.getElementById('grid-overlay'),
+            sound:            document.getElementById('sound-player'),
+            phase:            document.getElementById('phase-label'),
+            hmBtn:            document.getElementById('hm-btn'),
+            btnHmShow:        document.getElementById('btn-hm-show'),
+            btnHmHide:        document.getElementById('btn-hm-hide'),
+            muteBtn:          document.getElementById('mute-btn'),
+            pipBtn:           document.getElementById('pip-btn'),
+            favIcon:          document.getElementById('fav-icon-large'),
+            managePopup:      document.getElementById('manage-popup'),
+            eyeBtn:           document.getElementById('eye-btn'),
+            hmMini:           document.getElementById('hm-step-mini'),
+            historyPanel:     document.getElementById('history-panel'),
+            historyContent:   document.getElementById('history-content'),
             historyFilterBtn: document.getElementById('history-filter-btn'),
-            imageCounter: document.getElementById('image-counter'),
-            timeSelect: document.getElementById('time-select'),
-            bottomPanel: document.getElementById('bottom-panel')
+            imageCounter:     document.getElementById('image-counter'),
+            timeSelect:       document.getElementById('time-select'),
+            bottomPanel:      document.getElementById('bottom-panel'),
+            // ── 設定パネル要素 ────────────────────────────────────
+            bwBtn:            document.getElementById('bw-btn'),
+            bwBarWrap:        document.getElementById('bw-bar-wrap'),
+            breakToggle:      document.getElementById('break-reminder-toggle'),
+            eyeHideSel:       document.getElementById('eye-hide-delay-select'),
+            focusIdleSel:     document.getElementById('focus-idle-delay-select'),
+            breakIntSel:      document.getElementById('break-interval-select'),
+            breakDurSel:      document.getElementById('break-duration-select'),
+            flashSel:         document.getElementById('flash-intensity-select'),
+            progSel:          document.getElementById('progress-size-select'),
+            soundVolSel:      document.getElementById('sound-volume-select'),
+            bwSlider:         document.getElementById('bw-contrast-slider'),
+            bwContrastVal:    document.getElementById('bw-contrast-val'),
+            bwBarSlider:      document.getElementById('bw-bar-slider'),
+            bwBarVal:         document.getElementById('bw-bar-val'),
+            settingsPanel:    document.getElementById('settings-panel'),
+            settingsOverlay:  document.getElementById('settings-overlay'),
+            // ── 操作ボタン ────────────────────────────────────────
+            rfBtn:            document.getElementById('randomFlip-btn'),
+            flipHBtn:         document.getElementById('flipH-btn'),
+            flipVBtn:         document.getElementById('flipV-btn'),
+            shuffleBtn:       document.getElementById('shuffle-btn'),
+            gridBtn:          document.getElementById('grid-btn'),
+            monoBtn:          document.getElementById('mono-btn'),
+            prevBtn:          document.getElementById('prev-btn'),
+            nextBtn:          document.getElementById('next-btn'),
+            folderInput:      document.getElementById('folder-input'),
+            fileInput:        document.getElementById('file-input'),
+            // ── 休憩・オーバーレイ ────────────────────────────────
+            breakOverlay:     document.getElementById('break-overlay'),
+            breakCorner:      document.getElementById('break-corner'),
+            breakCountdown:   document.getElementById('break-countdown'),
+            breakCornerCount: document.getElementById('break-corner-count'),
+            // ── レイアウト要素 ────────────────────────────────────
+            imgContainer:     document.getElementById('image-container'),
+            canvasArea:       document.getElementById('canvas-area'),
         };
+        // settings.key → button要素 のマッピング（toggle()で使用）
+        const uiBtnMap = {
+            shuffle: ui.shuffleBtn,
+            flipH:   ui.flipHBtn,
+            flipV:   ui.flipVBtn,
+            grid:    ui.gridBtn,
+            mono:    ui.monoBtn,
+        };
+        /**
+         * 要素の active クラスを真偽値で一括制御する
+         * @param {Element|null} el
+         * @param {boolean} on
+         */
+        function setActive(el, on) {
+            if (!el) return;
+            if (on) el.classList.add('active');
+            else    el.classList.remove('active');
+        }
+
+        /**
+         * 要素の display を切り替える
+         * @param {Element|null} el
+         * @param {boolean} visible
+         * @param {string} [displayValue='block']
+         */
+        function setVisible(el, visible, displayValue) {
+            if (!el) return;
+            el.style.display = visible ? (displayValue || 'block') : 'none';
+        }
+
+        /** ランダム反転 ON 時に個別反転ボタンを無効化する */
+        function setFlipDisabled(disabled) {
+            ui.flipHBtn.classList.toggle('flip-disabled', disabled);
+            ui.flipVBtn.classList.toggle('flip-disabled', disabled);
+        }
+
         function updateHmMini() {
             if (!hmActive) { ui.hmMini.innerText = ''; return; }
             const active = hmPhase || 1;
@@ -659,8 +802,13 @@
             skipSaveTimer = setTimeout(function() {
                 try { localStorage.setItem('croquis_skips', JSON.stringify(skipList)); } catch(_) {}
                 skipSaveTimer = null;
-            }, 120);
+            }, TIMING.SAVE_DEBOUNCE_MS);
         }
+        /** skipList を localStorage に即時保存（beforeunload用） */
+        function flushSkipList() {
+            try { localStorage.setItem('croquis_skips', JSON.stringify(skipList)); } catch(_) {}
+        }
+
         function rebuildFavNameSet() { favNameSet = new Set(dbFavImages.map(function(f){ return f.name; })); }
         function rebuildSkipNameSet() { skipNameSet = new Set(skipList); }
         function hasUnskippedInCurrentPool() {
@@ -694,7 +842,7 @@
             let safe = 0;
             if (isStandalone && isIOS && innerH > 0 && vvH > 0) {
                 safe = Math.max(0, Math.round(innerH - vvH));
-                if (safe > 40) safe = 0;
+                if (safe > TIMING.SAFE_INSET_MAX_PX) safe = 0;
             }
             document.documentElement.style.setProperty('--bottom-safe', safe + 'px');
         }
@@ -723,7 +871,7 @@
             saveTimer = setTimeout(function() {
                 flushUiSettings();
                 saveTimer = null;
-            }, 120);
+            }, TIMING.SAVE_DEBOUNCE_MS);
         }
 
         function loadUiSettings() {
@@ -749,11 +897,11 @@
                 if (saved && typeof saved.focusIdleDelay === 'number') focusIdleDelay = saved.focusIdleDelay;
                 if (saved && typeof saved.breakIntervalMin === 'number') breakIntervalMin = saved.breakIntervalMin;
                 if (saved && typeof saved.breakDurationSec === 'number') breakDurationSec = saved.breakDurationSec;
-                if (saved && typeof saved.bwContrast === 'number') bwContrast = Math.max(1, Math.min(20, saved.bwContrast));
+                if (saved && typeof saved.bwContrast === 'number') bwContrast = Math.max(TIMING.BW_CONTRAST_MIN, Math.min(TIMING.BW_CONTRAST_MAX, saved.bwContrast));
                 if (saved && typeof saved.flashIntensity === 'number') flashIntensity = saved.flashIntensity;
                 if (saved && typeof saved.progressBarSize === 'number') progressBarSize = saved.progressBarSize;
                 if (saved && typeof saved.soundVolume === 'number') {
-                    soundVolume = Math.max(0, Math.min(2, saved.soundVolume));
+                    soundVolume = Math.max(0, Math.min(TIMING.VOLUME_MAX, saved.soundVolume));
                     isMuted = (soundVolume === 0);
                 } else if (saved && typeof saved.isMuted === 'boolean') {
                     // 旧データ互換: isMutedだけ保存されていた場合
@@ -765,52 +913,28 @@
 
         function reflectUiSettings() {
             ['shuffle', 'flipH', 'flipV', 'grid', 'mono'].forEach(function(k) {
-                const btn = document.getElementById(k + '-btn');
-                if (!btn) return;
-                if (settings[k]) btn.classList.add('active');
-                else btn.classList.remove('active');
+                setActive(uiBtnMap[k], !!settings[k]);
             });
             if (settings.bw) {
-                const b = document.getElementById('bw-btn'); if(b) b.classList.add('active');
-                const bbar = document.getElementById('bw-bar-wrap'); if(bbar) bbar.classList.add('visible');
+                setActive(ui.bwBtn, true);
+                if (ui.bwBarWrap) ui.bwBarWrap.classList.add('visible');
             }
-            const breakToggle = document.getElementById('break-reminder-toggle');
-            if (breakToggle) breakToggle.checked = breakReminderEnabled;
-            const eyeSel = document.getElementById('eye-hide-delay-select');
-            if (eyeSel) eyeSel.value = eyeHideDelay;
-            const focusSel = document.getElementById('focus-idle-delay-select');
-            if (focusSel) focusSel.value = focusIdleDelay;
-            const brkIntSel = document.getElementById('break-interval-select');
-            if (brkIntSel) brkIntSel.value = breakIntervalMin;
-            const brkDurSel = document.getElementById('break-duration-select');
-            if (brkDurSel) brkDurSel.value = breakDurationSec;
-            const flashSel = document.getElementById('flash-intensity-select');
-            if (flashSel) flashSel.value = flashIntensity;
-            const progSel = document.getElementById('progress-size-select');
-            if (progSel) { progSel.value = progressBarSize; onProgressSizeChange(progressBarSize); }
-            const sndSel = document.getElementById('sound-volume-select');
-            if (sndSel) sndSel.value = soundVolume;
-            const bwSlider = document.getElementById('bw-contrast-slider');
-            if (bwSlider) { bwSlider.value = bwContrast; }
-            const bwVal = document.getElementById('bw-contrast-val');
-            if (bwVal) bwVal.textContent = bwContrast;
-            const bwBarSlider = document.getElementById('bw-bar-slider');
-            if (bwBarSlider) bwBarSlider.value = bwContrast;
-            const bwBarVal = document.getElementById('bw-bar-val');
-            if (bwBarVal) bwBarVal.textContent = bwContrast;
-            if (isEyeHideEnabled) ui.eyeBtn.classList.add('active');
-            else ui.eyeBtn.classList.remove('active');
-            const rfBtn = document.getElementById('randomFlip-btn');
-            if (rfBtn) {
-                if (randomFlipEnabled) {
-                    rfBtn.classList.add('active');
-                    document.getElementById('flipH-btn').classList.add('flip-disabled');
-                    document.getElementById('flipV-btn').classList.add('flip-disabled');
-                } else {
-                    rfBtn.classList.remove('active');
-                    document.getElementById('flipH-btn').classList.remove('flip-disabled');
-                    document.getElementById('flipV-btn').classList.remove('flip-disabled');
-                }
+            if (ui.breakToggle) ui.breakToggle.checked = breakReminderEnabled;
+            if (ui.eyeHideSel) ui.eyeHideSel.value = eyeHideDelay;
+            if (ui.focusIdleSel) ui.focusIdleSel.value = focusIdleDelay;
+            if (ui.breakIntSel) ui.breakIntSel.value = breakIntervalMin;
+            if (ui.breakDurSel) ui.breakDurSel.value = breakDurationSec;
+            if (ui.flashSel) ui.flashSel.value = flashIntensity;
+            if (ui.progSel) { ui.progSel.value = progressBarSize; onProgressSizeChange(progressBarSize); }
+            if (ui.soundVolSel) ui.soundVolSel.value = soundVolume;
+            if (ui.bwSlider) ui.bwSlider.value = bwContrast;
+            if (ui.bwContrastVal) ui.bwContrastVal.textContent = bwContrast;
+            if (ui.bwBarSlider) ui.bwBarSlider.value = bwContrast;
+            if (ui.bwBarVal) ui.bwBarVal.textContent = bwContrast;
+            setActive(ui.eyeBtn, !!isEyeHideEnabled);
+            if (ui.rfBtn) {
+                setActive(ui.rfBtn, randomFlipEnabled);
+                setFlipDisabled(randomFlipEnabled);
             }
             ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG;
             document.documentElement.style.setProperty('--bg-color', bgColors[bgMode]);
@@ -818,17 +942,23 @@
 
         window.onload = async function() {
             loadUiSettings();
-            checkDevice(); await initDB(); dbFavImages = await getAllFavsFromDB(); rebuildFavNameSet(); initMediaSession();
+            checkDevice();
+            await initDB();
+            dbFavImages = await getAllFavsFromDB();
+            rebuildFavNameSet();
+            initMediaSession();
             reflectUiSettings();
             syncAppHeight();
             document.addEventListener('visibilitychange', handleVisibilityChange);
             window.addEventListener('resize', syncAppHeight, { passive: true });
             window.addEventListener('orientationchange', function() {
                 syncAppHeight();
-                setTimeout(syncAppHeight, 100);
-                setTimeout(syncAppHeight, 300);
+                setTimeout(syncAppHeight, TIMING.RESIZE_DEBOUNCE_MS);
+                setTimeout(syncAppHeight, TIMING.ORIENTATION_DELAY_MS);
             }, { passive: true });
-            if (window.visualViewport) window.visualViewport.addEventListener('resize', syncAppHeight, { passive: true });
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', syncAppHeight, { passive: true });
+            }
             armFocusIdleTimer();
         };
 
@@ -904,8 +1034,8 @@
                 // 休憩中なら中断（タイマー再開はしない）
                 if (breakCountdownTimer) {
                     clearInterval(breakCountdownTimer); breakCountdownTimer = null;
-                    document.getElementById('break-overlay').classList.remove('active');
-                    document.getElementById('break-corner').classList.remove('active');
+                    setActive(ui.breakOverlay, false);
+                    setActive(ui.breakCorner, false);
                     if (bottomPanelWasHidden) {
                         ui.bottomPanel.classList.add('hidden');
                         bottomPanelWasHidden = false;
@@ -940,25 +1070,25 @@
         }
 
         function startFullBreak() {
-            document.getElementById('break-overlay').classList.add('active');
+            setActive(ui.breakOverlay, true);
             breakSeconds = breakDurationSec;
-            document.getElementById('break-countdown').textContent = breakSeconds;
+            ui.breakCountdown.textContent = breakSeconds;
             clearInterval(breakCountdownTimer);
             breakCountdownTimer = setInterval(function() {
                 breakSeconds--;
-                document.getElementById('break-countdown').textContent = breakSeconds;
+                ui.breakCountdown.textContent = breakSeconds;
                 if (breakSeconds <= 0) endBreak();
             }, 1000);
         }
 
         function startCornerBreak() {
-            document.getElementById('break-corner').classList.add('active');
+            setActive(ui.breakCorner, true);
             breakSeconds = breakDurationSec;
-            document.getElementById('break-corner-count').textContent = breakSeconds;
+            ui.breakCornerCount.textContent = breakSeconds;
             clearInterval(breakCountdownTimer);
             breakCountdownTimer = setInterval(function() {
                 breakSeconds--;
-                document.getElementById('break-corner-count').textContent = breakSeconds;
+                ui.breakCornerCount.textContent = breakSeconds;
                 if (breakSeconds <= 0) endCornerBreak();
             }, 1000);
         }
@@ -976,25 +1106,25 @@
         }
 
         function endBreak() {
-            document.getElementById('break-overlay').classList.remove('active');
-            document.getElementById('break-corner').classList.remove('active');
+            setActive(ui.breakOverlay, false);
+            setActive(ui.breakCorner, false);
             _finishBreak();
         }
 
         function endCornerBreak() {
-            document.getElementById('break-corner').classList.remove('active');
+            setActive(ui.breakCorner, false);
             _finishBreak();
         }
 
         function onBwContrastChange(val) {
             bwContrast = val;
-            const sl = document.getElementById('bw-contrast-slider');
+            const sl = ui.bwSlider;
             if (sl) sl.value = val;
-            const lbl = document.getElementById('bw-contrast-val');
+            const lbl = ui.bwContrastVal;
             if (lbl) lbl.textContent = val;
-            const bsl = document.getElementById('bw-bar-slider');
+            const bsl = ui.bwBarSlider;
             if (bsl) bsl.value = val;
-            const bval = document.getElementById('bw-bar-val');
+            const bval = ui.bwBarVal;
             if (bval) bval.textContent = val;
             if (settings.bw) applyFiltersDeferred();
             saveUiSettings();
@@ -1028,8 +1158,8 @@
         }
 
         function toggleSettingsPanel() {
-            const panel = document.getElementById('settings-panel');
-            const overlay = document.getElementById('settings-overlay');
+            const panel = ui.settingsPanel;
+            const overlay = ui.settingsOverlay;
             const isOpen = panel.classList.contains('open');
             if (isOpen) {
                 panel.classList.remove('open');
@@ -1059,20 +1189,10 @@
             setFocusDimmed(false);
             if (focusIdleDelay === 0) return;
             // 設定パネルが開いている間はidle-dimしない
-            if (document.getElementById('settings-panel').classList.contains('open')) return;
+            if (ui.settingsPanel.classList.contains('open')) return;
             focusIdleTimer = setTimeout(function() { setFocusDimmed(true); }, focusIdleDelay * 1000);
         }
 
-        // #image-containerのpaddingをキャッシュ（変わらないため）
-        let _gridPadL = null, _gridPadT = null, _gridPadR = null, _gridPadB = null;
-        function getContainerPadding() {
-            if (_gridPadL !== null) return;
-            const s = window.getComputedStyle(imgContainer);
-            _gridPadL = parseFloat(s.paddingLeft)   || 0;
-            _gridPadR = parseFloat(s.paddingRight)  || 0;
-            _gridPadT = parseFloat(s.paddingTop)    || 0;
-            _gridPadB = parseFloat(s.paddingBottom) || 0;
-        }
 
         function applyLoadedFiles(files) {
             if (files.length > 0) { 
@@ -1160,19 +1280,24 @@
             }
             return out;
         }
-        document.getElementById('folder-input').addEventListener('change', handleFiles);
-        document.getElementById('file-input').addEventListener('change', handleFiles);
-        const dropArea = document.getElementById('image-container');
-        dropArea.addEventListener('dragover', function(e) { e.preventDefault(); dropArea.classList.add('drag-over'); }, { passive: false });
-        dropArea.addEventListener('dragleave', function(e) { if (!dropArea.contains(e.relatedTarget)) dropArea.classList.remove('drag-over'); }, { passive: true });
-        dropArea.addEventListener('drop', async function(e) {
+        ui.folderInput.addEventListener('change', handleFiles);
+        ui.fileInput.addEventListener('change', handleFiles);
+        ui.imgContainer.addEventListener('dragover', function(e) { e.preventDefault(); ui.imgContainer.classList.add('drag-over'); }, { passive: false });
+        ui.imgContainer.addEventListener('dragleave', function(e) { if (!ui.imgContainer.contains(e.relatedTarget)) ui.imgContainer.classList.remove('drag-over'); }, { passive: true });
+        ui.imgContainer.addEventListener('drop', async function(e) {
             e.preventDefault();
-            dropArea.classList.remove('drag-over');
+            ui.imgContainer.classList.remove('drag-over');
             const files = await getDroppedImageFiles(e.dataTransfer);
             applyLoadedFiles(files);
         }, { passive: false });
 
-        function shuffleArray(arr) { for(let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const temp = arr[i]; arr[i] = arr[j]; arr[j] = temp; } }
+        /** Fisher-Yates シャッフル（in-place） */
+        function shuffleArray(arr) {
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                const temp = arr[i]; arr[i] = arr[j]; arr[j] = temp;
+            }
+        }
 
         function getNextIndexForPreload() {
             if (!images.length) return -1;
@@ -1180,7 +1305,7 @@
                 if (images.length === 1) return 0;
                 let idx, guard = 0;
                 do { idx = Math.floor(Math.random() * images.length); guard++; }
-                while (idx === currentIndex && guard < 16);
+                while (idx === currentIndex && guard < TIMING.EYE_HIDE_PRELOAD_MAX);
                 return idx;
             }
             return (currentIndex + 1) % images.length;
@@ -1193,20 +1318,48 @@
             preloadUrl2 = null; preloadName2 = ''; preloadedImage2 = null;
         }
 
+        /**
+         * 指定アイテムをプリロードする。既に同じURLをロード済みなら何もしない。
+         * @param {File} item        対象画像ファイル
+         * @param {string} slotName  'preload' | 'preload2'
+         */
+        function _loadPreloadSlot(item, slotName) {
+            const isSlot1 = (slotName === 'preload');
+            const curUrl  = isSlot1 ? preloadUrl  : preloadUrl2;
+            const curName = isSlot1 ? preloadName : preloadName2;
+            const newName = item.name || '';
+            if (curName === newName && curUrl) return; // 既にロード済み
+            if (curUrl && curUrl.startsWith('blob:')) URL.revokeObjectURL(curUrl);
+            const url = item.data ? item.data : URL.createObjectURL(item);
+            const img = new Image();
+            img.onload  = function() {
+                if (img.decode) img.decode().catch(function(){});
+                if (isSlot1) preloadedImage  = img;
+                else         preloadedImage2 = img;
+            };
+            img.onerror = function() {
+                if (isSlot1) preloadedImage  = null;
+                else         preloadedImage2 = null;
+            };
+            img.src = url;
+            if (isSlot1) { preloadUrl  = url; preloadName  = newName; preloadedImage  = null; }
+            else         { preloadUrl2 = url; preloadName2 = newName; preloadedImage2 = null; }
+        }
+
         function updatePreloadQueue() {
             if (images.length === 0) return;
             const firstIdx = getNextIndexForPreload();
             if (firstIdx < 0 || !images[firstIdx]) return;
-            const firstItem = images[firstIdx];
-            const firstName = firstItem.name || '';
 
-            // 両スロットが既に同じ画像をプリロード済みなら早期リターン
+            _loadPreloadSlot(images[firstIdx], 'preload');
+
+            // 2枚目スロット
             let secondIdx = -1;
             if (images.length > 1) {
                 if (settings.shuffle) {
                     let guard = 0;
                     secondIdx = Math.floor(Math.random() * images.length);
-                    while ((secondIdx === firstIdx || secondIdx === currentIndex) && guard < 16) {
+                    while ((secondIdx === firstIdx || secondIdx === currentIndex) && guard < TIMING.EYE_HIDE_PRELOAD_MAX) {
                         secondIdx = Math.floor(Math.random() * images.length);
                         guard++;
                     }
@@ -1215,37 +1368,10 @@
                 }
             }
 
-            if (!(preloadName === firstName && preloadUrl)) {
-                if (preloadUrl && preloadUrl.startsWith('blob:')) URL.revokeObjectURL(preloadUrl);
-                preloadName = firstName;
-                preloadedImage = null;
-                preloadUrl = firstItem.data ? firstItem.data : URL.createObjectURL(firstItem);
-                const img1 = new Image();
-                img1.onload = function() {
-                    preloadedImage = img1;
-                    if (img1.decode) img1.decode().catch(function(){});
-                };
-                img1.onerror = function() { preloadedImage = null; };
-                img1.src = preloadUrl;
-            }
-
             if (secondIdx >= 0 && images[secondIdx]) {
-                const secondItem = images[secondIdx];
-                const secondName = secondItem.name || '';
-                if (!(preloadName2 === secondName && preloadUrl2)) {
-                    if (preloadUrl2 && preloadUrl2.startsWith('blob:')) URL.revokeObjectURL(preloadUrl2);
-                    preloadName2 = secondName;
-                    preloadedImage2 = null;
-                    preloadUrl2 = secondItem.data ? secondItem.data : URL.createObjectURL(secondItem);
-                    const img2 = new Image();
-                    img2.onload = function() {
-                        preloadedImage2 = img2;
-                        if (img2.decode) img2.decode().catch(function(){});
-                    };
-                    img2.onerror = function() { preloadedImage2 = null; };
-                    img2.src = preloadUrl2;
-                }
+                _loadPreloadSlot(images[secondIdx], 'preload2');
             } else {
+                // 2枚目不要：解放
                 if (preloadUrl2 && preloadUrl2.startsWith('blob:')) URL.revokeObjectURL(preloadUrl2);
                 preloadUrl2 = null; preloadName2 = ''; preloadedImage2 = null;
             }
@@ -1278,34 +1404,45 @@
             const isFav = isFavMode ? true : favNameSet.has(item.name);
             ui.favIcon.style.display = isFav ? 'block' : 'none';
 
+            /** 画像デコード完了後の共通処理 */
+            function onImageReady() {
+                if (loadToken !== imageLoadToken) return;
+                ui.img.style.display = 'block';
+                applyFilters();
+                clearTimeout(eyeHideTimeout);
+                if (isEyeHideEnabled && !hmActive) {
+                    eyeHideTimeout = setTimeout(function() {
+                        isImageHidden = true; applyFilters();
+                    }, eyeHideDelay * 1000);
+                }
+                if (pendingTimerStart) {
+                    pendingTimerStart = false;
+                    timerTickLoop();
+                    if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
+                }
+                requestAnimationFrame(function(){ updateGridOverlay(); });
+            }
+
+            /** 画像読み込みエラー時の共通処理 */
+            function onImageError() {
+                if (loadToken !== imageLoadToken) return;
+                pendingTimerStart = false;
+                if (images.length > 1) nextImage();
+            }
+
             ui.img.onload = null;
             ui.img.onerror = null;
             if (!supportsImageDecode) {
                 // decode非対応ブラウザのみonload/onerrorを使う
-                ui.img.onload = function() {
-                    if (loadToken !== imageLoadToken) return;
-                    ui.img.style.display = 'block';
-                    applyFilters(); clearTimeout(eyeHideTimeout);
-                    if (isEyeHideEnabled && !hmActive) { eyeHideTimeout = setTimeout(function() { isImageHidden = true; applyFilters(); }, eyeHideDelay * 1000); }
-                    if (pendingTimerStart) {
-                        pendingTimerStart = false;
-                        timerTickLoop();
-                        if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
-                    }
-                    requestAnimationFrame(function(){ updateGridOverlay(); });
-                };
-                ui.img.onerror = function() {
-                    if (loadToken !== imageLoadToken) return;
-                    pendingTimerStart = false;
-                    if (images.length > 1) nextImage();
-                };
+                ui.img.onload  = onImageReady;
+                ui.img.onerror = onImageError;
             }
 
             let newUrl;
             if (item.data) {
                 newUrl = item.data;
             } else if (preloadName === item.name && preloadUrl) {
-                // deocde完了前でもURLを流用（createObjectURL節約）
+                // decode完了前でもURLを流用（createObjectURL節約）
                 newUrl = preloadUrl; preloadUrl = null; preloadedImage = null; preloadName = '';
             } else if (preloadName2 === item.name && preloadUrl2) {
                 newUrl = preloadUrl2; preloadUrl2 = null; preloadedImage2 = null; preloadName2 = '';
@@ -1318,27 +1455,10 @@
             }
             currentImageUrl = newUrl;
 
-            // decodeが使える環境では、デコード完了後に表示＆タイマー開始
             if (supportsImageDecode) {
+                // decodeが使える環境では、デコード完了後に表示＆タイマー開始
                 ui.img.src = currentImageUrl;
-                ui.img.decode().then(function() {
-                    if (loadToken !== imageLoadToken) return;
-                    ui.img.style.display = 'block';
-                    applyFilters(); clearTimeout(eyeHideTimeout);
-                    if (isEyeHideEnabled && !hmActive) { eyeHideTimeout = setTimeout(function() { isImageHidden = true; applyFilters(); }, eyeHideDelay * 1000); }
-                    if (pendingTimerStart) {
-                        pendingTimerStart = false;
-                        timerTickLoop();
-                        if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
-                    }
-                    // グリッドをレイアウト確定後に再計算
-                    requestAnimationFrame(function(){ updateGridOverlay(); });
-                }).catch(function() {
-                    // decodeが失敗した場合はonloadに任せる
-                    if (loadToken !== imageLoadToken) return;
-                    pendingTimerStart = false;
-                    if (images.length > 1) nextImage();
-                });
+                ui.img.decode().then(onImageReady).catch(onImageError);
             } else {
                 // decode非対応ブラウザはonloadで処理（従来の動作）
                 ui.img.src = currentImageUrl;
@@ -1388,7 +1508,7 @@
                 if (lastGridDisplay !== 'none') { ui.grid.style.display = 'none'; lastGridDisplay = 'none'; }
                 return;
             }
-            const canvasArea = document.getElementById('canvas-area');
+            const canvasArea = ui.canvasArea;
             const cs = window.getComputedStyle(canvasArea);
             const padL = parseFloat(cs.paddingLeft)  || 0;
             const padR = parseFloat(cs.paddingRight) || 0;
@@ -1416,21 +1536,20 @@
 
         // canvas-area のリサイズを監視して自動更新
         (function() {
-            const canvasArea = document.getElementById('canvas-area');
+            const canvasArea = ui.canvasArea;
             if (typeof ResizeObserver !== 'undefined') {
                 new ResizeObserver(function() { updateGridOverlay(); }).observe(canvasArea);
             }
         })();
 
-        window.addEventListener('resize', function() { clearTimeout(resizeTimer); resizeTimer = setTimeout(applyFiltersDeferred, 100); });
+        window.addEventListener('resize', function() { clearTimeout(resizeTimer); resizeTimer = setTimeout(applyFiltersDeferred, TIMING.RESIZE_DEBOUNCE_MS); });
         
         function toggle(key) { 
-            settings[key] = !settings[key]; const btn = document.getElementById(key + '-btn');
-            if(btn) { if(settings[key]) { btn.classList.add("active"); } else { btn.classList.remove("active"); } }
+            settings[key] = !settings[key]; const btn = uiBtnMap[key];
+            setActive(btn, !!settings[key]);
             if (key === 'mono' && settings.mono && settings.bw) {
                 settings.bw = false;
-                const bwBtn = document.getElementById('bw-btn');
-                if (bwBtn) bwBtn.classList.remove('active');
+                setActive(ui.bwBtn, false);
             }
             if (key === 'shuffle') {
                 const currentItem = images[currentIndex];
@@ -1454,20 +1573,18 @@
 
         function toggleRandomFlip() {
             randomFlipEnabled = !randomFlipEnabled;
-            const btn = document.getElementById('randomFlip-btn');
+            const btn = ui.rfBtn;
             if (randomFlipEnabled) {
-                btn.classList.add('active');
+                setActive(btn, true);
                 // ランダム反転ON時は手動flipボタンを非活性化
-                document.getElementById('flipH-btn').classList.add('flip-disabled');
-                document.getElementById('flipV-btn').classList.add('flip-disabled');
+                setFlipDisabled(true);
             } else {
-                btn.classList.remove('active');
-                document.getElementById('flipH-btn').classList.remove('flip-disabled');
-                document.getElementById('flipV-btn').classList.remove('flip-disabled');
+                setActive(btn, false);
+                setFlipDisabled(false);
                 // OFF時は反転をリセット
                 settings.flipH = false; settings.flipV = false;
-                const hBtn = document.getElementById('flipH-btn'); if(hBtn) hBtn.classList.remove('active');
-                const vBtn = document.getElementById('flipV-btn'); if(vBtn) vBtn.classList.remove('active');
+                const hBtn = ui.flipHBtn; if(hBtn) setActive(hBtn, false);
+                const vBtn = ui.flipVBtn; if(vBtn) setActive(vBtn, false);
                 applyFiltersDeferred();
             }
             saveUiSettings();
@@ -1475,18 +1592,18 @@
 
         function toggleBW() {
             settings.bw = !settings.bw;
-            const bwBtn = document.getElementById('bw-btn');
-            const bwBar = document.getElementById('bw-bar-wrap');
+            const bwBtn = ui.bwBtn;
+            const bwBar = ui.bwBarWrap;
             if (settings.bw) {
-                bwBtn.classList.add('active');
+                setActive(bwBtn, true);
                 if (settings.mono) {
                     settings.mono = false;
-                    const monoBtn = document.getElementById('mono-btn');
+                    const monoBtn = ui.monoBtn;
                     if (monoBtn) monoBtn.classList.remove('active');
                 }
                 if (bwBar) bwBar.classList.add('visible');
             } else {
-                bwBtn.classList.remove('active');
+                setActive(bwBtn, false);
                 if (bwBar) bwBar.classList.remove('visible');
             }
             applyFiltersDeferred();
@@ -1496,9 +1613,9 @@
         function toggleEyeHide() {
             isEyeHideEnabled = !isEyeHideEnabled;
             if (isEyeHideEnabled) {
-                ui.eyeBtn.classList.add("active");
+                setActive(ui.eyeBtn, true);
             } else {
-                ui.eyeBtn.classList.remove("active");
+                setActive(ui.eyeBtn, false);
                 clearTimeout(eyeHideTimeout);
                 isImageHidden = false;
                 applyFiltersDeferred();
@@ -1777,7 +1894,6 @@
             };
         }
 
-        let renderHistoryRafId = 0;
         function renderHistoryThumbs() {
             if (renderHistoryRafId) cancelAnimationFrame(renderHistoryRafId);
             renderHistoryRafId = requestAnimationFrame(function() {
@@ -1851,21 +1967,29 @@
                     return thumbDiv;
                 });
             } else {
-                const currentPool = isFavMode ? dbFavImages : sourceImages; const start = Math.max(0, historyList.length - 100);
+                const currentPool = isFavMode ? dbFavImages : sourceImages;
+                const start = Math.max(0, historyList.length - 100);
                 const entries = [];
                 for (let i = historyList.length - 1; i >= start; i--) {
-                    const imgIndex = historyList[i]; const item = currentPool[imgIndex];
-                    if(item) entries.push({ historyIndex: i, item: item });
+                    const imgIndex = historyList[i];
+                    const item = currentPool[imgIndex];
+                    if (item) entries.push({ historyIndex: i, item: item });
                 }
-                if(entries.length === 0) { content.innerHTML = '<div style="grid-column:span 2; text-align:center; color:#666; font-size:0.8rem; padding:20px 0;">履歴がありません</div>'; return; }
+                if (entries.length === 0) {
+                    content.innerHTML = '<div style="grid-column:span 2; text-align:center; color:#666; font-size:0.8rem; padding:20px 0;">履歴がありません</div>';
+                    return;
+                }
                 const thumbBlobUrlCache = new Map();
                 mountVirtualHistory(entries, function(entry) {
                     if (token !== historyRenderToken) return document.createElement('div');
-                    const i = entry.historyIndex; const item = entry.item;
-                    const thumbDiv = document.createElement('div'); thumbDiv.style.position = 'relative';
+                    const i = entry.historyIndex;
+                    const item = entry.item;
+                    const thumbDiv = document.createElement('div');
+                    thumbDiv.style.position = 'relative';
                     const imgEl = document.createElement('img');
-                    if (item.data) { imgEl.src = item.data; }
-                    else {
+                    if (item.data) {
+                        imgEl.src = item.data;
+                    } else {
                         let url = thumbBlobUrlCache.get(item);
                         if (!url) {
                             url = URL.createObjectURL(item);
@@ -1875,42 +1999,70 @@
                         imgEl.src = url;
                     }
                     imgEl.className = 'history-thumb' + (i === historyPos ? ' current' : '');
-                    imgEl.onclick = (function(idx) { return function() { historyPos = idx; currentIndex = historyList[historyPos]; if (hmActive) exitHardMode(); loadImage(); resetTimer(); if(isMobileHistory) toggleHistoryPanel(); renderHistoryThumbs(); }; })(i);
+                    imgEl.onclick = (function(idx) {
+                        return function() {
+                            historyPos   = idx;
+                            currentIndex = historyList[historyPos];
+                            if (hmActive) exitHardMode();
+                            loadImage();
+                            resetTimer();
+                            if (isMobileHistory) toggleHistoryPanel();
+                            renderHistoryThumbs();
+                        };
+                    })(i);
                     thumbDiv.appendChild(imgEl);
                     const isFav = isFavMode ? true : favNameSet.has(item.name);
-                    if(isFav) { const badge = document.createElement('div'); badge.className = 'fav-badge'; badge.innerText = '★'; thumbDiv.appendChild(badge); }
+                    if (isFav) {
+                        const badge = document.createElement('div');
+                        badge.className  = 'fav-badge';
+                        badge.innerText  = '★';
+                        thumbDiv.appendChild(badge);
+                    }
                     return thumbDiv;
                 });
             }
         }
 
-        function toggleTimer() { if(images.length > 0) isRunning ? stopTimer() : startTimer(); }
+        function toggleTimer() { if (images.length > 0) isRunning ? stopTimer() : startTimer(); }
+
         let audioPrewarmed = false;
-        function startTimer() { 
-            isRunning = true; ui.playBtn.innerHTML = iconPauseSVG; ui.playBtn.classList.remove("accent"); 
+
+        function startTimer() {
+            isRunning = true;
+            ui.playBtn.innerHTML = iconPauseSVG;
+            ui.playBtn.classList.remove('accent');
             expectedEndTime = Date.now() + (remaining * 1000);
             if (breakReminderEnabled && sessionStartTime === 0) sessionStartTime = Date.now();
-            clearTimeout(timerTickId); timerTickId = null;
+            clearTimeout(timerTickId);    timerTickId    = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
             timerTickLoop();
             if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
             updateMediaSession();
-            if(isPiP) {
-                if (pipVideo && pipVideo.paused) pipVideo.play().catch(function(){}); 
+            if (isPiP) {
+                if (pipVideo && pipVideo.paused) pipVideo.play().catch(function(){});
                 updatePiP();
             }
+            // iOS Safari 向けオーディオ事前起動（初回のみ）
             if (!isMuted && ui.sound && !audioPrewarmed) {
                 audioPrewarmed = true;
-                ui.sound.volume = 0; ui.sound.play().then(function() { ui.sound.pause(); ui.sound.currentTime = 0; ui.sound.volume = 1; }).catch(function(){});
+                ui.sound.volume = 0;
+                ui.sound.play().then(function() {
+                    ui.sound.pause();
+                    ui.sound.currentTime = 0;
+                    ui.sound.volume = 1;
+                }).catch(function(){});
             }
         }
-        function stopTimer() { 
-            isRunning = false; ui.playBtn.innerHTML = iconPlaySVG; ui.playBtn.classList.add("accent");
-            clearTimeout(timerTickId); timerTickId = null;
+
+        function stopTimer() {
+            isRunning = false;
+            ui.playBtn.innerHTML = iconPlaySVG;
+            ui.playBtn.classList.add('accent');
+            clearTimeout(timerTickId);    timerTickId    = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
             ui.timer.classList.remove('urgent');
             updateMediaSession();
-            if (isPiP) updatePiP(); 
+            if (isPiP) updatePiP();
         }
         
         // バックグラウンドでも動作するタイマー進行ループ（250ms間隔）
@@ -1933,14 +2085,13 @@
                 remaining = nextRemaining;
                 updateTimerText(remaining);
                 // 残り10秒以下でタイマー文字をハイライト
-                if (remaining <= 10) { ui.timer.classList.add('urgent'); }
-                else { ui.timer.classList.remove('urgent'); }
+                ui.timer.classList.toggle('urgent', remaining <= 10);
             }
             // PiP中かつバックグラウンドのときは残り秒が変わったときだけ再描画
             if (isPiP && document.hidden && secondChanged) {
                 pipRenderStamp = ''; updatePiP();
             }
-            timerTickId = setTimeout(timerTickLoop, 250);
+            timerTickId = setTimeout(timerTickLoop, TIMING.TICK_INTERVAL_MS);
         }
 
         // フォアグラウンド専用のなめらか描画ループ（requestAnimationFrame）
@@ -1958,7 +2109,7 @@
             if (nextWidth !== lastProgressWidth) { ui.prog.style.width = nextWidth; lastProgressWidth = nextWidth; }
             const nextColor = remaining <= 5 ? 'var(--accent-urgent)' : 'var(--accent)';
             if (nextColor !== lastProgressColor) { ui.prog.style.backgroundColor = nextColor; lastProgressColor = nextColor; }
-            if (isPiP && (now - lastPipUpdateTime > 66)) { updatePiP(); lastPipUpdateTime = now; }
+            if (isPiP && (now - lastPipUpdateTime > TIMING.PIP_MIN_INTERVAL_MS)) { updatePiP(); lastPipUpdateTime = now; }
             animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
         }
 
@@ -1966,11 +2117,10 @@
             if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; flushUiSettings(); }
             if (skipSaveTimer) {
                 clearTimeout(skipSaveTimer); skipSaveTimer = null;
-                try { localStorage.setItem('croquis_skips', JSON.stringify(skipList)); } catch(_) {}
+                flushSkipList();
             }
             clearTimeout(timerTickId); timerTickId = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
-            clearPreloadUrl();
             clearPreloadUrl();
             if (currentImageUrl && currentImageUrl.startsWith('blob:')) {
                 URL.revokeObjectURL(currentImageUrl);
@@ -2021,8 +2171,7 @@
             isMuted = !isMuted;
             soundVolume = isMuted ? 0 : 2;
             ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG;
-            const sv = document.getElementById('sound-volume-select');
-            if (sv) sv.value = soundVolume;
+            if (ui.soundVolSel) ui.soundVolSel.value = soundVolume;
             saveUiSettings();
         }
         function playSound() {
@@ -2040,7 +2189,7 @@
             if (flashIntensity === 0) return;
             const alpha = FLASH_ALPHA_MAP[flashIntensity];
             const blur  = FLASH_BLUR_MAP[flashIntensity];
-            const el = imgContainer;
+            const el = ui.imgContainer;
             if (!el) return;
             el.style.setProperty('--flash-alpha', alpha);
             el.style.setProperty('--flash-blur', blur + 'px');
@@ -2077,7 +2226,7 @@
         function animatePipFlash() {
             if (!isPiP || !pipCanvas || !pipCtx || documentPipWindow) return;
             const elapsed = Date.now() - pipFlashStartTime;
-            const duration = 700;
+            const duration = TIMING.FLASH_DURATION_MS;
             if (elapsed >= duration) {
                 pipRenderStamp = '';
                 updatePiP();
@@ -2115,32 +2264,61 @@
         }
         
         function toggleHardMode() { hmActive ? exitHardMode() : startHardMode(); }
-        function startHardMode() { 
-            if(images.length === 0) return; 
-            hmActive = true; ui.hmBtn.classList.add("active");
+        function startHardMode() {
+            if (images.length === 0) return;
+            hmActive = true;
+            setActive(ui.hmBtn, true);
             setHmPhase(1);
             startTimer();
             updateHmMini();
         }
-        function exitHardMode() { 
-            hmActive = false; ui.hmBtn.classList.remove("active"); ui.phase.innerText = ""; 
-            isImageHidden = false; ui.btnHmShow.style.display = 'none'; ui.btnHmHide.style.display = 'none'; 
-            updateHmMini(); applyFilters();
+        function exitHardMode() {
+            hmActive = false;
+            setActive(ui.hmBtn, false);
+            ui.phase.innerText = '';
+            isImageHidden = false;
+            setVisible(ui.btnHmShow, false);
+            setVisible(ui.btnHmHide, false);
+            updateHmMini();
+            applyFilters();
             stopTimer();
             remaining = timerSeconds;
             updateTimerText(remaining);
             ui.prog.style.width = '100%'; lastProgressWidth = '100%';
-            if (lastProgressColor !== 'var(--accent)') { ui.prog.style.backgroundColor = 'var(--accent)'; lastProgressColor = 'var(--accent)'; }
+            if (lastProgressColor !== 'var(--accent)') {
+                ui.prog.style.backgroundColor = 'var(--accent)';
+                lastProgressColor = 'var(--accent)';
+            }
             if (isPiP) updatePiP();
         }
-        function setHmPhase(p) { hmPhase = p; ui.phase.innerText = hmPhases[p].t; remaining = hmPhases[p].s; isImageHidden = hmPhases[p].h; updateHmMini(); applyFilters(); playSound(); resetTimer(); }
-        function hmNextPhase() { if(hmPhase < 4) { setHmPhase(hmPhase + 1); } else { stopTimer(); ui.phase.innerText = "完了"; ui.btnHmShow.style.display = 'block'; ui.btnHmHide.style.display = 'block'; playSound(); } }
+        function setHmPhase(p) {
+            hmPhase = p;
+            ui.phase.innerText = hmPhases[p].t;
+            remaining     = hmPhases[p].s;
+            isImageHidden = hmPhases[p].h;
+            updateHmMini();
+            applyFilters();
+            playSound();
+            resetTimer();
+        }
+        function hmNextPhase() {
+            if (hmPhase < 4) {
+                setHmPhase(hmPhase + 1);
+            } else {
+                stopTimer();
+                ui.phase.innerText = '完了';
+                setVisible(ui.btnHmShow, true);
+                setVisible(ui.btnHmHide, true);
+                playSound();
+            }
+        }
 
         function initMediaSession() {
-            if (hasMediaSession) {
-                navigator.mediaSession.setActionHandler('play', function() { startTimer(); }); navigator.mediaSession.setActionHandler('pause', function() { stopTimer(); });
-                navigator.mediaSession.setActionHandler('previoustrack', function() { prevImage(); }); navigator.mediaSession.setActionHandler('nexttrack', function() { nextImage(); });
-            }
+            if (!hasMediaSession) return;
+            navigator.mediaSession.setActionHandler('play',          function() { startTimer(); });
+            navigator.mediaSession.setActionHandler('pause',         function() { stopTimer(); });
+            navigator.mediaSession.setActionHandler('previoustrack', function() { prevImage(); });
+            navigator.mediaSession.setActionHandler('nexttrack',     function() { nextImage(); });
         }
         function updateMediaSession() {
             if (hasMediaSession && images.length > 0) {
@@ -2332,6 +2510,7 @@
                     const ctx = canvas.getContext('2d');
                     drawToCanvas(canvas, ctx, true); 
                 }
+                // PiP Windowは別コンテキストのため ui 参照不可
                 const playBtn = documentPipWindow.document.getElementById('pip-play-btn');
                 if (playBtn) {
                     playBtn.innerHTML = isRunning ? iconPauseSVG : iconPlaySVG;
@@ -2343,7 +2522,7 @@
             }
         }
 
-        let pointerStartX = 0; let pointerStartY = 0; let lastTapTime = 0; const imgContainer = document.getElementById('image-container');
+        let pointerStartX = 0; let pointerStartY = 0; let lastTapTime = 0;
         let prevLongPressTimer = null, nextLongPressTimer = null;
         let prevLongPressHandled = false, nextLongPressHandled = false;
         let prevPressStartX = 0, prevPressStartY = 0, nextPressStartX = 0, nextPressStartY = 0;
@@ -2356,7 +2535,7 @@
             nextImage();
         }
         function onPressStart(btn, which, startX, startY) {
-            const delay = 450;
+            const delay = TIMING.LONG_PRESS_DELAY_MS;
             if (which === 'next') { nextPressStartX = startX; nextPressStartY = startY; }
             else { prevPressStartX = startX; prevPressStartY = startY; }
             const timer = setTimeout(function() {
@@ -2380,8 +2559,8 @@
             if (which === 'prev' && prevLongPressTimer) { clearTimeout(prevLongPressTimer); prevLongPressTimer = null; }
         }
         (function bindLongPressButtons(){
-            const prevBtn = document.getElementById('prev-btn');
-            const nextBtn = document.getElementById('next-btn');
+            const prevBtn = ui.prevBtn;
+            const nextBtn = ui.nextBtn;
             if (!prevBtn || !nextBtn) return;
             prevBtn.addEventListener('pointerdown', function(e){ onPressStart(prevBtn, 'prev', e.clientX, e.clientY); }, { passive: true });
             prevBtn.addEventListener('pointerup', function(){ onPressEnd('prev'); }, { passive: true });
@@ -2393,7 +2572,7 @@
             nextBtn.addEventListener('pointercancel', function(){ onPressEnd('next'); }, { passive: true });
         })();
         document.addEventListener('pointermove', function(e) {
-            const moveThreshold = 14;
+            const moveThreshold = TIMING.MOVE_THRESHOLD_PX;
             if (nextLongPressTimer) {
                 if (Math.abs(e.clientX - nextPressStartX) > moveThreshold || Math.abs(e.clientY - nextPressStartY) > moveThreshold) onPressEnd('next');
             }
@@ -2401,16 +2580,16 @@
                 if (Math.abs(e.clientX - prevPressStartX) > moveThreshold || Math.abs(e.clientY - prevPressStartY) > moveThreshold) onPressEnd('prev');
             }
         }, { passive: true });
-        imgContainer.addEventListener('pointerup', function(e) {
+        ui.imgContainer.addEventListener('pointerup', function(e) {
             const pointerEndX = e.clientX; const pointerEndY = e.clientY;
             const diffX = pointerStartX - pointerEndX;
             const diffY = pointerStartY - pointerEndY;
-            const threshold = 50;
+            const threshold = TIMING.SWIPE_THRESHOLD_PX;
             if (Math.abs(diffX) > threshold && Math.abs(diffX) > Math.abs(diffY)) {
                 if (diffX > 0) { nextImage(); } else { if (!hmActive) prevImage(); } lastTapTime = 0;
             } else if (Math.abs(diffY) <= 10 && Math.abs(diffX) <= threshold) {
                 const currentTime = Date.now(); const tapLength = currentTime - lastTapTime;
-                if (tapLength < 300 && tapLength > 0) { toggleTimer(); lastTapTime = 0; e.preventDefault(); }
+                if (tapLength < TIMING.DOUBLE_TAP_MS && tapLength > 0) { toggleTimer(); lastTapTime = 0; e.preventDefault(); }
                 else { lastTapTime = currentTime; }
             }
         }, { passive: false });
@@ -2419,7 +2598,7 @@
             if (document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'INPUT') return;
             if (e.code === 'Escape') {
                 if (ui.managePopup.classList.contains('show')) { ui.managePopup.classList.remove('show'); return; }
-                if (document.getElementById('settings-panel').classList.contains('open')) { toggleSettingsPanel(); return; }
+                if (ui.settingsPanel.classList.contains('open')) { toggleSettingsPanel(); return; }
                 if (isHistoryPanelOpen) { toggleHistoryPanel(); return; }
             }
             if (e.code === 'Space') { e.preventDefault(); toggleTimer(); } 
