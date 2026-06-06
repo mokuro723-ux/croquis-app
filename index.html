@@ -39,7 +39,7 @@
             justify-content: space-between; 
             align-items: flex-end; 
             padding: 0 15px 12px 15px; 
-            z-index: 100; 
+            z-index: 400; 
             border-bottom: 1px solid var(--border-color); 
         }
         .top-left { display: flex; align-items: center; gap: 6px; flex: 1; max-width: 180px; height: 36px; }
@@ -405,8 +405,10 @@
             <button onclick="clearManageData()">🔄 設定をリセット</button>
         </div>
 
-        <div id="settings-overlay" onclick="toggleSettingsPanel()"></div>
-        <div id="settings-panel">
+    </div><!-- /#bottom-panel -->
+
+    <div id="settings-overlay" onclick="toggleSettingsPanel()"></div>
+    <div id="settings-panel">
             <div id="settings-header">
                 <span>設定</span>
                 <button id="settings-close-btn" onclick="toggleSettingsPanel()" title="閉じる"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
@@ -1037,10 +1039,6 @@
                     clearInterval(breakCountdownTimer); breakCountdownTimer = null;
                     setActive(ui.breakOverlay, false);
                     setActive(ui.breakCorner, false);
-                    if (bottomPanelWasHidden) {
-                        ui.bottomPanel.classList.toggle('hidden', true);
-                        bottomPanelWasHidden = false;
-                    }
                     breakWasRunning = false;
                 }
             }
@@ -1054,16 +1052,12 @@
         }
 
         let breakWasRunning = false;
-        let bottomPanelWasHidden = false;
 
         function triggerBreak() {
             sessionStartTime = Date.now();
             const isLongTimer = timerSeconds >= 60;
             breakWasRunning = isRunning;
             if (isRunning) stopTimer();
-            const bottomPanel = ui.bottomPanel;
-            bottomPanelWasHidden = bottomPanel.classList.contains('hidden');
-            if (bottomPanelWasHidden) bottomPanel.classList.toggle('hidden', false);
             setFocusDimmed(false);
             if (focusIdleTimer) { clearTimeout(focusIdleTimer); focusIdleTimer = null; }
             playSound();
@@ -1096,10 +1090,6 @@
 
         function _finishBreak() {
             clearInterval(breakCountdownTimer); breakCountdownTimer = null;
-            if (bottomPanelWasHidden) {
-                ui.bottomPanel.classList.toggle('hidden', true);
-                bottomPanelWasHidden = false;
-            }
             const shouldResume = breakWasRunning;
             breakWasRunning = false;
             if (shouldResume) startTimer();
@@ -1162,15 +1152,27 @@
             const panel   = ui.settingsPanel;
             const overlay = ui.settingsOverlay;
             const isOpen  = panel.classList.contains('open');
-            panel.classList.toggle('open', !isOpen);
-            overlay.classList.toggle('open', !isOpen);
-            if (isOpen) {
-                armFocusIdleTimer(); // 閉じたら通常のidle-dimを再開
-            } else {
-                // 開いている間はidle-dimタイマーを停止
+            if (!isOpen) {
+                // 履歴が開いていたら transition なしで即座に閉じる
+                if (isHistoryPanelOpen) {
+                    ui.historyPanel.style.transition = 'none';
+                    isHistoryPanelOpen = false;
+                    ui.historyPanel.classList.toggle('open', false);
+                    historyRenderToken++;
+                    clearHistoryThumbs();
+                    requestAnimationFrame(function() {
+                        requestAnimationFrame(function() {
+                            ui.historyPanel.style.transition = '';
+                        });
+                    });
+                }
                 if (focusIdleTimer) { clearTimeout(focusIdleTimer); focusIdleTimer = null; }
                 setFocusDimmed(false);
+            } else {
+                armFocusIdleTimer();
             }
+            panel.classList.toggle('open', !isOpen);
+            overlay.classList.toggle('open', !isOpen);
         }
 
         function toggleBottomPanel() { ui.bottomPanel.classList.toggle('hidden'); } // hidden は2値トグルのため classList.toggle をそのまま使用
@@ -1793,6 +1795,18 @@
                 historyRenderToken++;
                 clearHistoryThumbs();
             } else {
+                // 設定が開いていたら transition なしで即座に閉じる
+                if (ui.settingsPanel.classList.contains('open')) {
+                    ui.settingsPanel.style.transition = 'none';
+                    ui.settingsPanel.classList.toggle('open', false);
+                    ui.settingsOverlay.classList.toggle('open', false);
+                    requestAnimationFrame(function() {
+                        requestAnimationFrame(function() {
+                            ui.settingsPanel.style.transition = '';
+                        });
+                    });
+                    armFocusIdleTimer();
+                }
                 renderHistoryThumbs();
             }
         }
