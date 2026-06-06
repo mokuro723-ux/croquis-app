@@ -823,11 +823,13 @@
         function hasUnskippedInCurrentPool() {
             if (isFavMode) return true;
             if (!images || images.length === 0) return false;
-            // スキップ数が画像数未満なら未スキップが存在する
+            // skipNameSet の交差数が images.length 未満なら未スキップが存在する
             let skipped = 0;
             for (let i = 0; i < images.length; i++) {
-                if (images[i] && skipNameSet.has(images[i].name)) skipped++;
-                if (skipped < images.length) return true; // 早期終了
+                if (skipNameSet.has(images[i].name)) {
+                    skipped++;
+                    if (skipped < images.length) return true; // 早期終了：まだ未スキップあり
+                }
             }
             return skipped < images.length;
         }
@@ -1249,8 +1251,15 @@
             if (entry.isDirectory) {
                 const reader = entry.createReader();
                 const children = await readDirEntries(reader);
-                for (let i = 0; i < children.length; i++) {
-                    await collectImageFilesFromEntry(children[i], out);
+                // フォルダ内エントリを並列処理（直列 await より高速）
+                const subResults = await Promise.all(
+                    children.map(function(child) {
+                        const subOut = [];
+                        return collectImageFilesFromEntry(child, subOut).then(function() { return subOut; });
+                    })
+                );
+                for (let i = 0; i < subResults.length; i++) {
+                    for (let j = 0; j < subResults[i].length; j++) out.push(subResults[i][j]);
                 }
             }
         }
@@ -1342,19 +1351,30 @@
             if (curName === newName && curUrl) return; // 既にロード済み
             if (curUrl && curUrl.startsWith('blob:')) URL.revokeObjectURL(curUrl);
             const url = item.data ? item.data : URL.createObjectURL(item);
-            const img = new Image();
-            img.onload  = function() {
-                if (img.decode) img.decode().catch(function(){});
-                if (isSlot1) preloadedImage  = img;
-                else         preloadedImage2 = img;
-            };
-            img.onerror = function() {
-                if (isSlot1) preloadedImage  = null;
-                else         preloadedImage2 = null;
-            };
-            img.src = url;
+            // URL をスロットに即記録してから src をセット（二重生成防止）
             if (isSlot1) { preloadUrl  = url; preloadName  = newName; preloadedImage  = null; }
             else         { preloadUrl2 = url; preloadName2 = newName; preloadedImage2 = null; }
+            const img = new Image();
+            // decode() を src セット直後に呼ぶことでネットワーク取得とデコードを並列化
+            img.src = url;
+            if (img.decode) {
+                img.decode().then(function() {
+                    if (isSlot1 && preloadUrl === url)  preloadedImage  = img;
+                    if (!isSlot1 && preloadUrl2 === url) preloadedImage2 = img;
+                }).catch(function() {
+                    if (isSlot1 && preloadUrl === url)  preloadedImage  = null;
+                    if (!isSlot1 && preloadUrl2 === url) preloadedImage2 = null;
+                });
+            } else {
+                img.onload  = function() {
+                    if (isSlot1 && preloadUrl === url)  preloadedImage  = img;
+                    if (!isSlot1 && preloadUrl2 === url) preloadedImage2 = img;
+                };
+                img.onerror = function() {
+                    if (isSlot1 && preloadUrl === url)  preloadedImage  = null;
+                    if (!isSlot1 && preloadUrl2 === url) preloadedImage2 = null;
+                };
+            }
         }
 
         function updatePreloadQueue() {
@@ -1754,11 +1774,9 @@
                     : (currentIndex + 1) % images.length;
             }
             lastShownIndex = prevIndex;
-            updatePreloadQueue();
             pendingTimerStart = false; // 前の pending をクリア
             remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds;
             if (isRunning) {
-                // タイマーは画像onload後に開始（pendingTimerStartフラグで制御）
                 expectedEndTime = Date.now() + (remaining * 1000);
                 pendingTimerStart = true;
             } else {
@@ -1766,6 +1784,8 @@
                 ui.prog.style.width = '100%'; lastProgressWidth = '100%';
             }
             loadImage(0, true);
+            // currentIndex 確定後にプリロードを更新（次の次の画像を先読み）
+            updatePreloadQueue();
             if(!isSkipping) { playSound(); }
             // 休憩リマインダーチェック
             if (!isSkipping && checkBreakTrigger()) {
