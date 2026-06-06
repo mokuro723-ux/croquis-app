@@ -609,7 +609,6 @@
         let lastPipUpdateTime  = 0;
         let timerTickId        = null;
         let filterFrameQueued  = false;
-        let resizeTimer;
 
         // ── DOM差分キャッシュ（不要な再描画を防ぐ） ───────────────
         let lastTimerText      = '';
@@ -623,7 +622,6 @@
         // ── 履歴パネル ───────────────────────────────────────────
         let historyRenderToken    = 0;
         let historyVirtualCleanup = null;
-        let historyResizeTimer    = null;
         let isHistoryPanelOpen    = false;
         let renderHistoryRafId    = null;
 
@@ -649,7 +647,6 @@
         let pipFlashStartTime = 0; // Video PiP用フラッシュタイムスタンプ
 
         let db; const dbName = "CroquisAppDB", storeName = "favorites";
-        let saveTimer = null;
         const hasMediaSession = 'mediaSession' in navigator;
         const bgColors = ['#1e1e1e', '#000', '#fff'];
 
@@ -722,6 +719,23 @@
             imgContainer:     document.getElementById('image-container'),
             canvasArea:       document.getElementById('canvas-area'),
         };
+        // ── ユーティリティ ────────────────────────────────────────
+        /**
+         * デバウンス：連続呼び出し時は最後の呼び出しから delay ms 後に fn を実行する。
+         * @param {Function} fn
+         * @param {number} delay  ミリ秒
+         * @returns {Function}    デバウンス済み関数
+         */
+        function debounce(fn, delay) {
+            let timer = null;
+            return function() {
+                clearTimeout(timer);
+                const ctx  = this;
+                const args = arguments;
+                timer = setTimeout(function() { timer = null; fn.apply(ctx, args); }, delay);
+            };
+        }
+
         // settings.key → button要素 のマッピング（toggle()で使用）
         const uiBtnMap = {
             shuffle: ui.shuffleBtn,
@@ -759,13 +773,13 @@
         }
 
         function updateHmMini() {
-            if (!hmActive) { ui.hmMini.innerText = ''; return; }
+            if (!hmActive) { ui.hmMini.textContent = ''; return; }
             const active = hmPhase || 1;
             const parts = ['①','②','③','④'].map(function(mark, idx) {
                 const n = idx + 1;
                 return n === active ? '[' + mark + ']' : mark;
             });
-            ui.hmMini.innerText = parts.join('');
+            ui.hmMini.textContent = parts.join('');
         }
 
         function initDB() {
@@ -796,14 +810,8 @@
                 request.onerror = function() { resolve([]); };
             });
         }
-        let skipSaveTimer = null;
-        function saveSkipList() {
-            if (skipSaveTimer) clearTimeout(skipSaveTimer);
-            skipSaveTimer = setTimeout(function() {
-                try { localStorage.setItem('croquis_skips', JSON.stringify(skipList)); } catch(_) {}
-                skipSaveTimer = null;
-            }, TIMING.SAVE_DEBOUNCE_MS);
-        }
+        /** skipList を debounce 付きで localStorage に保存する */
+        const saveSkipList = debounce(flushSkipList, TIMING.SAVE_DEBOUNCE_MS);
         /** skipList を localStorage に即時保存（beforeunload用） */
         function flushSkipList() {
             try { localStorage.setItem('croquis_skips', JSON.stringify(skipList)); } catch(_) {}
@@ -827,7 +835,7 @@
             return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
         }
         function checkDevice() {
-            if (isIOSDevice()) { ui.pipBtn.style.display = 'none'; }
+            if (isIOSDevice()) setVisible(ui.pipBtn, false);
         }
         function syncAppHeight() {
             const vv = window.visualViewport;
@@ -866,13 +874,8 @@
             };
             try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (_) {}
         }
-        function saveUiSettings() {
-            if (saveTimer) clearTimeout(saveTimer);
-            saveTimer = setTimeout(function() {
-                flushUiSettings();
-                saveTimer = null;
-            }, TIMING.SAVE_DEBOUNCE_MS);
-        }
+        /** 設定を debounce 付きで localStorage に保存する */
+        const saveUiSettings = debounce(flushUiSettings, TIMING.SAVE_DEBOUNCE_MS);
 
         function loadUiSettings() {
             try {
@@ -917,7 +920,7 @@
             });
             if (settings.bw) {
                 setActive(ui.bwBtn, true);
-                if (ui.bwBarWrap) ui.bwBarWrap.classList.add('visible');
+                if (ui.bwBarWrap) ui.bwBarWrap.classList.toggle('visible', true);
             }
             if (ui.breakToggle) ui.breakToggle.checked = breakReminderEnabled;
             if (ui.eyeHideSel) ui.eyeHideSel.value = eyeHideDelay;
@@ -999,7 +1002,7 @@
                     setTimeout(function() {
                         if (isPiP && !document.pictureInPictureElement) {
                             pipVideo.requestPictureInPicture().catch(function(){
-                                isPiP = false; ui.pipBtn.classList.remove('pip-active');
+                                isPiP = false; ui.pipBtn.classList.toggle('pip-active', false);
                             });
                         }
                     }, 600);
@@ -1037,7 +1040,7 @@
                     setActive(ui.breakOverlay, false);
                     setActive(ui.breakCorner, false);
                     if (bottomPanelWasHidden) {
-                        ui.bottomPanel.classList.add('hidden');
+                        ui.bottomPanel.classList.toggle('hidden', true);
                         bottomPanelWasHidden = false;
                     }
                     breakWasRunning = false;
@@ -1062,7 +1065,7 @@
             if (isRunning) stopTimer();
             const bottomPanel = ui.bottomPanel;
             bottomPanelWasHidden = bottomPanel.classList.contains('hidden');
-            if (bottomPanelWasHidden) bottomPanel.classList.remove('hidden');
+            if (bottomPanelWasHidden) bottomPanel.classList.toggle('hidden', false);
             setFocusDimmed(false);
             if (focusIdleTimer) { clearTimeout(focusIdleTimer); focusIdleTimer = null; }
             playSound();
@@ -1096,7 +1099,7 @@
         function _finishBreak() {
             clearInterval(breakCountdownTimer); breakCountdownTimer = null;
             if (bottomPanelWasHidden) {
-                ui.bottomPanel.classList.add('hidden');
+                ui.bottomPanel.classList.toggle('hidden', true);
                 bottomPanelWasHidden = false;
             }
             const shouldResume = breakWasRunning;
@@ -1158,31 +1161,28 @@
         }
 
         function toggleSettingsPanel() {
-            const panel = ui.settingsPanel;
+            const panel   = ui.settingsPanel;
             const overlay = ui.settingsOverlay;
-            const isOpen = panel.classList.contains('open');
+            const isOpen  = panel.classList.contains('open');
+            panel.classList.toggle('open', !isOpen);
+            overlay.classList.toggle('open', !isOpen);
             if (isOpen) {
-                panel.classList.remove('open');
-                overlay.classList.remove('open');
                 armFocusIdleTimer(); // 閉じたら通常のidle-dimを再開
             } else {
-                panel.classList.add('open');
-                overlay.classList.add('open');
                 // 開いている間はidle-dimタイマーを停止
                 if (focusIdleTimer) { clearTimeout(focusIdleTimer); focusIdleTimer = null; }
                 setFocusDimmed(false);
             }
         }
 
-        function toggleBottomPanel() { ui.bottomPanel.classList.toggle('hidden'); }
+        function toggleBottomPanel() { ui.bottomPanel.classList.toggle('hidden'); } // hidden は2値トグルのため classList.toggle をそのまま使用
         function toggleManagePopup() { ui.managePopup.classList.toggle('show'); }
         function setFocusDimmed(dim) {
             const panel = ui.bottomPanel;
             if (!panel || panel.classList.contains('hidden')) return;
             if (dim === isFocusDimmed) return;
             isFocusDimmed = dim;
-            if (dim) panel.classList.add('idle-dim');
-            else panel.classList.remove('idle-dim');
+            panel.classList.toggle('idle-dim', dim);
         }
         function armFocusIdleTimer() {
             if (focusIdleTimer) clearTimeout(focusIdleTimer);
@@ -1200,7 +1200,7 @@
                 originalOrder = files.slice();
                 sourceImages = files; if (settings.shuffle) shuffleArray(sourceImages); 
                 images = sourceImages; isFavMode = false; showFavsOnly = false; showHiddenOnly = false;
-                ui.historyFilterBtn.innerText = '全て (履歴)';
+                ui.historyFilterBtn.textContent = '全て (履歴)';
                 currentIndex = 0; historyList = [0]; historyPos = 0;
                 loadImage(); resetTimer();
                 updateImageCounter();
@@ -1281,9 +1281,19 @@
             return out;
         }
         ui.folderInput.addEventListener('change', handleFiles);
-        ui.fileInput.addEventListener('change', handleFiles);
-        ui.imgContainer.addEventListener('dragover', function(e) { e.preventDefault(); ui.imgContainer.classList.add('drag-over'); }, { passive: false });
-        ui.imgContainer.addEventListener('dragleave', function(e) { if (!ui.imgContainer.contains(e.relatedTarget)) ui.imgContainer.classList.remove('drag-over'); }, { passive: true });
+        ui.fileInput.addEventListener('change',   handleFiles);
+
+        ui.imgContainer.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            ui.imgContainer.classList.add('drag-over');
+        }, { passive: false });
+
+        ui.imgContainer.addEventListener('dragleave', function(e) {
+            if (!ui.imgContainer.contains(e.relatedTarget)) {
+                ui.imgContainer.classList.remove('drag-over');
+            }
+        }, { passive: true });
+
         ui.imgContainer.addEventListener('drop', async function(e) {
             e.preventDefault();
             ui.imgContainer.classList.remove('drag-over');
@@ -1382,7 +1392,7 @@
         let pendingTimerStart = false;
 
         function loadImage(skipDepth, skipPreload) {
-            if(images.length === 0) { ui.img.style.display = 'none'; ui.favIcon.style.display = 'none'; updateImageCounter(); return; }
+            if(images.length === 0) { setVisible(ui.img, false); setVisible(ui.favIcon, false); updateImageCounter(); return; }
             const item = images[currentIndex];
             if(!item) return;
             const loadToken = ++imageLoadToken;
@@ -1402,12 +1412,12 @@
 
             isImageHidden = false;
             const isFav = isFavMode ? true : favNameSet.has(item.name);
-            ui.favIcon.style.display = isFav ? 'block' : 'none';
+            setVisible(ui.favIcon, isFav);
 
             /** 画像デコード完了後の共通処理 */
             function onImageReady() {
                 if (loadToken !== imageLoadToken) return;
-                ui.img.style.display = 'block';
+                setVisible(ui.img, true);
                 applyFilters();
                 clearTimeout(eyeHideTimeout);
                 if (isEyeHideEnabled && !hmActive) {
@@ -1463,7 +1473,7 @@
                 // decode非対応ブラウザはonloadで処理（従来の動作）
                 ui.img.src = currentImageUrl;
                 if (ui.img.complete && ui.img.naturalWidth > 0) {
-                    ui.img.style.display = 'block';
+                    setVisible(ui.img, true);
                     applyFilters();
                     if (pendingTimerStart) {
                         pendingTimerStart = false;
@@ -1479,18 +1489,21 @@
 
         function applyFilters() {
             let transform = '';
-            if(settings.flipH) transform += 'scaleX(-1) ';
-            if(settings.flipV) transform += 'scaleY(-1) ';
+            if (settings.flipH) transform += 'scaleX(-1) ';
+            if (settings.flipV) transform += 'scaleY(-1) ';
+
             let nextFilter = 'none';
-            if (settings.bw) nextFilter = 'grayscale(1) contrast(' + bwContrast + ')';
+            if      (settings.bw)   nextFilter = `grayscale(1) contrast(${bwContrast})`;
             else if (settings.mono) nextFilter = 'grayscale(100%)';
+
             const nextOpacity = isImageHidden ? '0' : '1';
-            if (transform !== lastImageTransform) { ui.img.style.transform = transform; lastImageTransform = transform; }
-            if (nextFilter !== lastImageFilter) { ui.img.style.filter = nextFilter; lastImageFilter = nextFilter; }
-            if (nextOpacity !== lastImageOpacity) { ui.img.style.opacity = nextOpacity; lastImageOpacity = nextOpacity; }
-            
+
+            // 差分があるときのみ DOM に書き込む（不要なスタイル再計算を防ぐ）
+            if (transform     !== lastImageTransform) { ui.img.style.transform = transform;    lastImageTransform = transform;   }
+            if (nextFilter    !== lastImageFilter)    { ui.img.style.filter    = nextFilter;   lastImageFilter    = nextFilter;  }
+            if (nextOpacity   !== lastImageOpacity)   { ui.img.style.opacity   = nextOpacity;  lastImageOpacity   = nextOpacity; }
+
             updateGridOverlay();
-            
             if (isPiP) updatePiP();
         }
         function applyFiltersDeferred() {
@@ -1503,9 +1516,21 @@
         }
 
         // ── グリッドオーバーレイ位置計算（applyFiltersから完全分離）──
+        /**
+         * グリッドオーバーレイの display を差分更新する。
+         * setVisible と異なり lastGridDisplay キャッシュで不要な DOM 書き込みを回避する。
+         */
+        function setGridVisible(visible) {
+            const next = visible ? 'block' : 'none';
+            if (lastGridDisplay !== next) {
+                ui.grid.style.display = next;
+                lastGridDisplay = next;
+            }
+        }
+
         function updateGridOverlay() {
             if (!settings.grid || isImageHidden || !ui.img.complete || !ui.img.naturalWidth) {
-                if (lastGridDisplay !== 'none') { ui.grid.style.display = 'none'; lastGridDisplay = 'none'; }
+                setGridVisible(false);
                 return;
             }
             const canvasArea = ui.canvasArea;
@@ -1519,15 +1544,15 @@
             const natW = ui.img.naturalWidth;
             const natH = ui.img.naturalHeight;
             if (!conW || !conH || !natW || !natH) {
-                if (lastGridDisplay !== 'none') { ui.grid.style.display = 'none'; lastGridDisplay = 'none'; }
+                setGridVisible(false);
                 return;
             }
-            const scale  = Math.min(conW / natW, conH / natH);
-            const dispW  = Math.round(natW * scale);
-            const dispH  = Math.round(natH * scale);
-            const offL   = Math.round((conW - dispW) / 2 + padL);
-            const offT   = Math.round((conH - dispH) / 2 + padT);
-            if (lastGridDisplay !== 'block') { ui.grid.style.display = 'block'; lastGridDisplay = 'block'; }
+            const scale = Math.min(conW / natW, conH / natH);
+            const dispW = Math.round(natW * scale);
+            const dispH = Math.round(natH * scale);
+            const offL  = Math.round((conW - dispW) / 2 + padL);
+            const offT  = Math.round((conH - dispH) / 2 + padT);
+            setGridVisible(true);
             ui.grid.style.left   = offL + 'px';
             ui.grid.style.top    = offT + 'px';
             ui.grid.style.width  = dispW + 'px';
@@ -1542,7 +1567,7 @@
             }
         })();
 
-        window.addEventListener('resize', function() { clearTimeout(resizeTimer); resizeTimer = setTimeout(applyFiltersDeferred, TIMING.RESIZE_DEBOUNCE_MS); });
+        window.addEventListener('resize', debounce(applyFiltersDeferred, TIMING.RESIZE_DEBOUNCE_MS));
         
         function toggle(key) { 
             settings[key] = !settings[key]; const btn = uiBtnMap[key];
@@ -1583,8 +1608,8 @@
                 setFlipDisabled(false);
                 // OFF時は反転をリセット
                 settings.flipH = false; settings.flipV = false;
-                const hBtn = ui.flipHBtn; if(hBtn) setActive(hBtn, false);
-                const vBtn = ui.flipVBtn; if(vBtn) setActive(vBtn, false);
+                setActive(ui.flipHBtn, false);
+                setActive(ui.flipVBtn, false);
                 applyFiltersDeferred();
             }
             saveUiSettings();
@@ -1599,12 +1624,12 @@
                 if (settings.mono) {
                     settings.mono = false;
                     const monoBtn = ui.monoBtn;
-                    if (monoBtn) monoBtn.classList.remove('active');
+                    setActive(monoBtn, false);
                 }
-                if (bwBar) bwBar.classList.add('visible');
+                if (bwBar) bwBar.classList.toggle('visible', true);
             } else {
                 setActive(bwBtn, false);
-                if (bwBar) bwBar.classList.remove('visible');
+                if (bwBar) bwBar.classList.toggle('visible', false);
             }
             applyFiltersDeferred();
             saveUiSettings();
@@ -1629,11 +1654,11 @@
             if (isFavMode) {
                 dbFavImages = dbFavImages.filter(function(f){ return f.name !== fname; });
                 rebuildFavNameSet();
-                deleteFavFromDB(fname); ui.managePopup.classList.remove('show');
+                deleteFavFromDB(fname); ui.managePopup.classList.toggle('show', false);
                 if (dbFavImages.length === 0) {
                     alert("お気に入りが空になりました。通常モードに戻ります。");
                     isFavMode = false; showFavsOnly = false; showHiddenOnly = false; images = sourceImages;
-                    ui.historyFilterBtn.innerText = '全て (履歴)';
+                    ui.historyFilterBtn.textContent = '全て (履歴)';
                     currentIndex = 0; historyList = [0]; historyPos = 0; loadImage();
                 } else {
                     currentIndex = Math.min(currentIndex, dbFavImages.length - 1);
@@ -1646,19 +1671,19 @@
                 const foundIdx = dbFavImages.findIndex(function(f){ return f.name === fname; });
                 if(foundIdx > -1) {
                     dbFavImages.splice(foundIdx, 1); rebuildFavNameSet(); deleteFavFromDB(fname);
-                    ui.favIcon.style.display = 'none';
+                    setVisible(ui.favIcon, false);
                     if (isHistoryPanelOpen && showFavsOnly) renderHistoryThumbs();
                 }
                 else {
                     const reader = new FileReader();
                     reader.onload = function(e) {
                         const dataUrl = e.target.result; dbFavImages.push({ name: fname, data: dataUrl }); rebuildFavNameSet(); saveFavToDB(fname, dataUrl);
-                        ui.favIcon.style.display = 'block';
+                        setVisible(ui.favIcon, true);
                         if (isHistoryPanelOpen && showFavsOnly) renderHistoryThumbs();
                     };
                     reader.readAsDataURL(item);
                 }
-                ui.managePopup.classList.remove('show');
+                ui.managePopup.classList.toggle('show', false);
             }
         }
 
@@ -1672,7 +1697,7 @@
                 rebuildSkipNameSet();
                 saveSkipList();
             }
-            ui.managePopup.classList.remove('show'); nextImage();
+            ui.managePopup.classList.toggle('show', false); nextImage();
         }
 
         function clearManageData() {
@@ -1681,8 +1706,8 @@
             rebuildFavNameSet();
             rebuildSkipNameSet();
             if (db) { const tx = db.transaction(storeName, "readwrite"); tx.onerror = function(){}; tx.objectStore(storeName).clear(); }
-            ui.favIcon.style.display = 'none'; ui.managePopup.classList.remove('show');
-            isFavMode = false; showFavsOnly = false; showHiddenOnly = false; ui.historyFilterBtn.innerText = '全て (履歴)';
+            setVisible(ui.favIcon, false); ui.managePopup.classList.toggle('show', false);
+            isFavMode = false; showFavsOnly = false; showHiddenOnly = false; ui.historyFilterBtn.textContent = '全て (履歴)';
             if (sourceImages.length > 0) {
                 images = sourceImages; currentIndex = 0; historyList = [0]; historyPos = 0; loadImage();
             } else {
@@ -1705,10 +1730,10 @@
             return candidate;
         }
 
-        function nextImage(isSkipping = false) { 
-            if(images.length === 0) return; 
-            if(hmActive && !isSkipping) exitHardMode(); 
-            clearTimeout(timerTickId); timerTickId = null;
+        function nextImage(isSkipping = false) {
+            if (images.length === 0) return;
+            if (hmActive && !isSkipping) exitHardMode();
+            clearTimeout(timerTickId);    timerTickId    = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
             const prevIndex = currentIndex;
             
@@ -1750,26 +1775,26 @@
             if(isHistoryPanelOpen) renderHistoryThumbs();
         }
 
-        function prevImage() { 
+        function prevImage() {
             if (historyPos > 0 && !hmActive) {
-                clearTimeout(timerTickId); timerTickId = null;
+                clearTimeout(timerTickId);    timerTickId    = null;
                 cancelAnimationFrame(animationFrameId); animationFrameId = null;
-                historyPos--; currentIndex = historyList[historyPos];
-                loadImage(); resetTimer();
-                if(isHistoryPanelOpen) renderHistoryThumbs();
-            } 
+                historyPos--;
+                currentIndex = historyList[historyPos];
+                loadImage();
+                resetTimer();
+                if (isHistoryPanelOpen) renderHistoryThumbs();
+            }
         }
 
         function toggleHistoryPanel() {
             const panel = ui.historyPanel;
-            if (isHistoryPanelOpen) {
+            isHistoryPanelOpen = !isHistoryPanelOpen;
+            panel.classList.toggle('open', isHistoryPanelOpen);
+            if (!isHistoryPanelOpen) {
                 historyRenderToken++;
-                isHistoryPanelOpen = false;
-                panel.classList.remove('open');
                 clearHistoryThumbs();
             } else {
-                isHistoryPanelOpen = true;
-                panel.classList.add('open');
                 renderHistoryThumbs();
             }
         }
@@ -1792,7 +1817,7 @@
                     historyList = [currentIndex]; historyPos = 0; loadImage(); resetTimer();
                 }
             }
-            ui.historyFilterBtn.innerText = showFavsOnly ? '★ お気に入り' : (showHiddenOnly ? '非表示' : '全て (履歴)');
+            ui.historyFilterBtn.textContent = showFavsOnly ? '★ お気に入り' : (showHiddenOnly ? '非表示' : '全て (履歴)');
             updateImageCounter();
             renderHistoryThumbs();
         }
@@ -1869,13 +1894,9 @@
                     renderVisible();
                 });
             };
-            const onResize = function() {
-                if (historyResizeTimer) clearTimeout(historyResizeTimer);
-                historyResizeTimer = setTimeout(function() {
-                    historyResizeTimer = null;
-                    renderHistoryThumbs();
-                }, 80);
-            };
+            const onResize = debounce(function() {
+                renderHistoryThumbs();
+            }, 80);
             content.addEventListener('scroll', onScrollRaf, { passive: true });
             window.addEventListener('resize', onResize);
             renderVisible();
@@ -1887,10 +1908,7 @@
                     cancelAnimationFrame(scrollRafId);
                     scrollRafId = 0;
                 }
-                if (historyResizeTimer) {
-                    clearTimeout(historyResizeTimer);
-                    historyResizeTimer = null;
-                }
+                // _debouncedRenderHistory はキャンセル不要（クリーンアップ時は historyVirtualCleanup で対応）
             };
         }
 
@@ -1931,7 +1949,7 @@
                         imgEl.src = url;
                     }
                     const btn = document.createElement('button');
-                    btn.innerText = '表示解除';
+                    btn.textContent = '表示解除';
                     btn.style.position = 'absolute';
                     btn.style.left = '4px';
                     btn.style.right = '4px';
@@ -1962,7 +1980,7 @@
                         if(isMobileHistory) toggleHistoryPanel(); renderHistoryThumbs();
                     }; })(idx);
                     thumbDiv.appendChild(imgEl);
-                    const badge = document.createElement('div'); badge.className = 'fav-badge'; badge.innerText = '★';
+                    const badge = document.createElement('div'); badge.className = 'fav-badge'; badge.textContent = '★';
                     thumbDiv.appendChild(badge);
                     return thumbDiv;
                 });
@@ -2015,7 +2033,7 @@
                     if (isFav) {
                         const badge = document.createElement('div');
                         badge.className  = 'fav-badge';
-                        badge.innerText  = '★';
+                        badge.textContent  = '★';
                         thumbDiv.appendChild(badge);
                     }
                     return thumbDiv;
@@ -2030,7 +2048,7 @@
         function startTimer() {
             isRunning = true;
             ui.playBtn.innerHTML = iconPauseSVG;
-            ui.playBtn.classList.remove('accent');
+            ui.playBtn.classList.toggle('accent', false);
             expectedEndTime = Date.now() + (remaining * 1000);
             if (breakReminderEnabled && sessionStartTime === 0) sessionStartTime = Date.now();
             clearTimeout(timerTickId);    timerTickId    = null;
@@ -2057,10 +2075,10 @@
         function stopTimer() {
             isRunning = false;
             ui.playBtn.innerHTML = iconPlaySVG;
-            ui.playBtn.classList.add('accent');
+            ui.playBtn.classList.toggle('accent', true);
             clearTimeout(timerTickId);    timerTickId    = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
-            ui.timer.classList.remove('urgent');
+            ui.timer.classList.toggle('urgent', false);
             updateMediaSession();
             if (isPiP) updatePiP();
         }
@@ -2114,11 +2132,8 @@
         }
 
         window.addEventListener('beforeunload', function() {
-            if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; flushUiSettings(); }
-            if (skipSaveTimer) {
-                clearTimeout(skipSaveTimer); skipSaveTimer = null;
-                flushSkipList();
-            }
+            flushUiSettings(); // beforeunload: 即時保存
+            flushSkipList(); // beforeunload: 即時保存
             clearTimeout(timerTickId); timerTickId = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
             clearPreloadUrl();
@@ -2130,33 +2145,42 @@
             historyUrls = [];
         });
         
-        function resetTimer() { 
-            clearTimeout(timerTickId); timerTickId = null;
+        function resetTimer() {
+            clearTimeout(timerTickId);    timerTickId    = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
-            ui.timer.classList.remove('urgent');
-            remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds; 
+            ui.timer.classList.toggle('urgent', false);
+            remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds;
             if (isRunning) {
                 expectedEndTime = Date.now() + (remaining * 1000);
                 timerTickLoop();
                 if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
             } else {
                 updateTimerText(remaining);
-                if (lastProgressWidth !== '100%') { ui.prog.style.width = '100%'; lastProgressWidth = '100%'; }
-                if (lastProgressColor !== 'var(--accent)') { ui.prog.style.backgroundColor = 'var(--accent)'; lastProgressColor = 'var(--accent)'; }
+                // 差分があるときのみ DOM 更新（プログレスバーの不要な再描画を防ぐ）
+                if (lastProgressWidth !== '100%') {
+                    ui.prog.style.width = '100%';
+                    lastProgressWidth   = '100%';
+                }
+                if (lastProgressColor !== 'var(--accent)') {
+                    ui.prog.style.backgroundColor = 'var(--accent)';
+                    lastProgressColor             = 'var(--accent)';
+                }
                 if (isPiP) updatePiP();
             }
         }
-        function setTimer(sec) { 
+
+        function setTimer(sec) {
             if (hmActive) exitHardMode();
             timerSeconds = sec;
             if (ui.timeSelect) ui.timeSelect.value = sec;
             resetTimer();
         }
-        
-        function updateTimerText(sec) { 
-            let m = Math.floor(sec / 60); let s = sec % 60;
-            const txt = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
-            if (txt !== lastTimerText) { ui.timer.innerText = txt; lastTimerText = txt; }
+
+        function updateTimerText(sec) {
+            const m   = Math.floor(sec / 60);
+            const s   = sec % 60;
+            const txt = (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+            if (txt !== lastTimerText) { ui.timer.textContent = txt; lastTimerText = txt; }
         }
 
         function updateImageCounter() {
@@ -2275,7 +2299,7 @@
         function exitHardMode() {
             hmActive = false;
             setActive(ui.hmBtn, false);
-            ui.phase.innerText = '';
+            ui.phase.textContent = '';
             isImageHidden = false;
             setVisible(ui.btnHmShow, false);
             setVisible(ui.btnHmHide, false);
@@ -2293,7 +2317,7 @@
         }
         function setHmPhase(p) {
             hmPhase = p;
-            ui.phase.innerText = hmPhases[p].t;
+            ui.phase.textContent = hmPhases[p].t;
             remaining     = hmPhases[p].s;
             isImageHidden = hmPhases[p].h;
             updateHmMini();
@@ -2306,7 +2330,7 @@
                 setHmPhase(hmPhase + 1);
             } else {
                 stopTimer();
-                ui.phase.innerText = '完了';
+                ui.phase.textContent = '完了';
                 setVisible(ui.btnHmShow, true);
                 setVisible(ui.btnHmHide, true);
                 playSound();
@@ -2343,9 +2367,9 @@
                 
                 pipVideo.addEventListener('play', function() { if (isPiP && !isRunning) startTimer(); });
                 pipVideo.addEventListener('pause', function() { if (isPiP && isRunning) stopTimer(); });
-                pipVideo.addEventListener('leavepictureinpicture', function() { if(!documentPipWindow) { isPiP = false; ui.pipBtn.classList.remove('pip-active'); } });
+                pipVideo.addEventListener('leavepictureinpicture', function() { if(!documentPipWindow) { isPiP = false; ui.pipBtn.classList.toggle('pip-active', false); } });
                 pipVideo.addEventListener('enterpictureinpicture', function() {
-                    isPiP = true; ui.pipBtn.classList.add('pip-active'); updatePiP();
+                    isPiP = true; ui.pipBtn.classList.toggle('pip-active', true); updatePiP();
                 });
                 pipInitialized = true; return true;
             } catch(e) { return false; }
@@ -2424,10 +2448,10 @@
                     addPipBtnHandler('pip-play-btn', function(){ toggleTimer(); });
                     addPipBtnHandler('pip-next-btn', function(){ nextImage(); });
                     
-                    function onPipPageHide() { documentPipWindow = null; isPiP = false; ui.pipBtn.classList.remove('pip-active'); }
+                    function onPipPageHide() { documentPipWindow = null; isPiP = false; ui.pipBtn.classList.toggle('pip-active', false); }
                     documentPipWindow.addEventListener('pagehide', onPipPageHide);
                     
-                    isPiP = true; ui.pipBtn.classList.add('pip-active'); updatePiP();
+                    isPiP = true; ui.pipBtn.classList.toggle('pip-active', true); updatePiP();
                     return;
                 } catch(e) { console.warn("Document PiP failed. Falling back to Video PiP", e); }
             }
@@ -2481,16 +2505,29 @@
                 
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
                 const barColor = remaining <= 10 ? '#5be7ff' : '#00d4ff';
-                ctx.fillStyle = barColor; ctx.fillRect(0, canvas.height - barHeight, progWidth, barHeight);
+                ctx.fillStyle = barColor;
+                ctx.fillRect(0, canvas.height - barHeight, progWidth, barHeight);
 
                 const fontSize = Math.max(16, canvas.height * 0.04);
-                ctx.font = "bold " + fontSize + "px sans-serif"; ctx.textBaseline = 'top'; ctx.textAlign = 'right';
-                let sec = Math.ceil(remainMs / 1000); let m = Math.floor(sec / 60); let s = sec % 60; const timeText = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
-                
-                ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 6; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+                ctx.font        = `bold ${fontSize}px sans-serif`;
+                ctx.textBaseline = 'top';
+                ctx.textAlign    = 'right';
+
+                const sec      = Math.ceil(remainMs / 1000);
+                const m        = Math.floor(sec / 60);
+                const s        = sec % 60;
+                const timeText = (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+
+                ctx.shadowColor   = 'rgba(0,0,0,0.8)';
+                ctx.shadowBlur    = 6;
+                ctx.shadowOffsetX = 2;
+                ctx.shadowOffsetY = 2;
                 ctx.fillStyle = remaining <= 10 ? '#5be7ff' : '#00d4ff';
                 ctx.fillText(timeText, canvas.width - 20, 20);
-                ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+                ctx.shadowColor   = 'transparent';
+                ctx.shadowBlur    = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
             }
         }
 
@@ -2514,8 +2551,7 @@
                 const playBtn = documentPipWindow.document.getElementById('pip-play-btn');
                 if (playBtn) {
                     playBtn.innerHTML = isRunning ? iconPauseSVG : iconPlaySVG;
-                    if(isRunning) { playBtn.classList.remove('paused'); } 
-                    else { playBtn.classList.add('paused'); }
+                    playBtn.classList.toggle('paused', !isRunning);
                 }
             } else if (pipInitialized && pipVideo) {
                 drawToCanvas(pipCanvas, pipCtx, true);
@@ -2597,7 +2633,7 @@
             armFocusIdleTimer();
             if (document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'INPUT') return;
             if (e.code === 'Escape') {
-                if (ui.managePopup.classList.contains('show')) { ui.managePopup.classList.remove('show'); return; }
+                if (ui.managePopup.classList.contains('show')) { ui.managePopup.classList.toggle('show', false); return; }
                 if (ui.settingsPanel.classList.contains('open')) { toggleSettingsPanel(); return; }
                 if (isHistoryPanelOpen) { toggleHistoryPanel(); return; }
             }
@@ -2607,7 +2643,7 @@
         });
         document.addEventListener('pointerdown', function(e) {
             pointerStartX = e.clientX; pointerStartY = e.clientY; armFocusIdleTimer();
-            if (!e.target.closest('#manage-popup') && !e.target.closest('#manage-btn')) { ui.managePopup.classList.remove('show'); }
+            if (!e.target.closest('#manage-popup') && !e.target.closest('#manage-btn')) { ui.managePopup.classList.toggle('show', false); }
         }, { passive: true });
     </script>
 </body>
