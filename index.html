@@ -556,7 +556,6 @@
             BW_CONTRAST_MIN:        1,   // 2階調コントラスト最小値
             BW_CONTRAST_MAX:       20,   // 2階調コントラスト最大値
             VOLUME_MAX:             2,   // 音量最大値
-            BG_MODE_MAX:            3,   // 背景色モード数
             SAFE_INSET_MAX_PX:     40,   // iOS safe-area 上限
         };
 
@@ -903,7 +902,8 @@
                 if (saved && typeof saved.focusIdleDelay === 'number') focusIdleDelay = saved.focusIdleDelay;
                 if (saved && typeof saved.breakIntervalMin === 'number') breakIntervalMin = saved.breakIntervalMin;
                 if (saved && typeof saved.breakDurationSec === 'number') breakDurationSec = saved.breakDurationSec;
-                if (saved && typeof saved.bwContrast === 'number') bwContrast = Math.max(TIMING.BW_CONTRAST_MIN, Math.min(TIMING.BW_CONTRAST_MAX, saved.bwContrast));
+                if (saved && typeof saved.bwContrast === 'number')
+                    bwContrast = Math.max(TIMING.BW_CONTRAST_MIN, Math.min(TIMING.BW_CONTRAST_MAX, saved.bwContrast));
                 if (saved && typeof saved.flashIntensity === 'number') flashIntensity = saved.flashIntensity;
                 if (saved && typeof saved.progressBarSize === 'number') progressBarSize = saved.progressBarSize;
                 if (saved && typeof saved.soundVolume === 'number') {
@@ -2510,21 +2510,25 @@
             if (canvas.width !== baseWidth || canvas.height !== targetH) {
                 canvas.width = baseWidth; canvas.height = targetH;
             }
-            ctx.fillStyle = bgMode === 0 ? '#1e1e1e' : (bgMode === 1 ? '#000' : '#fff'); ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = bgMode === 0 ? '#1e1e1e' : (bgMode === 1 ? '#000' : '#fff');
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.save();
-            if(!isImageHidden) {
-                ctx.translate(canvas.width/2, canvas.height/2);
-                if(settings.flipH) ctx.scale(-1, 1); if(settings.flipV) ctx.scale(1, -1);
-                if (settings.bw) ctx.filter = 'grayscale(1) contrast(' + bwContrast + ')';
-                else if(settings.mono) ctx.filter = 'grayscale(100%)';
-                ctx.drawImage(ui.img, -canvas.width/2, -canvas.height/2, canvas.width, canvas.height);
-                if(settings.grid) {
-                    ctx.filter = 'none'; ctx.strokeStyle = 'rgba(128,128,128,0.4)'; ctx.lineWidth = Math.max(2, canvas.width / 200);
-                    ctx.beginPath(); 
-                    ctx.moveTo(-canvas.width/6, -canvas.height/2); ctx.lineTo(-canvas.width/6, canvas.height/2);
-                    ctx.moveTo(canvas.width/6, -canvas.height/2); ctx.lineTo(canvas.width/6, canvas.height/2);
-                    ctx.moveTo(-canvas.width/2, -canvas.height/6); ctx.lineTo(canvas.width/2, -canvas.height/6);
-                    ctx.moveTo(-canvas.width/2, canvas.height/6); ctx.lineTo(canvas.width/2, canvas.height/6);
+            if (!isImageHidden) {
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                if (settings.flipH) ctx.scale(-1,  1);
+                if (settings.flipV) ctx.scale( 1, -1);
+                if (settings.bw)        ctx.filter = `grayscale(1) contrast(${bwContrast})`;
+                else if (settings.mono) ctx.filter = 'grayscale(100%)';
+                ctx.drawImage(ui.img, -canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
+                if (settings.grid) {
+                    ctx.filter      = 'none';
+                    ctx.strokeStyle = 'rgba(128,128,128,0.4)';
+                    ctx.lineWidth   = Math.max(2, canvas.width / 200);
+                    ctx.beginPath();
+                    ctx.moveTo(-canvas.width / 6, -canvas.height / 2); ctx.lineTo(-canvas.width / 6, canvas.height / 2);
+                    ctx.moveTo( canvas.width / 6, -canvas.height / 2); ctx.lineTo( canvas.width / 6, canvas.height / 2);
+                    ctx.moveTo(-canvas.width / 2, -canvas.height / 6); ctx.lineTo(canvas.width / 2, -canvas.height / 6);
+                    ctx.moveTo(-canvas.width / 2,  canvas.height / 6); ctx.lineTo(canvas.width / 2,  canvas.height / 6);
                     ctx.stroke();
                 }
             }
