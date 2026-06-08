@@ -1718,26 +1718,19 @@
                 setGridVisible(false);
                 return;
             }
-            const dispW = ui.img.clientWidth;
-            const dispH = ui.img.clientHeight;
-            if (!dispW || !dispH) { setGridVisible(false); return; }
             setGridVisible(true);
             const imgRect    = ui.img.getBoundingClientRect();
             const canvasRect = ui.canvasArea.getBoundingClientRect();
-            const offL = Math.round(imgRect.left - canvasRect.left);
-            const offT = Math.round(imgRect.top  - canvasRect.top);
-            ui.grid.style.left   = offL + 'px';
-            ui.grid.style.top    = offT + 'px';
+            // サブピクセルズレを防ぐため floor/ceil で囲む
+            const offL  = Math.floor(imgRect.left   - canvasRect.left);
+            const offT  = Math.floor(imgRect.top    - canvasRect.top);
+            const dispW = Math.ceil(imgRect.right   - canvasRect.left) - offL;
+            const dispH = Math.ceil(imgRect.bottom  - canvasRect.top)  - offT;
+            if (!dispW || !dispH) { setGridVisible(false); return; }
+            ui.grid.style.left   = offL  + 'px';
+            ui.grid.style.top    = offT  + 'px';
             ui.grid.style.width  = dispW + 'px';
             ui.grid.style.height = dispH + 'px';
-            // デバッグ表示
-            let dbg = document.getElementById('_grid_dbg');
-            if (!dbg) { dbg = document.createElement('div'); dbg.id = '_grid_dbg'; dbg.style.cssText = 'position:fixed;top:80px;left:0;background:rgba(0,0,0,0.85);color:#0f0;font-size:11px;padding:4px 8px;z-index:9999;pointer-events:none;line-height:1.6;white-space:pre;'; document.body.appendChild(dbg); }
-            dbg.textContent =
-                `imgRect: L=${imgRect.left.toFixed(1)} T=${imgRect.top.toFixed(1)} W=${imgRect.width.toFixed(1)} H=${imgRect.height.toFixed(1)}\n` +
-                `canvasRect: L=${canvasRect.left.toFixed(1)} T=${canvasRect.top.toFixed(1)} W=${canvasRect.width.toFixed(1)} H=${canvasRect.height.toFixed(1)}\n` +
-                `offL=${offL} offT=${offT} dispW=${dispW} dispH=${dispH}\n` +
-                `img.natural: ${ui.img.naturalWidth}x${ui.img.naturalHeight}`;
         }
 
         // canvas-area のリサイズを監視して自動更新
