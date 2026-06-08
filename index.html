@@ -575,6 +575,10 @@
                             <option value="gray">グレー</option>
                             <option value="white">白</option>
                             <option value="black">黒</option>
+                            <option value="red">赤</option>
+                            <option value="green">緑</option>
+                            <option value="blue">青</option>
+                            <option value="yellow">黄</option>
                         </select>
                     </div>
                     <div class="settings-row settings-row-col">
@@ -1013,7 +1017,7 @@
                     soundVolume = isMuted ? 0 : 2;
                 }
                 if (saved && typeof saved.gridColor === 'string'
-                    && ['gray','white','black'].includes(saved.gridColor)) gridColor = saved.gridColor;
+                    && ['gray','white','black','red','green','blue','yellow'].includes(saved.gridColor)) gridColor = saved.gridColor;
                 if (saved && typeof saved.gridOpacity === 'number')
                     gridOpacity = Math.max(1, Math.min(10, saved.gridOpacity));
             } catch (_) {}
@@ -1223,7 +1227,15 @@
 
         /** グリッド線のCSS変数を更新する */
         function applyGridStyle() {
-            const colorMap = { gray: '128,128,128', white: '255,255,255', black: '0,0,0' };
+            const colorMap = {
+                gray:   '128,128,128',
+                white:  '255,255,255',
+                black:  '0,0,0',
+                red:    '255,60,60',
+                green:  '60,200,60',
+                blue:   '60,120,255',
+                yellow: '255,220,0',
+            };
             const rgb = colorMap[gridColor] || '128,128,128';
             const alpha = (gridOpacity / 10).toFixed(1);
             document.documentElement.style.setProperty('--grid-line-color', `rgba(${rgb},${alpha})`);
@@ -1687,25 +1699,16 @@
                 setGridVisible(false);
                 return;
             }
-            const canvasArea = ui.canvasArea;
-            const cs = window.getComputedStyle(canvasArea);
-            const padL = parseFloat(cs.paddingLeft)  || 0;
-            const padR = parseFloat(cs.paddingRight) || 0;
-            const padT = parseFloat(cs.paddingTop)   || 0;
-            const padB = parseFloat(cs.paddingBottom)|| 0;
-            const conW = canvasArea.clientWidth  - padL - padR;
-            const conH = canvasArea.clientHeight - padT - padB;
-            const natW = ui.img.naturalWidth;
-            const natH = ui.img.naturalHeight;
-            if (!conW || !conH || !natW || !natH) {
-                setGridVisible(false);
-                return;
-            }
-            const scale = Math.min(conW / natW, conH / natH);
-            const dispW = Math.round(natW * scale);
-            const dispH = Math.round(natH * scale);
-            const offL  = Math.round((conW - dispW) / 2 + padL);
-            const offT  = Math.round((conH - dispH) / 2 + padT);
+            // img と canvas-area の実際の描画矩形から直接オフセットを計算する。
+            // これにより object-fit:contain の余白・端末のdevicePixelRatio・
+            // padding の差異に関係なく正確に一致する。
+            const imgRect = ui.img.getBoundingClientRect();
+            const conRect = ui.canvasArea.getBoundingClientRect();
+            const offL = Math.round(imgRect.left - conRect.left);
+            const offT = Math.round(imgRect.top  - conRect.top);
+            const dispW = Math.round(imgRect.width);
+            const dispH = Math.round(imgRect.height);
+            if (!dispW || !dispH) { setGridVisible(false); return; }
             setGridVisible(true);
             ui.grid.style.left   = offL + 'px';
             ui.grid.style.top    = offT + 'px';
