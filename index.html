@@ -1716,13 +1716,19 @@
                 setGridVisible(false);
                 return;
             }
-            // clientWidth/Height は CSS レイアウトサイズ（transform の影響なし）
-            // offsetLeft/Top は position:relative の親からの距離
             const dispW = ui.img.clientWidth;
             const dispH = ui.img.clientHeight;
             if (!dispW || !dispH) { setGridVisible(false); return; }
-            const offL = ui.img.offsetLeft;
-            const offT = ui.img.offsetTop;
+            // img.offsetParent は image-container（position:relativeのため）
+            // canvas-area は image-container の子なので padding 分を引く
+            const cs  = window.getComputedStyle(ui.imgContainer);
+            const padL = parseFloat(cs.paddingLeft)  || 0;
+            const padT = parseFloat(cs.paddingTop)   || 0;
+            // img.offsetLeft/Top は image-container 基準
+            // canvas-area は image-container の padding 内側に position:relative なので
+            // canvas-area 基準の offL = img.offsetLeft - padL
+            const offL = ui.img.offsetLeft - padL;
+            const offT = ui.img.offsetTop  - padT;
             setGridVisible(true);
             ui.grid.style.left   = offL + 'px';
             ui.grid.style.top    = offT + 'px';
