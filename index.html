@@ -1716,22 +1716,18 @@
                 setGridVisible(false);
                 return;
             }
-            // display:block にしてからレイアウト確定後に座標を取得する
+            // clientWidth/Height は CSS レイアウトサイズ（transform の影響なし）
+            // offsetLeft/Top は position:relative の親からの距離
+            const dispW = ui.img.clientWidth;
+            const dispH = ui.img.clientHeight;
+            if (!dispW || !dispH) { setGridVisible(false); return; }
+            const offL = ui.img.offsetLeft;
+            const offT = ui.img.offsetTop;
             setGridVisible(true);
-            requestAnimationFrame(function() {
-                if (!settings.grid || isImageHidden) { setGridVisible(false); return; }
-                const imgRect = ui.img.getBoundingClientRect();
-                const conRect = ui.canvasArea.getBoundingClientRect();
-                const offL  = Math.round(imgRect.left  - conRect.left);
-                const offT  = Math.round(imgRect.top   - conRect.top);
-                const dispW = Math.round(imgRect.width);
-                const dispH = Math.round(imgRect.height);
-                if (!dispW || !dispH) { setGridVisible(false); return; }
-                ui.grid.style.left   = offL  + 'px';
-                ui.grid.style.top    = offT  + 'px';
-                ui.grid.style.width  = dispW + 'px';
-                ui.grid.style.height = dispH + 'px';
-            });
+            ui.grid.style.left   = offL + 'px';
+            ui.grid.style.top    = offT + 'px';
+            ui.grid.style.width  = dispW + 'px';
+            ui.grid.style.height = dispH + 'px';
         }
 
         // canvas-area のリサイズを監視して自動更新
