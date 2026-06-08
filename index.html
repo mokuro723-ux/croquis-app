@@ -93,7 +93,7 @@
             100% { opacity: 0; }
         }
         #canvas-area { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
-        #main-image { max-width: 100%; max-height: 100%; object-fit: contain; display: none; will-change: transform; contain: layout style; }
+        #main-image { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
         #grid-overlay { position: absolute; pointer-events: none; display: none; z-index: 5; background-image: linear-gradient(to right, var(--grid-line-color) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-line-color) 1px, transparent 1px); background-size: 33.33% 33.33%; }
         #fav-icon-large { position: absolute; top: 10px; right: 10px; font-size: 2rem; color: gold; display: none; text-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 5; pointer-events: none; }
         
@@ -1699,21 +1699,22 @@
                 setGridVisible(false);
                 return;
             }
-            // img と canvas-area の実際の描画矩形から直接オフセットを計算する。
-            // これにより object-fit:contain の余白・端末のdevicePixelRatio・
-            // padding の差異に関係なく正確に一致する。
-            const imgRect = ui.img.getBoundingClientRect();
-            const conRect = ui.canvasArea.getBoundingClientRect();
-            const offL = Math.round(imgRect.left - conRect.left);
-            const offT = Math.round(imgRect.top  - conRect.top);
-            const dispW = Math.round(imgRect.width);
-            const dispH = Math.round(imgRect.height);
-            if (!dispW || !dispH) { setGridVisible(false); return; }
+            // display:block にしてからレイアウト確定後に座標を取得する
             setGridVisible(true);
-            ui.grid.style.left   = offL + 'px';
-            ui.grid.style.top    = offT + 'px';
-            ui.grid.style.width  = dispW + 'px';
-            ui.grid.style.height = dispH + 'px';
+            requestAnimationFrame(function() {
+                if (!settings.grid || isImageHidden) { setGridVisible(false); return; }
+                const imgRect = ui.img.getBoundingClientRect();
+                const conRect = ui.canvasArea.getBoundingClientRect();
+                const offL  = Math.round(imgRect.left  - conRect.left);
+                const offT  = Math.round(imgRect.top   - conRect.top);
+                const dispW = Math.round(imgRect.width);
+                const dispH = Math.round(imgRect.height);
+                if (!dispW || !dispH) { setGridVisible(false); return; }
+                ui.grid.style.left   = offL  + 'px';
+                ui.grid.style.top    = offT  + 'px';
+                ui.grid.style.width  = dispW + 'px';
+                ui.grid.style.height = dispH + 'px';
+            });
         }
 
         // canvas-area のリサイズを監視して自動更新
