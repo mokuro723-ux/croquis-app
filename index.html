@@ -26,6 +26,7 @@
             --bottom-btn-pad-x: 12px;
             --bottom-btn-pad-y: 8px;
             --bottom-btn-min: 45px;
+            --grid-line-color: rgba(128,128,128,0.4);
         }
         html, body { height: 100%; }
         * { box-sizing: border-box; user-select: none; margin: 0; padding: 0; -webkit-touch-callout: none; }
@@ -93,7 +94,7 @@
         }
         #canvas-area { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
         #main-image { max-width: 100%; max-height: 100%; object-fit: contain; display: none; will-change: transform; contain: layout style; }
-        #grid-overlay { position: absolute; pointer-events: none; display: none; z-index: 5; background-image: linear-gradient(to right, rgba(128,128,128,0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(128,128,128,0.4) 1px, transparent 1px); background-size: 33.33% 33.33%; }
+        #grid-overlay { position: absolute; pointer-events: none; display: none; z-index: 5; background-image: linear-gradient(to right, var(--grid-line-color) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-line-color) 1px, transparent 1px); background-size: 33.33% 33.33%; }
         #fav-icon-large { position: absolute; top: 10px; right: 10px; font-size: 2rem; color: gold; display: none; text-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 5; pointer-events: none; }
         
         #progress-container { width: 100%; height: var(--progress-height, 4px); background-color: #222; }
@@ -568,6 +569,23 @@
                             <span id="bw-contrast-val">10</span>
                         </div>
                     </div>
+                    <div class="settings-row">
+                        <div class="settings-label"><span>グリッド線の色</span></div>
+                        <select id="grid-color-select" class="settings-select" onchange="onGridColorChange(this.value)">
+                            <option value="gray">グレー</option>
+                            <option value="white">白</option>
+                            <option value="black">黒</option>
+                        </select>
+                    </div>
+                    <div class="settings-row settings-row-col">
+                        <div class="settings-label"><span>グリッド線の濃さ</span></div>
+                        <div class="settings-slider-wrap">
+                            <input type="range" id="grid-opacity-slider" class="settings-slider"
+                                min="1" max="10" step="1" value="4"
+                                oninput="onGridOpacityChange(parseInt(this.value))">
+                            <span id="grid-opacity-val">4</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="settings-section">
                     <div class="settings-section-title">サウンド</div>
@@ -950,7 +968,9 @@
                 flashIntensity: flashIntensity,
                 progressBarSize: progressBarSize,
                 soundVolume: soundVolume,
-                bwContrast: bwContrast
+                bwContrast: bwContrast,
+                gridColor: gridColor,
+                gridOpacity: gridOpacity
             };
             try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (_) {}
         }
@@ -992,6 +1012,10 @@
                     isMuted = saved.isMuted;
                     soundVolume = isMuted ? 0 : 2;
                 }
+                if (saved && typeof saved.gridColor === 'string'
+                    && ['gray','white','black'].includes(saved.gridColor)) gridColor = saved.gridColor;
+                if (saved && typeof saved.gridOpacity === 'number')
+                    gridOpacity = Math.max(1, Math.min(10, saved.gridOpacity));
             } catch (_) {}
         }
 
@@ -1015,6 +1039,13 @@
             if (ui.bwContrastVal) ui.bwContrastVal.textContent = bwContrast;
             if (ui.bwBarSlider) ui.bwBarSlider.value = bwContrast;
             if (ui.bwBarVal) ui.bwBarVal.textContent = bwContrast;
+            const gridColorSel = document.getElementById('grid-color-select');
+            if (gridColorSel) gridColorSel.value = gridColor;
+            const gridOpacitySl = document.getElementById('grid-opacity-slider');
+            if (gridOpacitySl) gridOpacitySl.value = gridOpacity;
+            const gridOpacityVal = document.getElementById('grid-opacity-val');
+            if (gridOpacityVal) gridOpacityVal.textContent = gridOpacity;
+            applyGridStyle();
             setActive(ui.eyeBtn, !!isEyeHideEnabled);
             if (ui.rfBtn) {
                 setActive(ui.rfBtn, randomFlipEnabled);
@@ -1102,6 +1133,8 @@
         let progressBarSize = 2;   // ⑧ 1=細 2=中 3=太
         let soundVolume = 2;       // ⑩ 0=なし 1=小 2=中
         let bwContrast = 10;       // 2階調コントラスト強度（1〜20）
+        let gridColor = 'gray';    // グリッド線の色: gray / white / black
+        let gridOpacity = 4;       // グリッド線の濃さ: 1〜10
 
         // ---- 休憩リマインダー ----
         let breakReminderEnabled = false;
@@ -1186,6 +1219,28 @@
         function endCornerBreak() {
             setActive(ui.breakCorner, false);
             _finishBreak();
+        }
+
+        /** グリッド線のCSS変数を更新する */
+        function applyGridStyle() {
+            const colorMap = { gray: '128,128,128', white: '255,255,255', black: '0,0,0' };
+            const rgb = colorMap[gridColor] || '128,128,128';
+            const alpha = (gridOpacity / 10).toFixed(1);
+            document.documentElement.style.setProperty('--grid-line-color', `rgba(${rgb},${alpha})`);
+        }
+
+        function onGridColorChange(val) {
+            gridColor = val;
+            applyGridStyle();
+            saveUiSettings();
+        }
+
+        function onGridOpacityChange(val) {
+            gridOpacity = val;
+            const lbl = document.getElementById('grid-opacity-val');
+            if (lbl) lbl.textContent = val;
+            applyGridStyle();
+            saveUiSettings();
         }
 
         function onBwContrastChange(val) {
