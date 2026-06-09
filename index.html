@@ -1996,19 +1996,21 @@
                 updateMultiSelectCount();
             });
 
-            // ── ドラッグ範囲選択 ＋ 自動スクロール ──────────────
+            // ── ドラッグ連続選択（選択済みサムネからのみ発動）──────
+            // 未選択サムネからのドラッグはスクロールとして扱う
             let msDragStartX    = 0;
             let msDragStartY    = 0;
             let msDragStartIdx  = -1;
             let msLastEndIdx    = -1;
             let msAutoScrollRAF = null;
+            let msLastClientX   = 0;
             let msLastClientY   = 0;
-            const DRAG_THRESHOLD  = 6;   // px: ドラッグ判定閾値
-            const SCROLL_ZONE     = 80;  // px: 画面端からこの距離でスクロール開始
-            const SCROLL_SPEED    = 8;   // px/frame: 最大スクロール速度
+            const DRAG_THRESHOLD = 6;
+            const SCROLL_ZONE    = 80;
+            const SCROLL_SPEED   = 8;
 
-            function msUpdateSelection(clientY) {
-                const el    = document.elementFromPoint(msLastClientX, clientY);
+            function msUpdateSelection(clientX, clientY) {
+                const el    = document.elementFromPoint(clientX, clientY);
                 const thumb = el && el.closest('.ms-thumb');
                 if (!thumb) return;
                 const endIdx = parseInt(thumb.dataset.idx);
@@ -2028,20 +2030,17 @@
                 updateMultiSelectCount();
             }
 
-            let msLastClientX = 0;
-
             function msAutoScroll() {
                 if (!msDragSelecting) return;
                 const gridRect   = grid.getBoundingClientRect();
                 const relY       = msLastClientY - gridRect.top;
-                const zoneTop    = SCROLL_ZONE;
                 const zoneBottom = gridRect.height - SCROLL_ZONE;
                 let speed = 0;
-                if (relY < zoneTop)    speed = -SCROLL_SPEED * (1 - relY / zoneTop);
-                if (relY > zoneBottom) speed =  SCROLL_SPEED * ((relY - zoneBottom) / SCROLL_ZONE);
+                if (relY < SCROLL_ZONE)    speed = -SCROLL_SPEED * (1 - relY / SCROLL_ZONE);
+                if (relY > zoneBottom)     speed =  SCROLL_SPEED * ((relY - zoneBottom) / SCROLL_ZONE);
                 if (speed !== 0) {
                     grid.scrollTop += speed;
-                    msUpdateSelection(msLastClientY);
+                    msUpdateSelection(msLastClientX, msLastClientY);
                 }
                 msAutoScrollRAF = requestAnimationFrame(msAutoScroll);
             }
@@ -2050,15 +2049,18 @@
                 if (e.pointerType === 'mouse' && e.button !== 0) return;
                 const thumb = e.target.closest('.ms-thumb');
                 if (!thumb) return;
-                msDragMoved    = false;
+                const idx = parseInt(thumb.dataset.idx);
+                // 選択済みサムネからのみドラッグ選択を受け付ける
+                if (!multiSelectSet.has(idx)) return;
+                msDragMoved     = false;
                 msDragSelecting = false;
-                msDragStartX   = e.clientX;
-                msDragStartY   = e.clientY;
-                msLastClientX  = e.clientX;
-                msLastClientY  = e.clientY;
-                msDragStartIdx = parseInt(thumb.dataset.idx);
-                msLastEndIdx   = msDragStartIdx;
-                msDragMode     = multiSelectSet.has(msDragStartIdx) ? 'remove' : 'add';
+                msDragStartX    = e.clientX;
+                msDragStartY    = e.clientY;
+                msLastClientX   = e.clientX;
+                msLastClientY   = e.clientY;
+                msDragStartIdx  = idx;
+                msLastEndIdx    = idx;
+                msDragMode      = 'add';
             }, { passive: true });
 
             grid.addEventListener('pointermove', function(e) {
@@ -2073,7 +2075,7 @@
                     msDragMoved     = true;
                     if (!msAutoScrollRAF) msAutoScrollRAF = requestAnimationFrame(msAutoScroll);
                 }
-                msUpdateSelection(e.clientY);
+                msUpdateSelection(e.clientX, e.clientY);
             }, { passive: true });
 
             const endDrag = function() {
