@@ -206,7 +206,7 @@
         }
         #multiselect-grid {
             flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
-            display: grid; grid-template-columns: repeat(3, 1fr);
+            display: grid; grid-template-columns: repeat(2, 1fr);
             gap: 2px; padding: 2px;
             user-select: none; -webkit-user-select: none;
         }
@@ -1901,6 +1901,7 @@
         let multiSelectSet  = new Set();
         let msDragSelecting = false;   // ドラッグ選択中フラグ
         let msDragMode      = null;    // 'add' | 'remove'
+        let msDragMoved     = false;   // ドラッグ移動があったか（click抑制用）
         let msBlobCache     = new Map();
 
         function openMultiSelect() {
@@ -1971,6 +1972,7 @@
 
             // タップ選択
             grid.addEventListener('click', function(e) {
+                if (msDragMoved) return; // ドラッグ後のclickは無視
                 const thumb = e.target.closest('.ms-thumb');
                 if (!thumb) return;
                 const idx = parseInt(thumb.dataset.idx);
@@ -1979,35 +1981,50 @@
                 updateMultiSelectCount();
             });
 
-            // ドラッグ範囲選択
+            // ドラッグ範囲選択（開始〜終了インデックスの連番）
+            let msDragStartIdx = -1;
+            let msLastEndIdx   = -1;
             grid.addEventListener('pointerdown', function(e) {
                 const thumb = e.target.closest('.ms-thumb');
                 if (!thumb) return;
+                msDragMoved    = false;
+                msDragStartIdx = parseInt(thumb.dataset.idx);
+                msLastEndIdx   = msDragStartIdx;
+                msDragMode     = multiSelectSet.has(msDragStartIdx) ? 'remove' : 'add';
                 msDragSelecting = true;
-                const idx = parseInt(thumb.dataset.idx);
-                msDragMode = multiSelectSet.has(idx) ? 'remove' : 'add';
                 grid.setPointerCapture(e.pointerId);
-            });
+                e.preventDefault();
+            }, { passive: false });
 
             grid.addEventListener('pointermove', function(e) {
                 if (!msDragSelecting) return;
+                msDragMoved = true;
                 const el = document.elementFromPoint(e.clientX, e.clientY);
                 const thumb = el && el.closest('.ms-thumb');
                 if (!thumb) return;
-                const idx = parseInt(thumb.dataset.idx);
-                if (msDragMode === 'add' && !multiSelectSet.has(idx)) {
-                    multiSelectSet.add(idx);
-                    thumb.classList.add('selected');
-                    updateMultiSelectCount();
-                } else if (msDragMode === 'remove' && multiSelectSet.has(idx)) {
-                    multiSelectSet.delete(idx);
-                    thumb.classList.remove('selected');
-                    updateMultiSelectCount();
-                }
+                const endIdx = parseInt(thumb.dataset.idx);
+                if (endIdx === msLastEndIdx) return;
+                msLastEndIdx = endIdx;
+
+                // 開始〜終了の範囲を連番で選択/解除
+                const lo = Math.min(msDragStartIdx, endIdx);
+                const hi = Math.max(msDragStartIdx, endIdx);
+                grid.querySelectorAll('.ms-thumb').forEach(function(t) {
+                    const i = parseInt(t.dataset.idx);
+                    if (i < lo || i > hi) return;
+                    if (msDragMode === 'add' && !multiSelectSet.has(i)) {
+                        multiSelectSet.add(i);
+                        t.classList.add('selected');
+                    } else if (msDragMode === 'remove' && multiSelectSet.has(i)) {
+                        multiSelectSet.delete(i);
+                        t.classList.remove('selected');
+                    }
+                });
+                updateMultiSelectCount();
             });
 
-            grid.addEventListener('pointerup',     function() { msDragSelecting = false; msDragMode = null; });
-            grid.addEventListener('pointercancel', function() { msDragSelecting = false; msDragMode = null; });
+            grid.addEventListener('pointerup',     function() { msDragSelecting = false; msDragMode = null; msDragStartIdx = -1; });
+            grid.addEventListener('pointercancel', function() { msDragSelecting = false; msDragMode = null; msDragStartIdx = -1; });
 
             updateMultiSelectCount();
         }
