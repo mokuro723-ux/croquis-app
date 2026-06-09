@@ -207,12 +207,13 @@
         #multiselect-grid {
             flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
             display: grid; grid-template-columns: repeat(2, 1fr);
+            align-items: start;
             gap: 2px; padding: 2px;
             user-select: none; -webkit-user-select: none;
         }
         .ms-thumb {
             position: relative; aspect-ratio: 1; cursor: pointer; overflow: hidden;
-            background: #111;
+            background: #111; align-self: start; min-width: 0;
         }
         .ms-thumb img {
             width: 100%; height: 100%; object-fit: cover; display: block;
@@ -937,6 +938,18 @@
             const tx = db.transaction(storeName, "readwrite");
             tx.onerror = function() {};
             tx.objectStore(storeName).put({ name: name, data: dataUrl, timestamp: Date.now() });
+        }
+        /** File/Blob を DataURL に変換してから IndexedDB に保存する（バックグラウンド用）*/
+        function saveFavFileToDB(item) {
+            return new Promise(function(resolve) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    saveFavToDB(item.name, e.target.result);
+                    resolve(e.target.result);
+                };
+                reader.onerror = function() { resolve(null); };
+                reader.readAsDataURL(item);
+            });
         }
         function deleteFavFromDB(name) {
             if (!db) return;
@@ -2057,21 +2070,15 @@
                 .map(function(i) { return sourceImages[i]; })
                 .filter(function(item) { return item && !favNameSet.has(item.name); });
             if (targets.length === 0) { showMultiSelectMsg('選択中は既にお気に入り登録済みです'); return; }
-            await Promise.all(targets.map(function(item) {
-                return new Promise(function(resolve) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const dataUrl = e.target.result;
-                        dbFavImages.push({ name: item.name, data: dataUrl });
-                        saveFavToDB(item.name, dataUrl);
-                        resolve();
-                    };
-                    reader.onerror = function() { resolve(); };
-                    reader.readAsDataURL(item);
-                });
-            }));
+
+            // ── 即時UI更新（体感速度優先）──
+            targets.forEach(function(item) {
+                // data はまだ null だがキーで管理するので問題なし
+                dbFavImages.push({ name: item.name, data: null });
+            });
             rebuildFavNameSet();
-            // ⭐バッジを再描画（グリッド再構築なしで差分更新）
+
+            // ⭐バッジを差分追加
             document.getElementById('multiselect-grid').querySelectorAll('.ms-thumb').forEach(function(thumb) {
                 const item = sourceImages[parseInt(thumb.dataset.idx)];
                 if (!item) return;
@@ -2082,6 +2089,15 @@
                 }
             });
             showMultiSelectMsg(`⭐ ${targets.length}件をお気に入りに登録しました`);
+
+            // ── バックグラウンドでDB保存（順次処理して負荷を分散）──
+            for (let i = 0; i < targets.length; i++) {
+                const item = targets[i];
+                const dataUrl = await saveFavFileToDB(item);
+                // dbFavImages の data を更新
+                const entry = dbFavImages.find(function(f) { return f.name === item.name; });
+                if (entry && dataUrl) entry.data = dataUrl;
+            }
         }
 
         async function multiSelectUnfav() {
