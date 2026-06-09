@@ -181,66 +181,87 @@
         /* 複数選択オーバーレイ */
         #multiselect-overlay {
             position: fixed; inset: 0; z-index: 600;
-            background: rgba(0,0,0,0.96);
+            background: #0a0a0a;
             display: none; flex-direction: column;
             padding-top: env(safe-area-inset-top, 0px);
         }
         #multiselect-overlay.open { display: flex; }
         #multiselect-header {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 12px 16px; border-bottom: 1px solid var(--border-color);
-            flex-shrink: 0;
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 12px; border-bottom: 1px solid #1e1e1e;
+            flex-shrink: 0; background: #111;
         }
-        #multiselect-count { font-size: 0.9rem; color: var(--accent); font-weight: bold; }
+        #multiselect-count {
+            flex: 1; font-size: 0.85rem; color: var(--accent); font-weight: bold;
+        }
+        #multiselect-select-all, #multiselect-deselect-all {
+            background: none; border: 1px solid #333; color: #aaa;
+            font-size: 0.75rem; padding: 5px 10px; border-radius: 4px; cursor: pointer;
+            white-space: nowrap;
+        }
+        #multiselect-select-all:active, #multiselect-deselect-all:active { background: #222; }
         #multiselect-close-btn {
-            background: none; border: none; color: #888; font-size: 1.2rem;
-            cursor: pointer; padding: 4px 8px; border-radius: 4px;
+            background: none; border: none; color: #666; font-size: 1.3rem;
+            cursor: pointer; padding: 4px 6px; line-height: 1;
         }
-        #multiselect-close-btn:hover { color: #ccc; }
         #multiselect-grid {
-            flex: 1; overflow-y: auto;
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            align-items: start;
-            gap: 4px; padding: 8px;
+            flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 2px; padding: 2px;
+            user-select: none; -webkit-user-select: none;
         }
-        .multiselect-thumb {
-            position: relative; aspect-ratio: 1; cursor: pointer;
-            border-radius: 6px; overflow: hidden;
-            border: 3px solid transparent; transition: border-color 0.1s;
+        .ms-thumb {
+            position: relative; aspect-ratio: 1; cursor: pointer; overflow: hidden;
+            background: #111;
         }
-        .multiselect-thumb.selected { border-color: var(--accent); }
-        .multiselect-thumb img {
+        .ms-thumb img {
             width: 100%; height: 100%; object-fit: cover; display: block;
+            pointer-events: none; transition: opacity 0.1s;
+        }
+        .ms-thumb.selected img { opacity: 0.7; }
+        .ms-overlay {
+            position: absolute; inset: 0;
+            background: rgba(0, 212, 255, 0.25);
+            opacity: 0; transition: opacity 0.1s; pointer-events: none;
+        }
+        .ms-thumb.selected .ms-overlay { opacity: 1; }
+        .ms-check {
+            position: absolute; top: 6px; left: 6px;
+            width: 22px; height: 22px; border-radius: 50%;
+            background: rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.4);
+            display: flex; align-items: center; justify-content: center;
+            pointer-events: none; transition: all 0.1s;
+        }
+        .ms-check::after {
+            content: ''; width: 6px; height: 10px;
+            border-right: 2px solid transparent; border-bottom: 2px solid transparent;
+            transform: rotate(45deg) translate(-1px, -1px);
+            transition: border-color 0.1s;
+        }
+        .ms-thumb.selected .ms-check {
+            background: var(--accent); border-color: var(--accent);
+        }
+        .ms-thumb.selected .ms-check::after { border-color: #000; }
+        .ms-fav {
+            position: absolute; bottom: 4px; right: 5px;
+            font-size: 13px; line-height: 1;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.9);
             pointer-events: none;
         }
-        .multiselect-check {
-            position: absolute; top: 6px; right: 6px;
-            width: 26px; height: 26px; border-radius: 50%;
-            background: rgba(0,0,0,0.65); border: 2px solid #666;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 14px; color: transparent; transition: all 0.1s;
-        }
-        .multiselect-thumb.selected .multiselect-check {
-            background: var(--accent); border-color: var(--accent); color: #000;
-        }
-        .multiselect-fav-badge {
-            position: absolute; bottom: 4px; left: 6px;
-            font-size: 14px; line-height: 1; text-shadow: 0 1px 4px rgba(0,0,0,0.9);
-        }
         #multiselect-actions {
-            display: flex; gap: 8px; padding: 10px 12px;
+            display: flex; gap: 6px; padding: 10px 12px;
             padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-            border-top: 1px solid var(--border-color); flex-shrink: 0;
-            flex-wrap: wrap;
+            border-top: 1px solid #1e1e1e; flex-shrink: 0; background: #111;
         }
         #multiselect-actions button {
-            flex: 1; min-width: 100px; padding: 10px 8px;
-            font-size: 0.82rem; border-radius: 6px;
-            border: 1px solid var(--border-color);
-            background: #222; color: #ccc; cursor: pointer;
+            flex: 1; padding: 11px 6px; font-size: 0.8rem;
+            border-radius: 8px; border: 1px solid #2a2a2a;
+            background: #1a1a1a; color: #bbb; cursor: pointer; font-weight: bold;
         }
-        #multiselect-actions button:active { background: #333; }
-        .multiselect-danger { color: #ff6b6b !important; border-color: #ff6b6b !important; }
+        #multiselect-actions button:active { background: #252525; }
+        #multiselect-fav-btn { color: #ffd700 !important; border-color: #554400 !important; }
+        #multiselect-unfav-btn { color: #888 !important; }
+        #multiselect-skip-btn { color: #ff6b6b !important; border-color: #4a1f1f !important; }
 
         #settings-panel {
             position: fixed; top: env(safe-area-inset-top, 0px); right: 0; bottom: 0;
@@ -643,14 +664,16 @@
 
     <div id="multiselect-overlay">
         <div id="multiselect-header">
-            <span id="multiselect-count">0件選択中</span>
+            <span id="multiselect-count">画像をタップして選択</span>
+            <button id="multiselect-select-all" onclick="multiSelectAll()">全選択</button>
+            <button id="multiselect-deselect-all" onclick="multiDeselectAll()">全解除</button>
             <button id="multiselect-close-btn" onclick="closeMultiSelect()">✕</button>
         </div>
         <div id="multiselect-grid"></div>
         <div id="multiselect-actions">
             <button id="multiselect-fav-btn" onclick="multiSelectFav()">⭐ お気に入り登録</button>
-            <button id="multiselect-unfav-btn" onclick="multiSelectUnfav()">☆ お気に入り解除</button>
-            <button id="multiselect-skip-btn" onclick="multiSelectSkip()" class="multiselect-danger">🗑️ スキップ登録</button>
+            <button id="multiselect-unfav-btn" onclick="multiSelectUnfav()">☆ 解除</button>
+            <button id="multiselect-skip-btn" onclick="multiSelectSkip()">🗑️ スキップ</button>
         </div>
     </div>
 
@@ -1875,11 +1898,15 @@
         }
 
         // ── 複数選択機能 ────────────────────────────────────────
-        let multiSelectSet = new Set(); // 選択中のインデックス（sourceImages基準）
+        let multiSelectSet  = new Set();
+        let msDragSelecting = false;   // ドラッグ選択中フラグ
+        let msDragMode      = null;    // 'add' | 'remove'
+        let msBlobCache     = new Map();
 
         function openMultiSelect() {
             ui.managePopup.classList.toggle('show', false);
             multiSelectSet.clear();
+            msBlobCache = new Map();
             renderMultiSelectGrid();
             document.getElementById('multiselect-overlay').classList.add('open');
         }
@@ -1887,20 +1914,29 @@
         function closeMultiSelect() {
             document.getElementById('multiselect-overlay').classList.remove('open');
             multiSelectSet.clear();
+            msBlobCache = new Map();
+        }
+
+        function updateMultiSelectCount() {
+            const el = document.getElementById('multiselect-count');
+            if (!el) return;
+            el.textContent = multiSelectSet.size > 0
+                ? `${multiSelectSet.size} / ${sourceImages.length} 件選択中`
+                : '画像をタップして選択';
         }
 
         function renderMultiSelectGrid() {
             const grid = document.getElementById('multiselect-grid');
             grid.innerHTML = '';
             if (sourceImages.length === 0) {
-                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#555;padding:40px 0;font-size:0.9rem;">画像が読み込まれていません</div>';
+                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#444;padding:60px 0;font-size:0.9rem;">画像が読み込まれていません</div>';
                 updateMultiSelectCount();
                 return;
             }
-            const blobCache = new Map();
+
             sourceImages.forEach(function(item, idx) {
                 const div = document.createElement('div');
-                div.className = 'multiselect-thumb' + (multiSelectSet.has(idx) ? ' selected' : '');
+                div.className = 'ms-thumb' + (multiSelectSet.has(idx) ? ' selected' : '');
                 div.dataset.idx = idx;
 
                 const img = document.createElement('img');
@@ -1908,40 +1944,94 @@
                 if (item.data) {
                     img.src = item.data;
                 } else {
-                    let url = blobCache.get(item);
-                    if (!url) { url = URL.createObjectURL(item); blobCache.set(item, url); }
+                    let url = msBlobCache.get(item);
+                    if (!url) { url = URL.createObjectURL(item); msBlobCache.set(item, url); }
                     img.src = url;
                 }
 
+                const overlay = document.createElement('div');
+                overlay.className = 'ms-overlay';
+
                 const check = document.createElement('div');
-                check.className = 'multiselect-check';
-                check.textContent = '✓';
+                check.className = 'ms-check';
 
                 div.appendChild(img);
+                div.appendChild(overlay);
                 div.appendChild(check);
 
                 if (favNameSet.has(item.name)) {
                     const badge = document.createElement('div');
-                    badge.className = 'multiselect-fav-badge';
+                    badge.className = 'ms-fav';
                     badge.textContent = '⭐';
                     div.appendChild(badge);
                 }
 
-                div.addEventListener('click', function() {
-                    const i = parseInt(div.dataset.idx);
-                    if (multiSelectSet.has(i)) { multiSelectSet.delete(i); div.classList.remove('selected'); }
-                    else                        { multiSelectSet.add(i);    div.classList.add('selected');    }
-                    updateMultiSelectCount();
-                });
-
                 grid.appendChild(div);
             });
+
+            // タップ選択
+            grid.addEventListener('click', function(e) {
+                const thumb = e.target.closest('.ms-thumb');
+                if (!thumb) return;
+                const idx = parseInt(thumb.dataset.idx);
+                if (multiSelectSet.has(idx)) { multiSelectSet.delete(idx); thumb.classList.remove('selected'); }
+                else                          { multiSelectSet.add(idx);    thumb.classList.add('selected');    }
+                updateMultiSelectCount();
+            });
+
+            // ドラッグ範囲選択
+            grid.addEventListener('pointerdown', function(e) {
+                const thumb = e.target.closest('.ms-thumb');
+                if (!thumb) return;
+                msDragSelecting = true;
+                const idx = parseInt(thumb.dataset.idx);
+                msDragMode = multiSelectSet.has(idx) ? 'remove' : 'add';
+                grid.setPointerCapture(e.pointerId);
+            });
+
+            grid.addEventListener('pointermove', function(e) {
+                if (!msDragSelecting) return;
+                const el = document.elementFromPoint(e.clientX, e.clientY);
+                const thumb = el && el.closest('.ms-thumb');
+                if (!thumb) return;
+                const idx = parseInt(thumb.dataset.idx);
+                if (msDragMode === 'add' && !multiSelectSet.has(idx)) {
+                    multiSelectSet.add(idx);
+                    thumb.classList.add('selected');
+                    updateMultiSelectCount();
+                } else if (msDragMode === 'remove' && multiSelectSet.has(idx)) {
+                    multiSelectSet.delete(idx);
+                    thumb.classList.remove('selected');
+                    updateMultiSelectCount();
+                }
+            });
+
+            grid.addEventListener('pointerup',     function() { msDragSelecting = false; msDragMode = null; });
+            grid.addEventListener('pointercancel', function() { msDragSelecting = false; msDragMode = null; });
+
             updateMultiSelectCount();
         }
 
-        function updateMultiSelectCount() {
-            document.getElementById('multiselect-count').textContent =
-                multiSelectSet.size > 0 ? `${multiSelectSet.size}件選択中` : '画像をタップして選択';
+        function multiSelectAll() {
+            const grid = document.getElementById('multiselect-grid');
+            sourceImages.forEach(function(_, idx) { multiSelectSet.add(idx); });
+            grid.querySelectorAll('.ms-thumb').forEach(function(t) { t.classList.add('selected'); });
+            updateMultiSelectCount();
+        }
+
+        function multiDeselectAll() {
+            const grid = document.getElementById('multiselect-grid');
+            multiSelectSet.clear();
+            grid.querySelectorAll('.ms-thumb').forEach(function(t) { t.classList.remove('selected'); });
+            updateMultiSelectCount();
+        }
+
+        function showMultiSelectMsg(msg) {
+            const el = document.getElementById('multiselect-count');
+            if (!el) return;
+            el.textContent = msg;
+            clearTimeout(el._msgTimer);
+            el._msgTimer = setTimeout(function() { updateMultiSelectCount(); }, 2000);
         }
 
         async function multiSelectFav() {
@@ -1949,11 +2039,7 @@
             const targets = Array.from(multiSelectSet)
                 .map(function(i) { return sourceImages[i]; })
                 .filter(function(item) { return item && !favNameSet.has(item.name); });
-            if (targets.length === 0) {
-                document.getElementById('multiselect-count').textContent = '選択中は既にお気に入り登録済みです';
-                return;
-            }
-            // FileReader で DataURL 変換してから保存（toggleFavCurrent と同じ方式）
+            if (targets.length === 0) { showMultiSelectMsg('選択中は既にお気に入り登録済みです'); return; }
             await Promise.all(targets.map(function(item) {
                 return new Promise(function(resolve) {
                     const reader = new FileReader();
@@ -1968,9 +2054,17 @@
                 });
             }));
             rebuildFavNameSet();
-            renderMultiSelectGrid();
-            document.getElementById('multiselect-count').textContent =
-                `${targets.length}件をお気に入りに登録しました`;
+            // ⭐バッジを再描画（グリッド再構築なしで差分更新）
+            document.getElementById('multiselect-grid').querySelectorAll('.ms-thumb').forEach(function(thumb) {
+                const item = sourceImages[parseInt(thumb.dataset.idx)];
+                if (!item) return;
+                if (favNameSet.has(item.name) && !thumb.querySelector('.ms-fav')) {
+                    const badge = document.createElement('div');
+                    badge.className = 'ms-fav'; badge.textContent = '⭐';
+                    thumb.appendChild(badge);
+                }
+            });
+            showMultiSelectMsg(`⭐ ${targets.length}件をお気に入りに登録しました`);
         }
 
         async function multiSelectUnfav() {
@@ -1978,32 +2072,35 @@
             const targets = Array.from(multiSelectSet)
                 .map(function(i) { return sourceImages[i]; })
                 .filter(function(item) { return item && favNameSet.has(item.name); });
-            if (targets.length === 0) {
-                document.getElementById('multiselect-count').textContent = '選択中にお気に入り登録済みの画像がありません';
-                return;
-            }
+            if (targets.length === 0) { showMultiSelectMsg('選択中にお気に入り登録済みの画像がありません'); return; }
             targets.forEach(function(item) {
                 dbFavImages = dbFavImages.filter(function(f) { return f.name !== item.name; });
                 deleteFavFromDB(item.name);
             });
             rebuildFavNameSet();
-            renderMultiSelectGrid();
-            document.getElementById('multiselect-count').textContent =
-                `${targets.length}件のお気に入りを解除しました`;
+            // ⭐バッジを差分削除
+            document.getElementById('multiselect-grid').querySelectorAll('.ms-thumb').forEach(function(thumb) {
+                const item = sourceImages[parseInt(thumb.dataset.idx)];
+                if (!item) return;
+                if (!favNameSet.has(item.name)) {
+                    const badge = thumb.querySelector('.ms-fav');
+                    if (badge) badge.remove();
+                }
+            });
+            showMultiSelectMsg(`☆ ${targets.length}件のお気に入りを解除しました`);
         }
 
         function multiSelectSkip() {
             if (multiSelectSet.size === 0) return;
-            const targets = Array.from(multiSelectSet).map(function(i) { return sourceImages[i]; }).filter(Boolean);
+            const targets = Array.from(multiSelectSet)
+                .map(function(i) { return sourceImages[i]; })
+                .filter(function(item) { return item && !skipNameSet.has(item.name); });
             targets.forEach(function(item) {
-                if (!skipNameSet.has(item.name)) {
-                    skipList.push(item.name);
-                    skipNameSet.add(item.name);
-                }
+                skipList.push(item.name);
+                skipNameSet.add(item.name);
             });
-            flushSkipList();
-            document.getElementById('multiselect-count').textContent =
-                `${targets.length}件をスキップ登録しました`;
+            if (targets.length > 0) flushSkipList();
+            showMultiSelectMsg(`🗑️ ${targets.length}件をスキップ登録しました`);
         }
 
         function clearManageData() {
