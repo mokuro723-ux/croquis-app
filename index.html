@@ -1996,39 +1996,19 @@
                 updateMultiSelectCount();
             });
 
-            // ── ドラッグ範囲選択（スクロールを妨げない）──────────
-            // 縦スクロールはブラウザに任せ、横方向の移動が大きい場合のみドラッグ選択とみなす
-            let msDragStartX   = 0;
-            let msDragStartY   = 0;
-            let msDragStartIdx = -1;
-            let msLastEndIdx   = -1;
-            const DRAG_THRESHOLD = 8; // px: これ以上動いたらドラッグ判定
+            // ── ドラッグ範囲選択 ＋ 自動スクロール ──────────────
+            let msDragStartX    = 0;
+            let msDragStartY    = 0;
+            let msDragStartIdx  = -1;
+            let msLastEndIdx    = -1;
+            let msAutoScrollRAF = null;
+            let msLastClientY   = 0;
+            const DRAG_THRESHOLD  = 6;   // px: ドラッグ判定閾値
+            const SCROLL_ZONE     = 80;  // px: 画面端からこの距離でスクロール開始
+            const SCROLL_SPEED    = 8;   // px/frame: 最大スクロール速度
 
-            grid.addEventListener('pointerdown', function(e) {
-                if (e.pointerType === 'mouse' && e.button !== 0) return;
-                const thumb = e.target.closest('.ms-thumb');
-                if (!thumb) return;
-                msDragMoved     = false;
-                msDragSelecting = false;
-                msDragStartX    = e.clientX;
-                msDragStartY    = e.clientY;
-                msDragStartIdx  = parseInt(thumb.dataset.idx);
-                msLastEndIdx    = msDragStartIdx;
-                msDragMode      = multiSelectSet.has(msDragStartIdx) ? 'remove' : 'add';
-            }, { passive: true });
-
-            grid.addEventListener('pointermove', function(e) {
-                if (msDragStartIdx < 0) return;
-                const dx = Math.abs(e.clientX - msDragStartX);
-                const dy = Math.abs(e.clientY - msDragStartY);
-                // 縦スクロールが主体なら無視
-                if (!msDragSelecting) {
-                    if (dy > dx && dy > DRAG_THRESHOLD) { msDragStartIdx = -1; return; }
-                    if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
-                    msDragSelecting = true;
-                    msDragMoved     = true;
-                }
-                const el    = document.elementFromPoint(e.clientX, e.clientY);
+            function msUpdateSelection(clientY) {
+                const el    = document.elementFromPoint(msLastClientX, clientY);
                 const thumb = el && el.closest('.ms-thumb');
                 if (!thumb) return;
                 const endIdx = parseInt(thumb.dataset.idx);
@@ -2046,9 +2026,62 @@
                     }
                 });
                 updateMultiSelectCount();
+            }
+
+            let msLastClientX = 0;
+
+            function msAutoScroll() {
+                if (!msDragSelecting) return;
+                const gridRect   = grid.getBoundingClientRect();
+                const relY       = msLastClientY - gridRect.top;
+                const zoneTop    = SCROLL_ZONE;
+                const zoneBottom = gridRect.height - SCROLL_ZONE;
+                let speed = 0;
+                if (relY < zoneTop)    speed = -SCROLL_SPEED * (1 - relY / zoneTop);
+                if (relY > zoneBottom) speed =  SCROLL_SPEED * ((relY - zoneBottom) / SCROLL_ZONE);
+                if (speed !== 0) {
+                    grid.scrollTop += speed;
+                    msUpdateSelection(msLastClientY);
+                }
+                msAutoScrollRAF = requestAnimationFrame(msAutoScroll);
+            }
+
+            grid.addEventListener('pointerdown', function(e) {
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
+                const thumb = e.target.closest('.ms-thumb');
+                if (!thumb) return;
+                msDragMoved    = false;
+                msDragSelecting = false;
+                msDragStartX   = e.clientX;
+                msDragStartY   = e.clientY;
+                msLastClientX  = e.clientX;
+                msLastClientY  = e.clientY;
+                msDragStartIdx = parseInt(thumb.dataset.idx);
+                msLastEndIdx   = msDragStartIdx;
+                msDragMode     = multiSelectSet.has(msDragStartIdx) ? 'remove' : 'add';
             }, { passive: true });
 
-            const endDrag = function() { msDragSelecting = false; msDragStartIdx = -1; msDragMode = null; };
+            grid.addEventListener('pointermove', function(e) {
+                if (msDragStartIdx < 0) return;
+                msLastClientX = e.clientX;
+                msLastClientY = e.clientY;
+                const dx = Math.abs(e.clientX - msDragStartX);
+                const dy = Math.abs(e.clientY - msDragStartY);
+                if (!msDragSelecting) {
+                    if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
+                    msDragSelecting = true;
+                    msDragMoved     = true;
+                    if (!msAutoScrollRAF) msAutoScrollRAF = requestAnimationFrame(msAutoScroll);
+                }
+                msUpdateSelection(e.clientY);
+            }, { passive: true });
+
+            const endDrag = function() {
+                msDragSelecting = false;
+                msDragStartIdx  = -1;
+                msDragMode      = null;
+                if (msAutoScrollRAF) { cancelAnimationFrame(msAutoScrollRAF); msAutoScrollRAF = null; }
+            };
             grid.addEventListener('pointerup',     endDrag, { passive: true });
             grid.addEventListener('pointercancel', endDrag, { passive: true });
 
