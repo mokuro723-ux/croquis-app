@@ -1914,9 +1914,6 @@
 
         // ── 複数選択機能 ────────────────────────────────────────
         let multiSelectSet  = new Set();
-        let msDragSelecting = false;   // ドラッグ選択中フラグ
-        let msDragMode      = null;    // 'add' | 'remove'
-        let msDragMoved     = false;   // ドラッグ移動があったか（click抑制用）
         let msBlobCache     = new Map();
 
         function openMultiSelect() {
@@ -1949,12 +1946,10 @@
                 updateMultiSelectCount();
                 return;
             }
-
             sourceImages.forEach(function(item, idx) {
                 const div = document.createElement('div');
                 div.className = 'ms-thumb' + (multiSelectSet.has(idx) ? ' selected' : '');
                 div.dataset.idx = idx;
-
                 const img = document.createElement('img');
                 img.loading = 'lazy';
                 if (item.data) {
@@ -1964,62 +1959,53 @@
                     if (!url) { url = URL.createObjectURL(item); msBlobCache.set(item, url); }
                     img.src = url;
                 }
-
                 const overlay = document.createElement('div');
                 overlay.className = 'ms-overlay';
-
                 const check = document.createElement('div');
                 check.className = 'ms-check';
-
                 div.appendChild(img);
                 div.appendChild(overlay);
                 div.appendChild(check);
-
                 if (favNameSet.has(item.name)) {
                     const badge = document.createElement('div');
                     badge.className = 'ms-fav';
                     badge.textContent = '⭐';
                     div.appendChild(badge);
                 }
-
                 grid.appendChild(div);
             });
+            updateMultiSelectCount();
+        }
 
-            // ── タップ選択 ──────────────────────────────────────
-            grid.addEventListener('click', function(e) {
-                if (msDragMoved) return;
-                const thumb = e.target.closest('.ms-thumb');
-                if (!thumb) return;
-                const idx = parseInt(thumb.dataset.idx);
-                if (multiSelectSet.has(idx)) { multiSelectSet.delete(idx); thumb.classList.remove('selected'); }
-                else                          { multiSelectSet.add(idx);    thumb.classList.add('selected');    }
-                updateMultiSelectCount();
-            });
+        // ── 複数選択のタッチ操作（グリッドに1回だけ登録）─────────────
+        // touchstart → 即タップ選択 ＆ ドラッグ準備
+        // touchmove  → ドラッグ中はスクロール禁止 ＋ 自動スクロール
+        // touchend   → 終了
+        (function() {
+            const overlay = document.getElementById('multiselect-overlay');
+            let dragStartIdx  = -1;
+            let lastEndIdx    = -1;
+            let isDragging    = false;
+            let lastX = 0, lastY = 0;
+            let autoRaf = null;
+            const SCROLL_ZONE  = 80;   // px
+            const SCROLL_SPEED = 12;   // px/frame
 
-            // ── ドラッグ連続選択 ＋ 自動スクロール ─────────────
-            // touch系イベントを使用（iOS/Androidで確実に動作）
-            // 選択済みサムネからのみ発動し、未選択サムネからはスクロールになる
-            let msDragStartIdx  = -1;
-            let msLastEndIdx    = -1;
-            let msAutoScrollRAF = null;
-            let msLastTouchX    = 0;
-            let msLastTouchY    = 0;
-            const SCROLL_ZONE  = 100;
-            const SCROLL_SPEED = 10;
-
-            function msThumbAtPoint(x, y) {
+            function thumbAt(x, y) {
                 const el = document.elementFromPoint(x, y);
                 return el && el.closest('.ms-thumb');
             }
 
-            function msApplyRange(endIdx) {
-                if (endIdx === msLastEndIdx) return;
-                msLastEndIdx = endIdx;
-                const lo = Math.min(msDragStartIdx, endIdx);
-                const hi = Math.max(msDragStartIdx, endIdx);
+            function applyRange(endIdx) {
+                if (endIdx === lastEndIdx) return;
+                lastEndIdx = endIdx;
+                const lo = Math.min(dragStartIdx, endIdx);
+                const hi = Math.max(dragStartIdx, endIdx);
+                const grid = document.getElementById('multiselect-grid');
                 grid.querySelectorAll('.ms-thumb').forEach(function(t) {
                     const i = parseInt(t.dataset.idx);
-                    if (i >= lo && i <= hi && !multiSelectSet.has(i)) {
+                    if (i < lo || i > hi) return;
+                    if (!multiSelectSet.has(i)) {
                         multiSelectSet.add(i);
                         t.classList.add('selected');
                     }
@@ -2027,65 +2013,66 @@
                 updateMultiSelectCount();
             }
 
-            function msScrollLoop() {
-                if (!msDragSelecting) return;
-                const rect   = grid.getBoundingClientRect();
-                const relY   = msLastTouchY - rect.top;
-                let speed = 0;
-                if (relY < SCROLL_ZONE)               speed = -SCROLL_SPEED * (1 - relY / SCROLL_ZONE);
-                if (relY > rect.height - SCROLL_ZONE) speed =  SCROLL_SPEED * ((relY - (rect.height - SCROLL_ZONE)) / SCROLL_ZONE);
-                if (speed !== 0) {
-                    grid.scrollTop += speed;
-                    const thumb = msThumbAtPoint(msLastTouchX, msLastTouchY);
-                    if (thumb) msApplyRange(parseInt(thumb.dataset.idx));
+            function autoScroll() {
+                if (!isDragging) return;
+                const grid = document.getElementById('multiselect-grid');
+                const rect = grid.getBoundingClientRect();
+                const relY = lastY - rect.top;
+                let spd = 0;
+                if (relY < SCROLL_ZONE)
+                    spd = -SCROLL_SPEED * Math.max(0, (SCROLL_ZONE - relY) / SCROLL_ZONE);
+                else if (relY > rect.height - SCROLL_ZONE)
+                    spd =  SCROLL_SPEED * Math.max(0, (relY - (rect.height - SCROLL_ZONE)) / SCROLL_ZONE);
+                if (spd !== 0) {
+                    grid.scrollTop += spd;
+                    const t = thumbAt(lastX, lastY);
+                    if (t) applyRange(parseInt(t.dataset.idx));
                 }
-                msAutoScrollRAF = requestAnimationFrame(msScrollLoop);
+                autoRaf = requestAnimationFrame(autoScroll);
             }
 
-            grid.addEventListener('touchstart', function(e) {
-                msDragMoved    = false;
-                msDragSelecting = false;
-                msDragStartIdx = -1;
-                const touch = e.touches[0];
-                const thumb = msThumbAtPoint(touch.clientX, touch.clientY);
-                if (!thumb) return;
-                const idx = parseInt(thumb.dataset.idx);
-                if (!multiSelectSet.has(idx)) return; // 未選択からはスクロール
-                msDragStartIdx = idx;
-                msLastEndIdx   = idx;
-                msLastTouchX   = touch.clientX;
-                msLastTouchY   = touch.clientY;
-            }, { passive: true });
+            function stopDrag() {
+                isDragging   = false;
+                dragStartIdx = -1;
+                lastEndIdx   = -1;
+                if (autoRaf) { cancelAnimationFrame(autoRaf); autoRaf = null; }
+            }
 
-            grid.addEventListener('touchmove', function(e) {
-                if (msDragStartIdx < 0) return;
+            overlay.addEventListener('touchstart', function(e) {
+                if (!overlay.classList.contains('open')) return;
                 const touch = e.touches[0];
-                msLastTouchX = touch.clientX;
-                msLastTouchY = touch.clientY;
-                if (!msDragSelecting) {
-                    msDragSelecting = true;
-                    msDragMoved     = true;
-                    if (!msAutoScrollRAF) msAutoScrollRAF = requestAnimationFrame(msScrollLoop);
-                }
-                e.preventDefault(); // スクロールを止めてドラッグ選択を優先
-                const thumb = msThumbAtPoint(touch.clientX, touch.clientY);
-                if (thumb) msApplyRange(parseInt(thumb.dataset.idx));
+                const t = thumbAt(touch.clientX, touch.clientY);
+                if (!t) return;
+                const idx = parseInt(t.dataset.idx);
+                // タップで即選択/解除
+                if (multiSelectSet.has(idx)) { multiSelectSet.delete(idx); t.classList.remove('selected'); }
+                else                          { multiSelectSet.add(idx);    t.classList.add('selected');    }
+                updateMultiSelectCount();
+                // ドラッグ準備
+                dragStartIdx = idx;
+                lastEndIdx   = idx;
+                isDragging   = false;
+                lastX = touch.clientX;
+                lastY = touch.clientY;
             }, { passive: false });
 
-            grid.addEventListener('touchend', function() {
-                msDragSelecting = false;
-                msDragStartIdx  = -1;
-                if (msAutoScrollRAF) { cancelAnimationFrame(msAutoScrollRAF); msAutoScrollRAF = null; }
-            }, { passive: true });
+            overlay.addEventListener('touchmove', function(e) {
+                if (dragStartIdx < 0) return;
+                e.preventDefault();
+                const touch = e.touches[0];
+                lastX = touch.clientX;
+                lastY = touch.clientY;
+                if (!isDragging) {
+                    isDragging = true;
+                    if (!autoRaf) autoRaf = requestAnimationFrame(autoScroll);
+                }
+                const t = thumbAt(touch.clientX, touch.clientY);
+                if (t) applyRange(parseInt(t.dataset.idx));
+            }, { passive: false });
 
-            grid.addEventListener('touchcancel', function() {
-                msDragSelecting = false;
-                msDragStartIdx  = -1;
-                if (msAutoScrollRAF) { cancelAnimationFrame(msAutoScrollRAF); msAutoScrollRAF = null; }
-            }, { passive: true });
-
-            updateMultiSelectCount();
-        }
+            overlay.addEventListener('touchend',    stopDrag, { passive: true });
+            overlay.addEventListener('touchcancel', stopDrag, { passive: true });
+        })();
 
         function multiSelectAll() {
             const grid = document.getElementById('multiselect-grid');
