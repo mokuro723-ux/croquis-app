@@ -206,14 +206,16 @@
         }
         #multiselect-grid {
             flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
-            display: grid; grid-template-columns: repeat(2, 1fr);
-            align-items: start;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-auto-rows: calc(50vw - 3px);
             gap: 2px; padding: 2px;
             user-select: none; -webkit-user-select: none;
+            align-content: start;
         }
         .ms-thumb {
-            position: relative; aspect-ratio: 1; cursor: pointer; overflow: hidden;
-            background: #111; align-self: start; min-width: 0;
+            position: relative; overflow: hidden;
+            background: #111; width: 100%; height: 100%;
         }
         .ms-thumb img {
             width: 100%; height: 100%; object-fit: cover; display: block;
@@ -1983,9 +1985,9 @@
                 grid.appendChild(div);
             });
 
-            // タップ選択
+            // ── タップ選択 ──────────────────────────────────────
             grid.addEventListener('click', function(e) {
-                if (msDragMoved) return; // ドラッグ後のclickは無視
+                if (msDragMoved) return;
                 const thumb = e.target.closest('.ms-thumb');
                 if (!thumb) return;
                 const idx = parseInt(thumb.dataset.idx);
@@ -1994,50 +1996,61 @@
                 updateMultiSelectCount();
             });
 
-            // ドラッグ範囲選択（開始〜終了インデックスの連番）
+            // ── ドラッグ範囲選択（スクロールを妨げない）──────────
+            // 縦スクロールはブラウザに任せ、横方向の移動が大きい場合のみドラッグ選択とみなす
+            let msDragStartX   = 0;
+            let msDragStartY   = 0;
             let msDragStartIdx = -1;
             let msLastEndIdx   = -1;
+            const DRAG_THRESHOLD = 8; // px: これ以上動いたらドラッグ判定
+
             grid.addEventListener('pointerdown', function(e) {
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
                 const thumb = e.target.closest('.ms-thumb');
                 if (!thumb) return;
-                msDragMoved    = false;
-                msDragStartIdx = parseInt(thumb.dataset.idx);
-                msLastEndIdx   = msDragStartIdx;
-                msDragMode     = multiSelectSet.has(msDragStartIdx) ? 'remove' : 'add';
-                msDragSelecting = true;
-                grid.setPointerCapture(e.pointerId);
-                e.preventDefault();
-            }, { passive: false });
+                msDragMoved     = false;
+                msDragSelecting = false;
+                msDragStartX    = e.clientX;
+                msDragStartY    = e.clientY;
+                msDragStartIdx  = parseInt(thumb.dataset.idx);
+                msLastEndIdx    = msDragStartIdx;
+                msDragMode      = multiSelectSet.has(msDragStartIdx) ? 'remove' : 'add';
+            }, { passive: true });
 
             grid.addEventListener('pointermove', function(e) {
-                if (!msDragSelecting) return;
-                msDragMoved = true;
-                const el = document.elementFromPoint(e.clientX, e.clientY);
+                if (msDragStartIdx < 0) return;
+                const dx = Math.abs(e.clientX - msDragStartX);
+                const dy = Math.abs(e.clientY - msDragStartY);
+                // 縦スクロールが主体なら無視
+                if (!msDragSelecting) {
+                    if (dy > dx && dy > DRAG_THRESHOLD) { msDragStartIdx = -1; return; }
+                    if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
+                    msDragSelecting = true;
+                    msDragMoved     = true;
+                }
+                const el    = document.elementFromPoint(e.clientX, e.clientY);
                 const thumb = el && el.closest('.ms-thumb');
                 if (!thumb) return;
                 const endIdx = parseInt(thumb.dataset.idx);
                 if (endIdx === msLastEndIdx) return;
                 msLastEndIdx = endIdx;
-
-                // 開始〜終了の範囲を連番で選択/解除
                 const lo = Math.min(msDragStartIdx, endIdx);
                 const hi = Math.max(msDragStartIdx, endIdx);
                 grid.querySelectorAll('.ms-thumb').forEach(function(t) {
                     const i = parseInt(t.dataset.idx);
                     if (i < lo || i > hi) return;
                     if (msDragMode === 'add' && !multiSelectSet.has(i)) {
-                        multiSelectSet.add(i);
-                        t.classList.add('selected');
+                        multiSelectSet.add(i); t.classList.add('selected');
                     } else if (msDragMode === 'remove' && multiSelectSet.has(i)) {
-                        multiSelectSet.delete(i);
-                        t.classList.remove('selected');
+                        multiSelectSet.delete(i); t.classList.remove('selected');
                     }
                 });
                 updateMultiSelectCount();
-            });
+            }, { passive: true });
 
-            grid.addEventListener('pointerup',     function() { msDragSelecting = false; msDragMode = null; msDragStartIdx = -1; });
-            grid.addEventListener('pointercancel', function() { msDragSelecting = false; msDragMode = null; msDragStartIdx = -1; });
+            const endDrag = function() { msDragSelecting = false; msDragStartIdx = -1; msDragMode = null; };
+            grid.addEventListener('pointerup',     endDrag, { passive: true });
+            grid.addEventListener('pointercancel', endDrag, { passive: true });
 
             updateMultiSelectCount();
         }
