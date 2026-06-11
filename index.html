@@ -863,6 +863,14 @@
             // ── レイアウト要素 ────────────────────────────────────
             imgContainer:     document.getElementById('image-container'),
             canvasArea:       document.getElementById('canvas-area'),
+            // ── 複数選択 ─────────────────────────────────────────
+            msOverlay:        document.getElementById('multiselect-overlay'),
+            msGrid:           document.getElementById('multiselect-grid'),
+            msCount:          document.getElementById('multiselect-count'),
+            // ── グリッド設定 ──────────────────────────────────────
+            gridColorSel:     document.getElementById('grid-color-select'),
+            gridOpacitySl:    document.getElementById('grid-opacity-slider'),
+            gridOpacityVal:   document.getElementById('grid-opacity-val'),
         };
         // ── ユーティリティ ────────────────────────────────────────
         /**
@@ -1100,12 +1108,9 @@
             if (ui.bwContrastVal) ui.bwContrastVal.textContent = bwContrast;
             if (ui.bwBarSlider) ui.bwBarSlider.value = bwContrast;
             if (ui.bwBarVal) ui.bwBarVal.textContent = bwContrast;
-            const gridColorSel = document.getElementById('grid-color-select');
-            if (gridColorSel) gridColorSel.value = gridColor;
-            const gridOpacitySl = document.getElementById('grid-opacity-slider');
-            if (gridOpacitySl) gridOpacitySl.value = gridOpacity;
-            const gridOpacityVal = document.getElementById('grid-opacity-val');
-            if (gridOpacityVal) gridOpacityVal.textContent = gridOpacity;
+            if (ui.gridColorSel) ui.gridColorSel.value = gridColor;
+            if (ui.gridOpacitySl) ui.gridOpacitySl.value = gridOpacity;
+            if (ui.gridOpacityVal) ui.gridOpacityVal.textContent = gridOpacity;
             applyGridStyle();
             setActive(ui.eyeBtn, !!isEyeHideEnabled);
             if (ui.rfBtn) {
@@ -1306,8 +1311,7 @@
 
         function onGridOpacityChange(val) {
             gridOpacity = val;
-            const lbl = document.getElementById('grid-opacity-val');
-            if (lbl) lbl.textContent = val;
+            if (ui.gridOpacityVal) ui.gridOpacityVal.textContent = val;
             applyGridStyle();
             saveUiSettings();
         }
@@ -1921,25 +1925,24 @@
             multiSelectSet.clear();
             msBlobCache = new Map();
             renderMultiSelectGrid();
-            document.getElementById('multiselect-overlay').classList.add('open');
+            ui.msOverlay.classList.add('open');
         }
 
         function closeMultiSelect() {
-            document.getElementById('multiselect-overlay').classList.remove('open');
+            ui.msOverlay.classList.remove('open');
             multiSelectSet.clear();
             msBlobCache = new Map();
         }
 
         function updateMultiSelectCount() {
-            const el = document.getElementById('multiselect-count');
-            if (!el) return;
-            el.textContent = multiSelectSet.size > 0
+            if (!ui.msCount) return;
+            ui.msCount.textContent = multiSelectSet.size > 0
                 ? `${multiSelectSet.size} / ${sourceImages.length} 件選択中`
                 : '画像をタップして選択';
         }
 
         function renderMultiSelectGrid() {
-            const grid = document.getElementById('multiselect-grid');
+            const grid = ui.msGrid;
             grid.innerHTML = '';
             if (sourceImages.length === 0) {
                 grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#444;padding:60px 0;font-size:0.9rem;">画像が読み込まれていません</div>';
@@ -1977,23 +1980,31 @@
             updateMultiSelectCount();
         }
 
-        // ── 複数選択のタッチ操作（グリッドに1回だけ登録）─────────────
-        // touchstart → 即タップ選択 ＆ ドラッグ準備
-        // touchmove  → ドラッグ中はスクロール禁止 ＋ 自動スクロール
-        // touchend   → 終了
+        // ── 複数選択のインタラクション（touch + pointer + keyboard）──
         (function() {
-            const overlay = document.getElementById('multiselect-overlay');
-            let dragStartIdx  = -1;
-            let lastEndIdx    = -1;
-            let isDragging    = false;
+            const overlay = ui.msOverlay;
+
+            // ── 共有状態 ────────────────────────────────────────────
+            let dragStartIdx = -1;
+            let lastEndIdx   = -1;
+            let isDragging   = false;
             let lastX = 0, lastY = 0;
             let autoRaf = null;
-            const SCROLL_ZONE  = 80;   // px
-            const SCROLL_SPEED = 12;   // px/frame
+            let lastClickIdx = -1; // Shift選択の基点
 
+            const SCROLL_ZONE  = 80;
+            const SCROLL_SPEED = 12;
+
+            // ── ユーティリティ ───────────────────────────────────────
             function thumbAt(x, y) {
                 const el = document.elementFromPoint(x, y);
                 return el && el.closest('.ms-thumb');
+            }
+
+            function toggleThumb(t, idx) {
+                if (multiSelectSet.has(idx)) { multiSelectSet.delete(idx); t.classList.remove('selected'); }
+                else                          { multiSelectSet.add(idx);    t.classList.add('selected');    }
+                updateMultiSelectCount();
             }
 
             function applyRange(endIdx) {
@@ -2001,21 +2012,18 @@
                 lastEndIdx = endIdx;
                 const lo = Math.min(dragStartIdx, endIdx);
                 const hi = Math.max(dragStartIdx, endIdx);
-                const grid = document.getElementById('multiselect-grid');
+                const grid = ui.msGrid;
                 grid.querySelectorAll('.ms-thumb').forEach(function(t) {
                     const i = parseInt(t.dataset.idx);
                     if (i < lo || i > hi) return;
-                    if (!multiSelectSet.has(i)) {
-                        multiSelectSet.add(i);
-                        t.classList.add('selected');
-                    }
+                    if (!multiSelectSet.has(i)) { multiSelectSet.add(i); t.classList.add('selected'); }
                 });
                 updateMultiSelectCount();
             }
 
             function autoScroll() {
                 if (!isDragging) return;
-                const grid = document.getElementById('multiselect-grid');
+                const grid = ui.msGrid;
                 const rect = grid.getBoundingClientRect();
                 const relY = lastY - rect.top;
                 let spd = 0;
@@ -2038,19 +2046,17 @@
                 if (autoRaf) { cancelAnimationFrame(autoRaf); autoRaf = null; }
             }
 
+            // ── Touch（iOS / Android）───────────────────────────────
             overlay.addEventListener('touchstart', function(e) {
                 if (!overlay.classList.contains('open')) return;
                 const touch = e.touches[0];
                 const t = thumbAt(touch.clientX, touch.clientY);
                 if (!t) return;
                 const idx = parseInt(t.dataset.idx);
-                // タップで即選択/解除
-                if (multiSelectSet.has(idx)) { multiSelectSet.delete(idx); t.classList.remove('selected'); }
-                else                          { multiSelectSet.add(idx);    t.classList.add('selected');    }
-                updateMultiSelectCount();
-                // ドラッグ準備
+                toggleThumb(t, idx);
                 dragStartIdx = idx;
                 lastEndIdx   = idx;
+                lastClickIdx = idx;
                 isDragging   = false;
                 lastX = touch.clientX;
                 lastY = touch.clientY;
@@ -2072,24 +2078,138 @@
 
             overlay.addEventListener('touchend',    stopDrag, { passive: true });
             overlay.addEventListener('touchcancel', stopDrag, { passive: true });
-        })();
+
+            // ── Pointer（Android Chrome / マウス）───────────────────
+            // touchイベントが発火しない環境（一部Androidブラウザ）のフォールバック
+            let pointerActive = false;
+
+            overlay.addEventListener('pointerdown', function(e) {
+                if (e.pointerType === 'touch') return; // touchで処理済みのため除外
+                if (!overlay.classList.contains('open')) return;
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
+                const t = thumbAt(e.clientX, e.clientY);
+                if (!t) return;
+                const idx = parseInt(t.dataset.idx);
+                // マウス: Ctrl/Cmd押しながらクリックで個別選択
+                // それ以外はtoggle
+                if (e.pointerType === 'mouse') {
+                    // クリックはpointerupで処理するのでここではドラッグ準備のみ
+                    pointerActive = true;
+                    dragStartIdx  = idx;
+                    lastEndIdx    = idx;
+                    lastX = e.clientX;
+                    lastY = e.clientY;
+                    isDragging = false;
+                    return;
+                }
+                // pen / touch(フォールバック)
+                toggleThumb(t, idx);
+                dragStartIdx = idx;
+                lastEndIdx   = idx;
+                lastClickIdx = idx;
+                isDragging   = false;
+                lastX = e.clientX;
+                lastY = e.clientY;
+            }, { passive: true });
+
+            overlay.addEventListener('pointermove', function(e) {
+                if (e.pointerType === 'touch') return;
+                if (!pointerActive || dragStartIdx < 0) return;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                const dx = Math.abs(e.clientX - lastX);
+                const dy = Math.abs(e.clientY - lastY);
+                if (!isDragging && (dx > 6 || dy > 6)) {
+                    isDragging = true;
+                    if (!autoRaf) autoRaf = requestAnimationFrame(autoScroll);
+                }
+                if (isDragging) {
+                    const t = thumbAt(e.clientX, e.clientY);
+                    if (t) applyRange(parseInt(t.dataset.idx));
+                }
+            }, { passive: true });
+
+            overlay.addEventListener('pointerup', function(e) {
+                if (e.pointerType === 'touch') return;
+                if (!pointerActive) return;
+                pointerActive = false;
+                if (!isDragging) {
+                    // ドラッグなし = クリック
+                    const t = thumbAt(e.clientX, e.clientY);
+                    if (t) {
+                        const idx = parseInt(t.dataset.idx);
+                        toggleThumb(t, idx);
+                        lastClickIdx = idx;
+                    }
+                }
+                stopDrag();
+            }, { passive: true });
+
+            overlay.addEventListener('pointercancel', function(e) {
+                if (e.pointerType === 'touch') return;
+                pointerActive = false;
+                stopDrag();
+            }, { passive: true });
+
+            // ── PC キーボードショートカット ──────────────────────────
+            // Ctrl+A / Cmd+A : 全選択
+            // Shift+クリック  : 範囲選択
+            // Ctrl+クリック   : 個別トグル（標準動作）
+            // ESC             : 閉じる（既存のESC処理で対応済み）
+            document.addEventListener('keydown', function(e) {
+                if (!overlay.classList.contains('open')) return;
+                if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+                    e.preventDefault();
+                    multiSelectAll();
+                }
+            });
+
+            // Shift+クリックによる範囲選択 / Ctrl+クリックによる個別選択（PC専用）
+            overlay.addEventListener('click', function(e) {
+                if (!overlay.classList.contains('open')) return;
+                const t = e.target.closest('.ms-thumb');
+                if (!t) return;
+                const idx = parseInt(t.dataset.idx);
+
+                if (e.shiftKey && lastClickIdx >= 0) {
+                    // Shift: lastClickIdx〜idx の範囲を選択
+                    const lo = Math.min(lastClickIdx, idx);
+                    const hi = Math.max(lastClickIdx, idx);
+                    const grid = ui.msGrid;
+                    grid.querySelectorAll('.ms-thumb').forEach(function(thumb) {
+                        const i = parseInt(thumb.dataset.idx);
+                        if (i >= lo && i <= hi && !multiSelectSet.has(i)) {
+                            multiSelectSet.add(i);
+                            thumb.classList.add('selected');
+                        }
+                    });
+                    updateMultiSelectCount();
+                } else if (e.ctrlKey || e.metaKey) {
+                    // Ctrl/Cmd: 個別トグル（pointerupと重複しないよう再トグル）
+                    toggleThumb(t, idx);
+                    lastClickIdx = idx;
+                }
+                // 修飾キーなしの通常クリックはpointerupで処理済みのためここでは何もしない
+            });
+
+        })(); // ── 複数選択インタラクション IIFE 終了 ──
 
         function multiSelectAll() {
-            const grid = document.getElementById('multiselect-grid');
+            const grid = ui.msGrid;
             sourceImages.forEach(function(_, idx) { multiSelectSet.add(idx); });
             grid.querySelectorAll('.ms-thumb').forEach(function(t) { t.classList.add('selected'); });
             updateMultiSelectCount();
         }
 
         function multiDeselectAll() {
-            const grid = document.getElementById('multiselect-grid');
+            const grid = ui.msGrid;
             multiSelectSet.clear();
             grid.querySelectorAll('.ms-thumb').forEach(function(t) { t.classList.remove('selected'); });
             updateMultiSelectCount();
         }
 
         function showMultiSelectMsg(msg) {
-            const el = document.getElementById('multiselect-count');
+            const el = ui.msCount;
             if (!el) return;
             el.textContent = msg;
             clearTimeout(el._msgTimer);
@@ -2111,7 +2231,7 @@
             rebuildFavNameSet();
 
             // ⭐バッジを差分追加
-            document.getElementById('multiselect-grid').querySelectorAll('.ms-thumb').forEach(function(thumb) {
+            ui.msGrid.querySelectorAll('.ms-thumb').forEach(function(thumb) {
                 const item = sourceImages[parseInt(thumb.dataset.idx)];
                 if (!item) return;
                 if (favNameSet.has(item.name) && !thumb.querySelector('.ms-fav')) {
@@ -2144,7 +2264,7 @@
             });
             rebuildFavNameSet();
             // ⭐バッジを差分削除
-            document.getElementById('multiselect-grid').querySelectorAll('.ms-thumb').forEach(function(thumb) {
+            ui.msGrid.querySelectorAll('.ms-thumb').forEach(function(thumb) {
                 const item = sourceImages[parseInt(thumb.dataset.idx)];
                 if (!item) return;
                 if (!favNameSet.has(item.name)) {
@@ -3080,22 +3200,24 @@
             const prevBtn = ui.prevBtn;
             const nextBtn = ui.nextBtn;
             if (!prevBtn || !nextBtn) return;
-            prevBtn.addEventListener('pointerdown', function(e){ onPressStart(prevBtn, 'prev', e.clientX, e.clientY); }, { passive: true });
-            prevBtn.addEventListener('pointerup', function(){ onPressEnd('prev'); }, { passive: true });
-            prevBtn.addEventListener('pointerleave', function(){ onPressEnd('prev'); }, { passive: true });
-            prevBtn.addEventListener('pointercancel', function(){ onPressEnd('prev'); }, { passive: true });
-            nextBtn.addEventListener('pointerdown', function(e){ onPressStart(nextBtn, 'next', e.clientX, e.clientY); }, { passive: true });
-            nextBtn.addEventListener('pointerup', function(){ onPressEnd('next'); }, { passive: true });
-            nextBtn.addEventListener('pointerleave', function(){ onPressEnd('next'); }, { passive: true });
-            nextBtn.addEventListener('pointercancel', function(){ onPressEnd('next'); }, { passive: true });
+            prevBtn.addEventListener('pointerdown',  function(e) { onPressStart(prevBtn, 'prev', e.clientX, e.clientY); }, { passive: true });
+            prevBtn.addEventListener('pointerup',     function()  { onPressEnd('prev'); }, { passive: true });
+            prevBtn.addEventListener('pointerleave',  function()  { onPressEnd('prev'); }, { passive: true });
+            prevBtn.addEventListener('pointercancel', function()  { onPressEnd('prev'); }, { passive: true });
+            nextBtn.addEventListener('pointerdown',  function(e) { onPressStart(nextBtn, 'next', e.clientX, e.clientY); }, { passive: true });
+            nextBtn.addEventListener('pointerup',     function()  { onPressEnd('next'); }, { passive: true });
+            nextBtn.addEventListener('pointerleave',  function()  { onPressEnd('next'); }, { passive: true });
+            nextBtn.addEventListener('pointercancel', function()  { onPressEnd('next'); }, { passive: true });
         })();
         document.addEventListener('pointermove', function(e) {
             const moveThreshold = TIMING.MOVE_THRESHOLD_PX;
             if (nextLongPressTimer) {
-                if (Math.abs(e.clientX - nextPressStartX) > moveThreshold || Math.abs(e.clientY - nextPressStartY) > moveThreshold) onPressEnd('next');
+                if (Math.abs(e.clientX - nextPressStartX) > moveThreshold ||
+                Math.abs(e.clientY - nextPressStartY) > moveThreshold) onPressEnd('next');
             }
             if (prevLongPressTimer) {
-                if (Math.abs(e.clientX - prevPressStartX) > moveThreshold || Math.abs(e.clientY - prevPressStartY) > moveThreshold) onPressEnd('prev');
+                if (Math.abs(e.clientX - prevPressStartX) > moveThreshold ||
+                Math.abs(e.clientY - prevPressStartY) > moveThreshold) onPressEnd('prev');
             }
         }, { passive: true });
         ui.imgContainer.addEventListener('pointerup', function(e) {
@@ -3115,7 +3237,7 @@
             armFocusIdleTimer();
             if (document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'INPUT') return;
             if (e.code === 'Escape') {
-                const msOverlay = document.getElementById('multiselect-overlay');
+                const msOverlay = ui.msOverlay;
                 if (msOverlay.classList.contains('open')) { closeMultiSelect(); return; }
                 if (ui.managePopup.classList.contains('show')) { ui.managePopup.classList.toggle('show', false); return; }
                 if (ui.settingsPanel.classList.contains('open')) { toggleSettingsPanel(); return; }
