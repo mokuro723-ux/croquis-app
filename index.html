@@ -503,7 +503,6 @@
         <button id="grid-btn" onclick="toggle('grid')" title="グリッド"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg></button>
         <button id="mono-btn" onclick="toggle('mono')" title="モノクロ"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm1-17.93c3.95.49 7 3.85 7 7.93s-3.05 7.44-7 7.93V4.07z"/></svg></button>
         <button id="bw-btn" onclick="toggleBW()" title="2階調（白黒2値化）"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="2" y="2" width="5" height="5"/><rect x="12" y="2" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/><rect x="17" y="7" width="5" height="5"/><rect x="2" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/><rect x="7" y="17" width="5" height="5"/><rect x="17" y="17" width="5" height="5"/></svg></button>
-        <button id="sil-btn" onclick="toggleSil()" title="シルエット（形だけ観る）(S)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 5.25a3.4 3.4 0 1 1 0 6.8 3.4 3.4 0 0 1 0-6.8zM12 13c3.7 0 6.7 2 6.7 4.5V19H5.3v-1.5C5.3 15 8.3 13 12 13z"/></svg></button>
         
         <span class="separator">|</span>
         
@@ -1528,6 +1527,9 @@
             e.preventDefault();
             ui.imgContainer.classList.remove('drag-over');
             const files = await getDroppedImageFiles(e.dataTransfer);
+            if (files.length > 0) { applyLoadedFiles(files); return; }
+            // v4: Pinterest等の他サイトから画像をドラッグ → URLとして追加
+            if (typeof addDroppedUrl === 'function' && addDroppedUrl(e.dataTransfer)) return;
             applyLoadedFiles(files);
         }, { passive: false });
 
@@ -3363,38 +3365,60 @@
         }
         #online-sel-count { font-size: 0.8rem; color: #aaa; margin-right: auto; }
 
-        /* ── 記憶スケッチ ──────────────────────────────────── */
-        #sketch-overlay { background: var(--bg-color); }
+        /* ── スケッチ v4（左右分割 / 半透明ペン / ジェスチャ対応） ── */
+        #sketch-overlay .v2-header { padding: 8px 10px; gap: 6px; }
+        #sketch-overlay .v2-header .v2-btn { padding: 8px 11px; font-size: 0.78rem; }
+        #sk-stage-wrap { flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column; }
         #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; }
         #sketch-img {
-            position: absolute; inset: 0; width: 100%; height: 100%;
+            position: absolute; left: 0; top: 0; height: 100%; width: 100%;
             object-fit: contain; pointer-events: none; user-select: none;
         }
-        #sketch-canvas { position: absolute; inset: 0; touch-action: none; cursor: crosshair; }
+        #sketch-overlay.side #sketch-img { width: 50%; }
+        #sketch-overlay.side #sketch-stage::before {
+            content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+            background: #3d3d3d; z-index: 3;
+        }
+        #sketch-canvas, #sketch-live { position: absolute; left: 0; top: 0; touch-action: none; }
+        #sketch-canvas { cursor: crosshair; }
+        #sketch-live { pointer-events: none; }
         #sketch-countdown {
-            position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
-            font-size: 2.2rem; font-weight: bold; color: var(--hm-color);
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            font-size: 2.4rem; font-weight: bold; color: var(--hm-color, #ffd75e);
             text-shadow: 0 2px 8px rgba(0,0,0,0.8); pointer-events: none; display: none; z-index: 5;
         }
         #sketch-msg {
-            position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
-            font-size: 0.85rem; color: #bbb; background: rgba(0,0,0,0.55); border-radius: 999px;
-            padding: 6px 16px; pointer-events: none; white-space: nowrap; z-index: 5;
+            position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+            font-size: 0.82rem; color: #f0f0f0; background: rgba(0,0,0,0.7); border-radius: 999px;
+            padding: 7px 16px; pointer-events: none; white-space: nowrap; z-index: 5; max-width: 92vw;
+            overflow: hidden; text-overflow: ellipsis;
         }
         #sketch-tools {
-            display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-            padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
-            border-top: 1px solid var(--border-color); background: var(--panel-bg);
+            display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; overflow-x: auto;
+            padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
+            border-top: 1px solid var(--border-color); background: var(--panel-bg); scrollbar-width: none;
         }
-        .sk-color { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #444; cursor: pointer; padding: 0; flex: 0 0 auto; }
-        .sk-color.on { border-color: var(--accent); box-shadow: 0 0 8px rgba(0,212,255,0.5); }
-        #sketch-size { width: 90px; accent-color: var(--accent); }
-        #sketch-imgopacity-wrap { display: none; align-items: center; gap: 6px; font-size: 0.75rem; color: #aaa; }
-        #sketch-imgopacity { width: 90px; accent-color: var(--accent); }
-        @media (max-width: 600px) {
-            .v2-header { padding: 10px 10px; gap: 6px; }
-            .v2-btn { padding: 8px 10px; font-size: 0.78rem; }
-            #sketch-tools { padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
+        #sketch-tools::-webkit-scrollbar { display: none; }
+        #sketch-overlay.tools-hidden #sketch-tools { display: none; }
+        #sk-tools-fab {
+            position: absolute; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+            z-index: 8; width: 42px; height: 42px; border-radius: 50%; border: 1px solid #4a4a4a;
+            background: rgba(30,30,30,0.92); color: #eee; font-size: 1.05rem; cursor: pointer; display: none;
+        }
+        #sketch-overlay.tools-hidden #sk-tools-fab { display: block; }
+        .sk-color { width: 27px; height: 27px; border-radius: 50%; border: 2px solid #4a4a4a; cursor: pointer; padding: 0; flex: 0 0 auto; }
+        .sk-color.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
+        .sk-color.half { background: linear-gradient(135deg, rgba(61,139,255,0.85) 50%, rgba(61,139,255,0.3) 50%) !important; }
+        #sketch-size { width: 84px; accent-color: var(--accent); flex: 0 0 auto; }
+        #sketch-tools .v2-btn { padding: 7px 10px; font-size: 0.74rem; flex: 0 0 auto; }
+        #sketch-imgopacity-wrap { display: none; align-items: center; gap: 6px; font-size: 0.72rem; color: #ccc; }
+        #sketch-imgopacity { width: 84px; accent-color: var(--accent); }
+        #sk-gesture-hint { font-size: 0.66rem; color: #888; white-space: nowrap; flex: 0 0 auto; margin-left: 4px; }
+        @media (max-width: 700px) {
+            #sketch-overlay .v2-header { padding: 6px 8px; gap: 5px; }
+            #sketch-overlay .v2-header .v2-btn { padding: 7px 9px; font-size: 0.72rem; }
+            #sketch-tools { padding: 5px 8px calc(5px + env(safe-area-inset-bottom, 0px)); }
+            #sk-gesture-hint { display: none; }
         }
 
         /* ── タグ ─────────────────────────────────────────── */
@@ -3463,44 +3487,50 @@
         </div>
     </div>
 
-    <!-- ── 記憶スケッチ ── -->
+    <!-- ── スケッチ v4 ── -->
     <div id="sketch-overlay" class="v2-overlay">
         <div class="v2-header">
-            <span>✏️ スケッチ</span>
+            <button class="v2-btn" id="sketch-layout-btn" onclick="skToggleLayout()" title="画像と描画スペースを左右に並べる（模写モード）">⬓ 並べる</button>
             <select id="sketch-memsec" class="v2-btn">
-                <option value="3">3秒見る</option>
-                <option value="5" selected>5秒見る</option>
-                <option value="10">10秒見る</option>
-                <option value="20">20秒見る</option>
-                <option value="30">30秒見る</option>
+                <option value="3">3秒</option>
+                <option value="5" selected>5秒</option>
+                <option value="10">10秒</option>
+                <option value="20">20秒</option>
+                <option value="30">30秒</option>
             </select>
-            <button class="v2-btn" id="sketch-mem-btn" onclick="skStartMemory()">🧠 記憶モード開始</button>
-            <button class="v2-btn" id="sketch-peek-btn" onclick="skPeek()" style="display:none;">👁 ちら見(1秒)</button>
+            <button class="v2-btn" id="sketch-mem-btn" onclick="skStartMemory()">🧠 記憶モード</button>
+            <button class="v2-btn" id="sketch-peek-btn" onclick="skPeek()" style="display:none;">👁 1秒見る</button>
             <button class="v2-btn" id="sketch-reveal-btn" onclick="skToggleReveal()" style="display:none;">✅ 答え合わせ</button>
             <div id="sketch-imgopacity-wrap">
-                <span>画像の濃さ</span>
+                <span>画像</span>
                 <input type="range" id="sketch-imgopacity" min="10" max="100" value="50" oninput="skSetImgOpacity(this.value)">
             </div>
             <span class="spacer"></span>
-            <button class="v2-btn" onclick="skNextImage()">⏭ 次の画像</button>
+            <button class="v2-btn" onclick="skNextImage()">⏭ 次</button>
             <button class="v2-btn" onclick="skSave()">💾 保存</button>
-            <button class="v2-btn ghost" onclick="toggleSketch()">✕ 閉じる</button>
+            <button class="v2-btn ghost" onclick="toggleSketch()">✕</button>
         </div>
         <div id="sketch-stage">
             <img id="sketch-img" draggable="false" alt="">
             <canvas id="sketch-canvas"></canvas>
+            <canvas id="sketch-live"></canvas>
             <div id="sketch-countdown"></div>
             <div id="sketch-msg" style="display:none;"></div>
+            <button id="sk-tools-fab" onclick="skToggleTools()" title="ツールを表示">🖌</button>
         </div>
         <div id="sketch-tools">
-            <button class="sk-color on" data-c="#ff4d5e" style="background:#ff4d5e" title="赤"></button>
-            <button class="sk-color" data-c="#1a1a1a" style="background:#1a1a1a" title="黒"></button>
-            <button class="sk-color" data-c="#f5f5f5" style="background:#f5f5f5" title="白"></button>
-            <button class="sk-color" data-c="#3d8bff" style="background:#3d8bff" title="青"></button>
+            <button class="v2-btn ghost" onclick="skToggleTools()" title="ツールをしまって描画領域を広げる">▾</button>
+            <button class="sk-color on" data-c="#ff4d5e" data-a="1" style="background:#ff4d5e" title="赤"></button>
+            <button class="sk-color" data-c="#1a1a1a" data-a="1" style="background:#1a1a1a" title="黒"></button>
+            <button class="sk-color" data-c="#f5f5f5" data-a="1" style="background:#f5f5f5" title="白"></button>
+            <button class="sk-color" data-c="#3d8bff" data-a="1" style="background:#3d8bff" title="青"></button>
+            <button class="sk-color half" data-c="#3d8bff" data-a="0.3" title="青鉛筆（半透明）— 当たり取りに"></button>
             <input type="range" id="sketch-size" min="2" max="30" value="5" title="ペンの太さ">
-            <button class="v2-btn" id="sketch-eraser-btn" onclick="skToggleEraser()">🧽 消しゴム</button>
-            <button class="v2-btn" onclick="skUndo()">↩ 元に戻す</button>
+            <button class="v2-btn" id="sketch-eraser-btn" onclick="skToggleEraser()">🧽</button>
+            <button class="v2-btn" onclick="skUndo()" title="元に戻す（2本指タップ / Ctrl+Z）">↩</button>
+            <button class="v2-btn" onclick="skRedo()" title="やり直し（3本指タップ / Ctrl+Y）">↪</button>
             <button class="v2-btn ghost" onclick="skClear()">🗑 全消去</button>
+            <span id="sk-gesture-hint">2本指タップ=戻る / 3本指=やり直し</span>
         </div>
     </div>
 
@@ -3911,41 +3941,62 @@
         };
 
         /* ════════════════════════════════════════════════════════
-           5) 記憶スケッチ（画面に直接描画 + 答え合わせ）
+           5) スケッチ v4 — 左右分割模写 / 記憶モード / 半透明青鉛筆
+              2本指タップ=元に戻す / 3本指タップ=やり直し
         ════════════════════════════════════════════════════════ */
         const skOverlay   = document.getElementById('sketch-overlay');
         const skStage     = document.getElementById('sketch-stage');
         const skImg       = document.getElementById('sketch-img');
         const skCanvas    = document.getElementById('sketch-canvas');
+        const skLive      = document.getElementById('sketch-live');
         const skCtx       = skCanvas.getContext('2d');
+        const skLiveCtx   = skLive.getContext('2d');
         const skCountdown = document.getElementById('sketch-countdown');
-        const skMsg       = document.getElementById('sketch-msg');
+        const skMsgEl     = document.getElementById('sketch-msg');
         let skOpen = false, skDrawing = false, skEraser = false;
-        let skColor = '#ff4d5e', skLastX = 0, skLastY = 0;
-        let skUndoStack = [];
-        let skMemTimer = null, skState = 'free'; // free | memorize | hidden | reveal
-        let skImgOpacity = 0.5;
-        let skWasRunning = false;
+        let skColor = '#ff4d5e', skAlpha = 1, skLiveActive = false;
+        let skLastX = 0, skLastY = 0;
+        let skUndoStack = [], skRedoStack = [];
+        let skMemTimer = null, skState = 'free';
+        let skImgOpacity = 0.5, skWasRunning = false;
+        let skSide = (function(){ try { return localStorage.getItem('croquis_sketch_side') === '1'; } catch(_) { return false; } })();
+        let skCW = 0, skCH = 0; // 描画キャンバスのCSSサイズ
 
-        function skShowMsg(t){ if (!t) { skMsg.style.display = 'none'; return; } skMsg.textContent = t; skMsg.style.display = 'block'; }
+        function skShowMsg(t){ if (!t) { skMsgEl.style.display = 'none'; return; } skMsgEl.textContent = t; skMsgEl.style.display = 'block'; }
 
         window.toggleSketch = function(){
             skOpen = !skOpen;
             skOverlay.classList.toggle('open', skOpen);
             if (skOpen) {
                 if (images.length === 0) { alert('先に画像を読み込んでください（フォルダ / 画像 / オンライン素材）'); skOpen = false; skOverlay.classList.remove('open'); return; }
-                // メインタイマーが動いていたら一時停止（スケッチに集中）
                 skWasRunning = isRunning;
                 if (isRunning) stopTimer();
+                skApplyLayout(false);
                 skSyncImage();
-                skResizeCanvas(true);
+                skResize(true);
                 skSetState('free');
-                skShowMsg('そのまま上から描けます。「記憶モード」で見て→隠して→描く練習ができます');
+                skShowMsg(skSide ? '左の画像を見ながら右に描けます（模写）' : 'そのまま上から描けます。「記憶モード」で見る→隠す→描く');
                 setTimeout(function(){ skShowMsg(''); }, 4000);
             } else {
                 skCancelMemory();
                 if (skWasRunning) startTimer();
             }
+        };
+
+        window.skToggleLayout = function(){
+            skSide = !skSide;
+            try { localStorage.setItem('croquis_sketch_side', skSide ? '1' : '0'); } catch(_){}
+            skApplyLayout(true);
+        };
+        function skApplyLayout(preserve){
+            skOverlay.classList.toggle('side', skSide);
+            const b = document.getElementById('sketch-layout-btn');
+            if (b) b.textContent = skSide ? '⬒ 重ねる' : '⬓ 並べる';
+            skResize(!preserve);
+        }
+        window.skToggleTools = function(){
+            skOverlay.classList.toggle('tools-hidden');
+            skResize(false);
         };
 
         function skSyncImage(){
@@ -3957,24 +4008,30 @@
             if (settings.flipV) t += 'scaleY(-1) ';
             skImg.style.transform = t;
         }
-        // メイン画像が切り替わったらスケッチ画像も追従
         ui.img.addEventListener('load', function(){ if (skOpen) skSyncImage(); });
 
-        function skResizeCanvas(clear){
-            const rect = skStage.getBoundingClientRect();
+        function skResize(clear){
+            const r = skStage.getBoundingClientRect();
             const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            skCW = skSide ? Math.floor(r.width / 2) : Math.floor(r.width);
+            skCH = Math.floor(r.height);
+            const left = skSide ? (Math.floor(r.width) - skCW) : 0;
             let saved = null;
             if (!clear && skCanvas.width > 0) { try { saved = skCanvas.toDataURL(); } catch(_){} }
-            skCanvas.width  = Math.max(1, Math.round(rect.width  * dpr));
-            skCanvas.height = Math.max(1, Math.round(rect.height * dpr));
-            skCanvas.style.width  = rect.width + 'px';
-            skCanvas.style.height = rect.height + 'px';
-            skCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            skCtx.lineCap = 'round'; skCtx.lineJoin = 'round';
-            if (clear) { skUndoStack = []; }
-            else if (saved) { const im = new Image(); im.onload = function(){ skCtx.drawImage(im, 0, 0, rect.width, rect.height); }; im.src = saved; }
+            [skCanvas, skLive].forEach(function(cv){
+                cv.width  = Math.max(1, Math.round(skCW * dpr));
+                cv.height = Math.max(1, Math.round(skCH * dpr));
+                cv.style.left   = left + 'px';
+                cv.style.top    = '0px';
+                cv.style.width  = skCW + 'px';
+                cv.style.height = skCH + 'px';
+            });
+            skCtx.setTransform(dpr, 0, 0, dpr, 0, 0);     skCtx.lineCap = 'round';     skCtx.lineJoin = 'round';
+            skLiveCtx.setTransform(dpr, 0, 0, dpr, 0, 0); skLiveCtx.lineCap = 'round'; skLiveCtx.lineJoin = 'round';
+            if (clear) { skUndoStack = []; skRedoStack = []; }
+            else if (saved) { const im = new Image(); im.onload = function(){ skCtx.drawImage(im, 0, 0, skCW, skCH); }; im.src = saved; }
         }
-        window.addEventListener('resize', function(){ if (skOpen) skResizeCanvas(false); });
+        window.addEventListener('resize', function(){ if (skOpen) skResize(false); });
 
         function skSetState(st){
             skState = st;
@@ -4033,21 +4090,29 @@
             skSetState('free');
         };
 
-        // ── 描画 ──
+        /* ── 取り消し / やり直し ── */
+        function skSnap(){ try { return skCanvas.toDataURL(); } catch(_) { return null; } }
+        function skRestore(data){
+            skCtx.clearRect(0, 0, skCW, skCH);
+            if (data) { const im = new Image(); im.onload = function(){ skCtx.drawImage(im, 0, 0, skCW, skCH); }; im.src = data; }
+        }
         function skPushUndo(){
-            try {
-                skUndoStack.push(skCanvas.toDataURL());
-                if (skUndoStack.length > 15) skUndoStack.shift();
-            } catch(_){}
+            const d = skSnap(); if (d === null) return;
+            skUndoStack.push(d);
+            if (skUndoStack.length > 20) skUndoStack.shift();
         }
         window.skUndo = function(){
-            const prev = skUndoStack.pop();
-            const rect = skStage.getBoundingClientRect();
-            skCtx.clearRect(0, 0, rect.width, rect.height);
-            if (prev) { const im = new Image(); im.onload = function(){ skCtx.drawImage(im, 0, 0, rect.width, rect.height); }; im.src = prev; }
+            if (!skUndoStack.length) return;
+            const d = skSnap(); if (d !== null) { skRedoStack.push(d); if (skRedoStack.length > 20) skRedoStack.shift(); }
+            skRestore(skUndoStack.pop());
         };
-        function skClearSilent(){ const rect = skStage.getBoundingClientRect(); skCtx.clearRect(0, 0, rect.width, rect.height); skUndoStack = []; }
-        window.skClear = function(){ skPushUndo(); const rect = skStage.getBoundingClientRect(); skCtx.clearRect(0, 0, rect.width, rect.height); };
+        window.skRedo = function(){
+            if (!skRedoStack.length) return;
+            const d = skSnap(); if (d !== null) skUndoStack.push(d);
+            skRestore(skRedoStack.pop());
+        };
+        function skClearSilent(){ skCtx.clearRect(0, 0, skCW, skCH); skLiveCtx.clearRect(0, 0, skCW, skCH); skUndoStack = []; skRedoStack = []; }
+        window.skClear = function(){ skPushUndo(); skRedoStack = []; skCtx.clearRect(0, 0, skCW, skCH); };
         window.skToggleEraser = function(){
             skEraser = !skEraser;
             document.getElementById('sketch-eraser-btn').classList.toggle('accent', skEraser);
@@ -4057,78 +4122,155 @@
                 document.querySelectorAll('.sk-color').forEach(function(x){ x.classList.remove('on'); });
                 b.classList.add('on');
                 skColor = b.getAttribute('data-c');
+                skAlpha = parseFloat(b.getAttribute('data-a') || '1');
                 if (skEraser) skToggleEraser();
             });
         });
 
+        /* ── 描画本体（半透明ペンはライブレイヤーに描き、ストローク確定時に合成） ── */
         function skPos(e){
-            const rect = skCanvas.getBoundingClientRect();
-            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            const r = skCanvas.getBoundingClientRect();
+            return { x: e.clientX - r.left, y: e.clientY - r.top };
         }
-        skCanvas.addEventListener('pointerdown', function(e){
-            if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
-            e.preventDefault();
-            skCanvas.setPointerCapture(e.pointerId);
-            skPushUndo();
+        function skTargetCtx(){ return (skLiveActive ? skLiveCtx : skCtx); }
+        function skBeginStroke(e){
+            skPushUndo(); skRedoStack = [];
             skDrawing = true;
+            skLiveActive = (!skEraser && skAlpha < 1);
+            if (skLiveActive) { skLiveCtx.clearRect(0, 0, skCW, skCH); skLive.style.opacity = String(skAlpha); }
+            const c = skTargetCtx();
             const p = skPos(e); skLastX = p.x; skLastY = p.y;
-            // 点を打つ
-            skCtx.globalCompositeOperation = skEraser ? 'destination-out' : 'source-over';
-            skCtx.strokeStyle = skColor;
+            c.globalCompositeOperation = skEraser ? 'destination-out' : 'source-over';
+            c.strokeStyle = skColor;
             const size = parseInt(document.getElementById('sketch-size').value, 10) || 5;
-            skCtx.lineWidth = skEraser ? size * 3 : size;
-            skCtx.beginPath();
-            skCtx.moveTo(p.x, p.y);
-            skCtx.lineTo(p.x + 0.01, p.y + 0.01);
-            skCtx.stroke();
-        }, { passive: false });
-        skCanvas.addEventListener('pointermove', function(e){
-            if (!skDrawing) return;
-            e.preventDefault();
+            c.lineWidth = skEraser ? size * 3 : size;
+            c.beginPath();
+            c.moveTo(p.x, p.y);
+            c.lineTo(p.x + 0.01, p.y + 0.01);
+            c.stroke();
+        }
+        function skStrokeMove(e){
+            const c = skTargetCtx();
             const events = (typeof e.getCoalescedEvents === 'function') ? e.getCoalescedEvents() : [e];
-            skCtx.globalCompositeOperation = skEraser ? 'destination-out' : 'source-over';
-            skCtx.strokeStyle = skColor;
+            c.globalCompositeOperation = skEraser ? 'destination-out' : 'source-over';
+            c.strokeStyle = skColor;
             const size = parseInt(document.getElementById('sketch-size').value, 10) || 5;
             for (let i = 0; i < events.length; i++) {
                 const p = skPos(events[i]);
                 const pw = (events[i].pointerType === 'pen' && events[i].pressure > 0) ? (0.4 + events[i].pressure * 1.2) : 1;
-                skCtx.lineWidth = (skEraser ? size * 3 : size) * pw;
+                c.lineWidth = (skEraser ? size * 3 : size) * pw;
                 const midX = (skLastX + p.x) / 2, midY = (skLastY + p.y) / 2;
-                skCtx.beginPath();
-                skCtx.moveTo(skLastX, skLastY);
-                skCtx.quadraticCurveTo(skLastX, skLastY, midX, midY);
-                skCtx.lineTo(p.x, p.y);
-                skCtx.stroke();
+                c.beginPath();
+                c.moveTo(skLastX, skLastY);
+                c.quadraticCurveTo(skLastX, skLastY, midX, midY);
+                c.lineTo(p.x, p.y);
+                c.stroke();
                 skLastX = p.x; skLastY = p.y;
             }
-        }, { passive: false });
-        function skEnd(e){ if (skDrawing) { skDrawing = false; } }
-        skCanvas.addEventListener('pointerup', skEnd, { passive: true });
-        skCanvas.addEventListener('pointercancel', skEnd, { passive: true });
+        }
+        function skEndStroke(){
+            if (!skDrawing) return;
+            skDrawing = false;
+            if (skLiveActive) {
+                skCtx.globalCompositeOperation = 'source-over';
+                skCtx.globalAlpha = skAlpha;
+                try { skCtx.drawImage(skLive, 0, 0, skCW, skCH); } catch(_){}
+                skCtx.globalAlpha = 1;
+                skLiveCtx.clearRect(0, 0, skCW, skCH);
+                skLive.style.opacity = '1';
+                skLiveActive = false;
+            }
+        }
+        function skCancelStroke(){
+            if (!skDrawing) return;
+            skDrawing = false;
+            if (skLiveActive) {
+                skLiveCtx.clearRect(0, 0, skCW, skCH);
+                skLive.style.opacity = '1';
+                skLiveActive = false;
+                skUndoStack.pop(); // ストローク開始時のスナップは不要（本体未変更）
+            } else {
+                skRestore(skUndoStack.pop()); // 描きかけを破棄して開始前の状態へ
+            }
+        }
 
+        /* ── ポインタ処理（指のジェスチャ: 2本指タップ=戻る / 3本指=やり直し） ── */
+        const skTouches = new Map();
+        let skMaxTouch = 0, skTapStart = 0, skTapMoved = false;
+        skCanvas.addEventListener('pointerdown', function(e){
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            e.preventDefault();
+            try { skCanvas.setPointerCapture(e.pointerId); } catch(_){}
+            if (e.pointerType === 'touch') {
+                skTouches.set(e.pointerId, { sx: e.clientX, sy: e.clientY });
+                skMaxTouch = Math.max(skMaxTouch, skTouches.size);
+                if (skTouches.size === 1) {
+                    skTapStart = Date.now(); skTapMoved = false;
+                    skBeginStroke(e);
+                } else {
+                    // 2本目以降の指 → ジェスチャ。描きかけの点は取り消す
+                    skCancelStroke();
+                }
+                return;
+            }
+            skBeginStroke(e); // ペン / マウス
+        }, { passive: false });
+        skCanvas.addEventListener('pointermove', function(e){
+            if (e.pointerType === 'touch' && skTouches.has(e.pointerId)) {
+                const t = skTouches.get(e.pointerId);
+                if (Math.hypot(e.clientX - t.sx, e.clientY - t.sy) > 14) skTapMoved = true;
+                if (skTouches.size > 1) return; // ジェスチャ中は描かない
+            }
+            if (!skDrawing) return;
+            e.preventDefault();
+            skStrokeMove(e);
+        }, { passive: false });
+        function skPointerEnd(e){
+            if (e.pointerType === 'touch') {
+                skTouches.delete(e.pointerId);
+                if (skTouches.size === 0) {
+                    const dur = Date.now() - skTapStart;
+                    if (skMaxTouch >= 2 && !skTapMoved && dur < 450) {
+                        if (skMaxTouch === 2) { skUndo(); skShowMsg('↩ 元に戻す'); }
+                        else { skRedo(); skShowMsg('↪ やり直し'); }
+                        setTimeout(function(){ skShowMsg(''); }, 700);
+                    }
+                    skMaxTouch = 0;
+                }
+            }
+            skEndStroke();
+        }
+        skCanvas.addEventListener('pointerup', skPointerEnd, { passive: true });
+        skCanvas.addEventListener('pointercancel', function(e){
+            if (e.pointerType === 'touch') { skTouches.delete(e.pointerId); if (skTouches.size === 0) skMaxTouch = 0; }
+            skCancelStroke();
+        }, { passive: true });
+
+        /* ── 保存（レイアウトに応じて合成） ── */
         window.skSave = function(){
-            const rect = skStage.getBoundingClientRect();
+            const r = skStage.getBoundingClientRect();
             const out = document.createElement('canvas');
-            out.width = Math.round(rect.width * 2); out.height = Math.round(rect.height * 2);
-            const ctx = out.getContext('2d');
-            ctx.fillStyle = '#1e1e1e'; ctx.fillRect(0, 0, out.width, out.height);
-            // 画像（表示中のみ・現在の不透明度）
+            out.width = Math.round(r.width * 2); out.height = Math.round(r.height * 2);
+            const c = out.getContext('2d');
+            c.fillStyle = '#1e1e1e'; c.fillRect(0, 0, out.width, out.height);
+            const imgAreaW = skSide ? out.width / 2 : out.width;
+            const cvX = skSide ? out.width / 2 : 0;
             try {
                 if (skImg.style.visibility !== 'hidden' && skImg.naturalWidth > 0) {
-                    const ratio = Math.min(out.width / skImg.naturalWidth, out.height / skImg.naturalHeight);
+                    const ratio = Math.min(imgAreaW / skImg.naturalWidth, out.height / skImg.naturalHeight);
                     const w = skImg.naturalWidth * ratio, h = skImg.naturalHeight * ratio;
-                    ctx.globalAlpha = parseFloat(skImg.style.opacity || '1') || 1;
-                    ctx.save();
-                    ctx.translate(out.width / 2, out.height / 2);
-                    if (settings.flipH) ctx.scale(-1, 1);
-                    if (settings.flipV) ctx.scale(1, -1);
-                    ctx.drawImage(skImg, -w / 2, -h / 2, w, h);
-                    ctx.restore();
-                    ctx.globalAlpha = 1;
+                    c.globalAlpha = parseFloat(skImg.style.opacity || '1') || 1;
+                    c.save();
+                    c.translate(imgAreaW / 2, out.height / 2);
+                    if (settings.flipH) c.scale(-1, 1);
+                    if (settings.flipV) c.scale(1, -1);
+                    c.drawImage(skImg, -w / 2, -h / 2, w, h);
+                    c.restore();
+                    c.globalAlpha = 1;
                 }
             } catch(_){ /* CORS不可画像は描画スキップ */ }
             try {
-                ctx.drawImage(skCanvas, 0, 0, out.width, out.height);
+                c.drawImage(skCanvas, cvX, 0, skSide ? out.width / 2 : out.width, out.height);
                 const a = document.createElement('a');
                 a.download = 'croquis_sketch_' + Date.now() + '.png';
                 a.href = out.toDataURL('image/png');
@@ -4157,7 +4299,9 @@
             if (ae && (ae.tagName === 'SELECT' || ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
             if (skOpen) {
                 if (e.code === 'Escape') { toggleSketch(); }
+                else if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey) && e.shiftKey) { e.preventDefault(); skRedo(); }
                 else if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); skUndo(); }
+                else if (e.code === 'KeyY' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); skRedo(); }
                 return;
             }
             const onlineOpen = document.getElementById('online-overlay').classList.contains('open');
@@ -4232,6 +4376,43 @@
             transition: opacity .25s, transform .25s; max-width: 88vw; text-align: center;
         }
         #v3-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* ════════ 視認性向上（全体） ════════ */
+        :root { --border-color: #3d3d3d; }
+        #bottom-panel button { color: #e2e2e2; }
+        #bottom-panel button:hover { color: #fff; }
+        .v2-btn { color: #f2f2f2; }
+        .v2-btn.ghost { border-color: #4d4d4d; }
+        .v2-chip { color: #e8e8e8; border-color: #4a4a4a; background: #2b2b2b; font-size: 0.84rem; padding: 9px 16px; }
+        .v2-note { color: #9c9c9c; }
+        .v2-header { font-size: 0.95rem; }
+
+        /* ════════ オンライン素材庫の視認性（特にiPhone） ════════ */
+        #online-status { color: #d6d6d6; font-size: 0.85rem; padding: 6px 14px 0; }
+        .ol-thumb { border-width: 3px; border-radius: 11px; background: #232323; }
+        .ol-thumb.sel { border-color: var(--accent); }
+        .ol-thumb.sel::after {
+            content: '✓'; position: absolute; top: 6px; right: 6px; width: 26px; height: 26px;
+            background: var(--accent); color: #00222b; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.95rem; font-weight: bold; text-shadow: none;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+        }
+        #online-sel-count { font-size: 0.9rem; color: #fff; }
+        #online-actions .v2-btn { padding: 12px 16px; font-size: 0.9rem; }
+        #online-searchrow .v2-btn { padding: 11px 14px; }
+        @media (max-width: 600px) {
+            #online-overlay .v2-header { padding: 10px 12px; gap: 6px; }
+            #online-overlay .v2-header .v2-note { display: none; }
+            #online-cats { padding: 9px 12px 2px; gap: 8px; }
+            #online-searchrow { flex-wrap: wrap; gap: 7px; padding: 8px 12px 2px; }
+            #online-searchrow input[type="text"] { flex: 1 1 100%; order: -1; padding: 12px 14px; }
+            #online-source { flex: 1 1 auto; padding: 11px 8px; font-size: 0.84rem; }
+            #online-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 10px 12px; }
+            #online-actions { gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
+            #online-sel-count { flex-basis: 100%; margin: 0 0 2px; }
+            #online-actions .v2-btn { flex: 1; }
+        }
     </style>
 
     <!-- クラスモード設定 -->
@@ -4299,97 +4480,6 @@
             }
             _bagPos++;
             return idx;
-        };
-
-        /* ════════════════════════════════════════════════════════
-           2) シルエットモード — 形だけを観る（背景は自動で白に）
-        ════════════════════════════════════════════════════════ */
-        let silOn = false, silPrevBg = 0;
-        window.toggleSil = function(){
-            silOn = !silOn;
-            const b = document.getElementById('sil-btn');
-            if (b) b.classList.toggle('active', silOn);
-            let g = 0;
-            if (silOn) { silPrevBg = bgMode; while (bgMode !== 2 && g++ < 4) cycleBg(); }
-            else { while (bgMode !== silPrevBg && g++ < 4) cycleBg(); }
-            lastImageFilter = '__sil_dirty__';
-            applyFilters();
-            if (isPiP) { pipRenderStamp = ''; updatePiP(); }
-        };
-        const _applyFilters = applyFilters;
-        window.applyFilters = function(){
-            _applyFilters();
-            if (silOn && !isImageHidden && lastImageFilter !== 'brightness(0)') {
-                ui.img.style.filter = 'brightness(0)';
-                lastImageFilter = 'brightness(0)';
-            }
-        };
-        /* PiP・小窓描画にもシルエットを反映（元の drawToCanvas を2点だけ拡張した完全置き換え） */
-        window.drawToCanvas = function(canvas, ctx, drawOverlay) {
-            const nw = ui.img.naturalWidth, nh = ui.img.naturalHeight;
-            if (!nw || !nh) return;
-            const ratio = nw / nh;
-            const maxW = canvas === pipCanvas ? 2560 : 1200;
-            const baseWidth = Math.min(Math.max(nw, maxW), maxW);
-            const targetH = Math.round(baseWidth / ratio);
-            if (canvas.width !== baseWidth || canvas.height !== targetH) {
-                canvas.width = baseWidth; canvas.height = targetH;
-            }
-            ctx.fillStyle = silOn ? '#fff' : (bgMode === 0 ? '#1e1e1e' : (bgMode === 1 ? '#000' : '#fff'));
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.save();
-            if (!isImageHidden) {
-                ctx.translate(canvas.width / 2, canvas.height / 2);
-                if (settings.flipH) ctx.scale(-1,  1);
-                if (settings.flipV) ctx.scale( 1, -1);
-                if (silOn)              ctx.filter = 'brightness(0)';
-                else if (settings.bw)   ctx.filter = `grayscale(1) contrast(${bwContrast})`;
-                else if (settings.mono) ctx.filter = 'grayscale(100%)';
-                ctx.drawImage(ui.img, -canvas.width / 2, -canvas.height / 2, canvas.width, canvas.height);
-                if (settings.grid) {
-                    ctx.filter      = 'none';
-                    ctx.strokeStyle = 'rgba(128,128,128,0.4)';
-                    ctx.lineWidth   = Math.max(2, canvas.width / 200);
-                    ctx.beginPath();
-                    ctx.moveTo(-canvas.width / 6, -canvas.height / 2); ctx.lineTo(-canvas.width / 6, canvas.height / 2);
-                    ctx.moveTo( canvas.width / 6, -canvas.height / 2); ctx.lineTo( canvas.width / 6, canvas.height / 2);
-                    ctx.moveTo(-canvas.width / 2, -canvas.height / 6); ctx.lineTo(canvas.width / 2, -canvas.height / 6);
-                    ctx.moveTo(-canvas.width / 2,  canvas.height / 6); ctx.lineTo(canvas.width / 2,  canvas.height / 6);
-                    ctx.stroke();
-                }
-            }
-            ctx.restore();
-            if (drawOverlay) {
-                const barHeight = Math.max(4, canvas.height * 0.015); const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
-                const remainMs = isRunning ? Math.max(0, expectedEndTime - Date.now()) : (remaining * 1000);
-                const progWidth = (remainMs / totalMs) * canvas.width;
-
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
-                const barColor = remaining <= 10 ? '#5be7ff' : '#00d4ff';
-                ctx.fillStyle = barColor;
-                ctx.fillRect(0, canvas.height - barHeight, progWidth, barHeight);
-
-                const fontSize = Math.max(16, canvas.height * 0.04);
-                ctx.font        = `bold ${fontSize}px sans-serif`;
-                ctx.textBaseline = 'top';
-                ctx.textAlign    = 'right';
-
-                const sec      = Math.ceil(remainMs / 1000);
-                const m        = Math.floor(sec / 60);
-                const s        = sec % 60;
-                const timeText = (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
-
-                ctx.shadowColor   = 'rgba(0,0,0,0.8)';
-                ctx.shadowBlur    = 6;
-                ctx.shadowOffsetX = 2;
-                ctx.shadowOffsetY = 2;
-                ctx.fillStyle = remaining <= 10 ? '#5be7ff' : '#00d4ff';
-                ctx.fillText(timeText, canvas.width - 20, 20);
-                ctx.shadowColor   = 'transparent';
-                ctx.shadowBlur    = 0;
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 0;
-            }
         };
 
         /* ════════════════════════════════════════════════════════
@@ -4669,19 +4759,89 @@
             if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA')) return;
             const clOpen = document.getElementById('class-panel').classList.contains('open');
             if (e.code === 'Escape' && clOpen) { closeClassPanel(); return; }
-            if (clOpen) return;
-            if (typeof v2OverlayOpen === 'function' && v2OverlayOpen()) return;
-            if (e.code === 'KeyS') toggleSil();
         });
 
         /* ════════════════════════════════════════════════════════
-           6) オンライン素材の接続を先回りで温める（読み込み体感の高速化）
+           6) Pinterest 連携 / URLで画像を追加
+              Pinterestを横に開き、ピンをこの画面へドラッグ＆ドロップで
+              そのままプールに追加できる（PC）。スマホはURL追加で。
+        ════════════════════════════════════════════════════════ */
+        function urlToItem(url){
+            let u = String(url).trim();
+            if (!/^https?:\/\//.test(u)) return null;
+            // Pinterestのサムネイルは大きいサイズに引き上げる
+            u = u.replace(/(pinimg\.com\/)\d+x(\/)/, '$1736x$2');
+            let cors = false;
+            try {
+                const h = new URL(u).hostname;
+                if (/(^|\.)pinimg\.com$|(^|\.)wikimedia\.org$|(^|\.)metmuseum\.org$|(^|\.)artic\.edu$|(^|\.)clevelandart\.org$|(^|\.)picsum\.photos$/.test(h)) cors = true;
+            } catch(_) { return null; }
+            return { name: 'web_drop_' + Date.now() + '_' + Math.random().toString(36).slice(2,6), data: u, cors: cors };
+        }
+        window.addUrlToPool = function(url, silent){
+            const item = urlToItem(url);
+            if (!item) { if (!silent) v3toast('http(s)で始まる画像URLを入力してください'); return false; }
+            if (sourceImages.length === 0) {
+                applyLoadedFiles([item]);
+            } else {
+                sourceImages.push(item); originalOrder.push(item);
+                if (!isFavMode) images = sourceImages;
+                updateImageCounter();
+                if (typeof updatePreloadQueue === 'function') updatePreloadQueue();
+            }
+            v3toast('画像を追加しました（計' + sourceImages.length + '枚）');
+            return true;
+        };
+        // 他サイト（Pinterest等）から画像をドラッグ＆ドロップ → URLとして追加
+        window.addDroppedUrl = function(dt){
+            if (!dt) return false;
+            let url = '';
+            try {
+                const htmlData = dt.getData('text/html');
+                if (htmlData) {
+                    const m = htmlData.match(/<img[^>]+src=["']([^"']+)["']/i);
+                    if (m) url = m[1];
+                }
+                if (!url) url = (dt.getData('text/uri-list') || dt.getData('text/plain') || '').split(/[\r\n]/)[0];
+            } catch(_) {}
+            if (!url || !/^https?:\/\//.test(url)) return false;
+            return addUrlToPool(url, true);
+        };
+        // 素材庫の検索行に「Pinterest」「URL追加」ボタンを追加
+        (function(){
+            const row = document.getElementById('online-searchrow');
+            if (!row) return;
+            const pin = document.createElement('button');
+            pin.className = 'v2-btn';
+            pin.textContent = '📌 Pinterest';
+            pin.title = 'Pinterestを別ウィンドウで開く（画像をこの画面へドラッグ＆ドロップで追加できます）';
+            pin.addEventListener('click', function(){
+                let q = (document.getElementById('online-query').value || '').trim();
+                if (!q) { q = prompt('Pinterestで検索するキーワード（例: pose reference）', 'pose reference') || ''; q = q.trim(); }
+                if (!q) return;
+                window.open('https://www.pinterest.com/search/pins/?q=' + encodeURIComponent(q), 'croquis_pinterest', 'width=920,height=860');
+                v3toast('PCではPinterestの画像をこの画面へドラッグ＆ドロップで追加できます。スマホは画像URLをコピーして「URL追加」へ', 5200);
+            });
+            const urlBtn = document.createElement('button');
+            urlBtn.className = 'v2-btn ghost';
+            urlBtn.textContent = '🔗 URL追加';
+            urlBtn.title = '画像URLを貼り付けてプールに追加';
+            urlBtn.addEventListener('click', function(){
+                const u = prompt('画像のURLを貼り付けてください（.jpg / .png などへの直接リンク）');
+                if (u) addUrlToPool(u);
+            });
+            row.appendChild(pin);
+            row.appendChild(urlBtn);
+        })();
+
+        /* ════════════════════════════════════════════════════════
+           7) オンライン素材の接続を先回りで温める（読み込み体感の高速化）
         ════════════════════════════════════════════════════════ */
         ['https://upload.wikimedia.org','https://commons.wikimedia.org',
          'https://images.metmuseum.org','https://collectionapi.metmuseum.org',
          'https://www.artic.edu','https://api.artic.edu',
          'https://openaccess-cdn.clevelandart.org','https://openaccess-api.clevelandart.org',
-         'https://picsum.photos','https://fastly.picsum.photos'
+         'https://picsum.photos','https://fastly.picsum.photos','https://i.pinimg.com'
         ].forEach(function(h){
             const l = document.createElement('link');
             l.rel = 'preconnect'; l.href = h; l.crossOrigin = 'anonymous';
