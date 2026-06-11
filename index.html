@@ -3312,7 +3312,8 @@
         /* ── 共通フルオーバーレイ ───────────────────────────── */
         .v2-overlay {
             position: fixed; inset: 0; z-index: 1200; display: none;
-            flex-direction: column; background: #0e0e0e;
+            flex-direction: column; background: rgba(14,14,14,0.97);
+            backdrop-filter: blur(6px);
             padding-top: env(safe-area-inset-top, 0px);
             padding-bottom: env(safe-area-inset-bottom, 0px);
         }
@@ -3368,7 +3369,7 @@
         #sketch-overlay .v2-header { padding: 8px 10px; gap: 6px; }
         #sketch-overlay .v2-header .v2-btn { padding: 8px 11px; font-size: 0.78rem; }
         #sk-stage-wrap { flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column; }
-        #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; background: #000; }
+        #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; }
         #sketch-img {
             position: absolute; left: 0; top: 0; height: 100%; width: 100%;
             object-fit: contain; pointer-events: none; user-select: none;
@@ -3777,7 +3778,7 @@
             p.classList.toggle('open', opening);
             if (opening) {
                 if (!navigator.onLine) { olStatus('⚠ オフラインです。オンライン素材はインターネット接続時に利用できます。'); }
-                else if (olResults.length === 0) { olStatus('カテゴリを選ぶか、キーワードで検索してください（個人の練習用途を想定。素材の利用条件は各提供元に従ってください）'); }
+                else if (olResults.length === 0) { olStatus(''); }
                 if (document.getElementById('online-cats').children.length === 0) olBuildCats();
             }
         };
@@ -4046,7 +4047,7 @@
                 skImg.style.visibility = 'visible'; skImg.style.opacity = '1';
                 memBtn.style.display = 'none'; peekBtn.style.display = 'none'; revealBtn.style.display = 'none'; opWrap.style.display = 'none';
             } else if (st === 'hidden') {
-                skImg.style.visibility = 'visible'; skImg.style.opacity = '0';
+                skImg.style.visibility = 'hidden';
                 memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = ''; revealBtn.textContent = '✅ 答え合わせ'; opWrap.style.display = 'none';
             } else if (st === 'reveal') {
                 skImg.style.visibility = 'visible'; skImg.style.opacity = String(skImgOpacity);
@@ -4074,8 +4075,8 @@
         function skCancelMemory(){ if (skMemTimer) { clearInterval(skMemTimer); skMemTimer = null; } skCountdown.style.display = 'none'; }
         window.skPeek = function(){
             if (skState !== 'hidden') return;
-            skImg.style.opacity = '1';
-            setTimeout(function(){ if (skState === 'hidden') { skImg.style.opacity = '0'; } }, 1000);
+            skImg.style.visibility = 'visible'; skImg.style.opacity = '1';
+            setTimeout(function(){ if (skState === 'hidden') { skImg.style.visibility = 'hidden'; } }, 1000);
         };
         window.skToggleReveal = function(){
             if (skState === 'hidden') { skSetState('reveal'); skShowMsg('自分の線と見比べてみよう'); setTimeout(function(){ skShowMsg(''); }, 2500); }
@@ -4401,16 +4402,45 @@
         #online-actions .v2-btn { padding: 12px 16px; font-size: 0.9rem; }
         #online-searchrow .v2-btn { padding: 11px 14px; }
         @media (max-width: 600px) {
-            #online-overlay .v2-header { padding: 10px 12px; gap: 6px; }
+            /* ── ヘッダー ── */
+            #online-overlay .v2-header { padding: 12px 14px; gap: 8px; }
+            #online-overlay .v2-header > span:first-child { font-size: 1rem; }
             #online-overlay .v2-header .v2-note { display: none; }
-            #online-cats { padding: 9px 12px 2px; gap: 8px; }
-            #online-searchrow { flex-wrap: wrap; gap: 7px; padding: 8px 12px 2px; }
-            #online-searchrow input[type="text"] { flex: 1 1 100%; order: -1; padding: 12px 14px; }
-            #online-source { flex: 1 1 auto; padding: 11px 8px; font-size: 0.84rem; }
+            #online-overlay .v2-header .v2-btn.ghost { padding: 10px 16px; font-size: 0.9rem; }
+
+            /* ── カテゴリチップ ── */
+            #online-cats { padding: 10px 12px 6px; gap: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+            #online-cats::-webkit-scrollbar { display: none; }
+            #online-cats .v2-chip { font-size: 0.9rem; padding: 10px 16px; border-radius: 999px; white-space: nowrap; }
+
+            /* ── 検索行 ── */
+            #online-searchrow { flex-wrap: wrap; gap: 8px; padding: 8px 12px 6px; }
+            #online-searchrow input[type="text"] { flex: 1 1 100%; order: -1; padding: 13px 14px; font-size: 1rem; border-radius: 10px; }
+            #online-source { flex: 1 1 auto; padding: 11px 10px; font-size: 0.88rem; border-radius: 10px; }
+            #online-searchrow > .v2-btn.accent { flex: 0 0 auto; padding: 11px 22px; font-size: 0.95rem; font-weight: bold; border-radius: 10px; }
+            #online-searchrow > .v2-btn:not(.accent):not(select) { flex: 1 1 auto; padding: 11px 10px; font-size: 0.85rem; border-radius: 10px; text-align: center; justify-content: center; }
+
+            /* ── ステータス ── */
+            #online-status { font-size: 0.88rem; padding: 6px 14px 2px; min-height: 1.4em; }
+
+            /* ── グリッド ── */
             #online-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 10px 12px; }
-            #online-actions { gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
-            #online-sel-count { flex-basis: 100%; margin: 0 0 2px; }
-            #online-actions .v2-btn { flex: 1; }
+            .ol-thumb { border-radius: 12px; }
+
+            /* ── 空状態の説明文 ── */
+            #online-grid:empty::after {
+                content: 'カテゴリを選ぶか\Aキーワードで検索してください';
+                white-space: pre;
+                display: block; grid-column: 1 / -1;
+                color: #555; font-size: 0.95rem; text-align: center;
+                padding: 48px 20px; line-height: 1.9;
+            }
+
+            /* ── アクションバー ── */
+            #online-actions { gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); flex-wrap: wrap; }
+            #online-sel-count { flex-basis: 100%; margin: 0 0 2px; font-size: 0.88rem; color: #bbb; }
+            #online-actions .v2-btn { flex: 1; padding: 13px 8px; font-size: 0.88rem; border-radius: 10px; }
+            #online-actions .v2-btn.accent { font-size: 0.95rem; font-weight: bold; }
         }
     </style>
 
