@@ -1,4 +1,4 @@
-const CACHE_NAME = 'croquis-timer-v8';
+const CACHE_NAME = 'croquis-timer-v9';
 const STATIC_CACHE = [
     './',
     './index.html',

@@ -482,7 +482,7 @@
         
         <span class="separator">|</span>
         
-        <select id="time-select" onchange="setTimer(parseInt(this.value))">
+        <select id="time-select" onchange="onTimeSelectChange(this.value)">
             <option value="30">30s</option>
             <option value="60">1m</option>
             <option value="120">2m</option>
@@ -490,6 +490,7 @@
             <option value="300">5m</option>
             <option value="600">10m</option>
             <option value="1800">30m</option>
+            <option value="custom">カスタム…</option>
         </select>
         
         <span class="separator">|</span>
@@ -504,12 +505,15 @@
         
         <span class="separator">|</span>
         
-        <button id="pip-btn" onclick="togglePiP()" title="小窓(PiP)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16.01H3V4.98h18v14.03z"/></svg></button>
+        <button id="pip-btn" onclick="togglePiP()" title="小窓表示・常に最前面 (PiP) (P)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16.01H3V4.98h18v14.03z"/></svg></button>
         <button id="eye-btn" onclick="toggleEyeHide()" title="5秒後に画像を隠す"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
+        <button id="online-btn" onclick="toggleOnlinePanel()" title="オンライン素材ライブラリ (O)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2s.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.9-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2s.07-1.35.16-2h4.68c.09.65.16 1.32.16 2s-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2s-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg></button>
+        <button id="sketch-btn" onclick="toggleSketch()" title="スケッチ・記憶モード (D)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
         <button class="hard-mode" id="hm-btn" onclick="toggleHardMode()" title="ハードモード"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M13,2.05v9h6L7,22v-9H2L13,2.05z"/></svg></button>
 
         <div id="manage-popup">
             <button onclick="toggleFavCurrent()">⭐ お気に入り登録/解除</button>
+            <button onclick="toggleTagPanel()">🏷️ タグ（フォルダ分け）</button>
             <button onclick="skipCurrent()" class="popup-danger">🗑️ この画像をスキップ</button>
             <button onclick="openMultiSelect()">📋 複数選択</button>
             <button onclick="clearManageData()">🔄 設定をリセット</button>
@@ -632,6 +636,14 @@
                                 oninput="onGridOpacityChange(parseInt(this.value))">
                             <span id="grid-opacity-val">4</span>
                         </div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">統計</div>
+                    <div id="stats-grid"></div>
+                    <div class="settings-row">
+                        <div class="settings-label"><span>統計をリセット</span><span class="settings-desc">枚数・練習時間の記録を消去します</span></div>
+                        <button class="v2-btn ghost" onclick="resetStats()">リセット</button>
                     </div>
                 </div>
                 <div class="settings-section">
@@ -1561,6 +1573,7 @@
             if (isSlot1) { preloadUrl  = url; preloadName  = newName; preloadedImage  = null; }
             else         { preloadUrl2 = url; preloadName2 = newName; preloadedImage2 = null; }
             const img = new Image();
+            if (url.indexOf('http') === 0 && item.cors) img.crossOrigin = 'anonymous';
             // decode() を src セット直後に呼ぶことでネットワーク取得とデコードを並列化
             img.src = url;
             if (img.decode) {
@@ -1691,6 +1704,9 @@
                 URL.revokeObjectURL(currentImageUrl);
             }
             currentImageUrl = newUrl;
+            // v2: オンライン素材（CORS対応URL）は crossorigin を付与（PiP/保存のため）
+            if (newUrl.indexOf('http') === 0 && item.cors) { ui.img.setAttribute('crossorigin', 'anonymous'); }
+            else { ui.img.removeAttribute('crossorigin'); }
 
             if (supportsImageDecode) {
                 // decodeが使える環境では、デコード完了後に表示＆タイマー開始
@@ -1897,7 +1913,11 @@
                         setVisible(ui.favIcon, true);
                         if (isHistoryPanelOpen && showFavsOnly) renderHistoryThumbs();
                     };
-                    reader.readAsDataURL(item);
+                    if (item.data) {
+                        // v2: オンライン素材はURLから取得してデータURL化
+                        if (String(item.data).indexOf('data:') === 0) { reader.onload({ target: { result: item.data } }); }
+                        else { fetch(item.data).then(function(r){ return r.blob(); }).then(function(b){ reader.readAsDataURL(b); }).catch(function(){ alert('この画像はお気に入りに保存できませんでした（提供元の制限）'); }); }
+                    } else { reader.readAsDataURL(item); }
                 }
                 ui.managePopup.classList.toggle('show', false);
             }
@@ -2694,6 +2714,7 @@
                 clearTimeout(timerTickId); timerTickId = null;
                 cancelAnimationFrame(animationFrameId); animationFrameId = null;
                 flashScreen();
+                if (typeof recordSessionStat === 'function') recordSessionStat(); // v2: 統計
                 hmActive ? hmNextPhase() : nextImage();
                 return;
             }
@@ -3236,6 +3257,7 @@
         document.addEventListener('keydown', function(e) {
             armFocusIdleTimer();
             if (document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'INPUT') return;
+            if (typeof v2OverlayOpen === 'function' && v2OverlayOpen()) return; // v2
             if (e.code === 'Escape') {
                 const msOverlay = ui.msOverlay;
                 if (msOverlay.classList.contains('open')) { closeMultiSelect(); return; }
@@ -3252,5 +3274,854 @@
             if (!e.target.closest('#manage-popup') && !e.target.closest('#manage-btn')) { ui.managePopup.classList.toggle('show', false); }
         }, { passive: true });
     </script>
+    <!-- ════════════ v2 追加機能（オンライン素材 / 記憶スケッチ / タグ / 統計） ════════════ -->
+    <style>
+        /* ── UI ポリッシュ（既存スタイルの上書き） ───────────── */
+        :root { --panel-bg: #141414; --border-color: #2c2c2c; --btn-bg: #2e2e2e; }
+        #bottom-panel button, .text-btn, select, .settings-select {
+            border-radius: 9px;
+            transition: background-color .15s ease, color .15s ease, transform .06s ease, box-shadow .15s ease;
+        }
+        #bottom-panel button:active { transform: scale(0.93); }
+        #bottom-panel button.active, #bottom-panel button.pip-active {
+            box-shadow: 0 0 0 1px rgba(0,212,255,0.35), 0 0 10px rgba(0,212,255,0.15);
+        }
+        #history-panel, #settings-panel, #manage-popup { border-radius: 0 0 12px 0; }
+        #manage-popup { border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,0.55); }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+
+        /* ── 共通フルオーバーレイ ───────────────────────────── */
+        .v2-overlay {
+            position: fixed; inset: 0; z-index: 1200; display: none;
+            flex-direction: column; background: rgba(14,14,14,0.97);
+            backdrop-filter: blur(6px);
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        .v2-overlay.open { display: flex; }
+        .v2-header {
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px 14px; border-bottom: 1px solid var(--border-color);
+            font-weight: bold; color: var(--accent); flex-wrap: wrap;
+        }
+        .v2-header .spacer { flex: 1; }
+        .v2-btn {
+            background: var(--btn-bg); color: #eee; border: none; border-radius: 9px;
+            padding: 8px 14px; font-size: 0.85rem; cursor: pointer; white-space: nowrap;
+            transition: background-color .15s ease, transform .06s ease;
+        }
+        .v2-btn:active { transform: scale(0.95); }
+        .v2-btn.accent { background: var(--accent); color: #00222b; font-weight: bold; }
+        .v2-btn.ghost { background: transparent; border: 1px solid #444; }
+        .v2-btn:disabled { opacity: 0.4; cursor: default; }
+        .v2-chip {
+            background: #262626; border: 1px solid #3a3a3a; color: #ddd; border-radius: 999px;
+            padding: 7px 13px; font-size: 0.8rem; cursor: pointer; white-space: nowrap;
+        }
+        .v2-chip.on { background: rgba(0,212,255,0.16); border-color: var(--accent); color: var(--accent); }
+        .v2-note { font-size: 0.7rem; color: #777; font-weight: normal; }
+
+        /* ── オンライン素材パネル ───────────────────────────── */
+        #online-cats { display: flex; gap: 8px; padding: 10px 14px 4px; overflow-x: auto; flex-wrap: nowrap; }
+        #online-searchrow { display: flex; gap: 8px; padding: 8px 14px; align-items: center; }
+        #online-searchrow input[type="text"] {
+            flex: 1; min-width: 0; background: #222; border: 1px solid #3a3a3a; color: #fff;
+            border-radius: 9px; padding: 9px 12px; font-size: 16px; outline: none;
+        }
+        #online-searchrow input[type="text"]:focus { border-color: var(--accent); }
+        #online-source { background: #222; color: #ddd; border: 1px solid #3a3a3a; }
+        #online-status { padding: 4px 14px 0; font-size: 0.78rem; color: #999; min-height: 1.2em; }
+        #online-grid {
+            flex: 1; overflow-y: auto; padding: 10px 14px;
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-content: start;
+            overscroll-behavior: contain;
+        }
+        .ol-thumb { position: relative; aspect-ratio: 3/4; border-radius: 8px; overflow: hidden; cursor: pointer; background: #1c1c1c; border: 2px solid transparent; }
+        .ol-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .ol-thumb.sel { border-color: var(--accent); }
+        .ol-thumb.sel::after { content: '✓'; position: absolute; top: 4px; right: 6px; color: var(--accent); font-weight: bold; text-shadow: 0 0 4px #000; }
+        #online-actions {
+            display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+            border-top: 1px solid var(--border-color); flex-wrap: wrap; align-items: center;
+        }
+        #online-sel-count { font-size: 0.8rem; color: #aaa; margin-right: auto; }
+
+        /* ── 記憶スケッチ ──────────────────────────────────── */
+        #sketch-overlay { background: var(--bg-color); }
+        #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; }
+        #sketch-img {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: contain; pointer-events: none; user-select: none;
+        }
+        #sketch-canvas { position: absolute; inset: 0; touch-action: none; cursor: crosshair; }
+        #sketch-countdown {
+            position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+            font-size: 2.2rem; font-weight: bold; color: var(--hm-color);
+            text-shadow: 0 2px 8px rgba(0,0,0,0.8); pointer-events: none; display: none; z-index: 5;
+        }
+        #sketch-msg {
+            position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+            font-size: 0.85rem; color: #bbb; background: rgba(0,0,0,0.55); border-radius: 999px;
+            padding: 6px 16px; pointer-events: none; white-space: nowrap; z-index: 5;
+        }
+        #sketch-tools {
+            display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+            padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+            border-top: 1px solid var(--border-color); background: var(--panel-bg);
+        }
+        .sk-color { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #444; cursor: pointer; padding: 0; flex: 0 0 auto; }
+        .sk-color.on { border-color: var(--accent); box-shadow: 0 0 8px rgba(0,212,255,0.5); }
+        #sketch-size { width: 90px; accent-color: var(--accent); }
+        #sketch-imgopacity-wrap { display: none; align-items: center; gap: 6px; font-size: 0.75rem; color: #aaa; }
+        #sketch-imgopacity { width: 90px; accent-color: var(--accent); }
+        @media (max-width: 600px) {
+            .v2-header { padding: 10px 10px; gap: 6px; }
+            .v2-btn { padding: 8px 10px; font-size: 0.78rem; }
+            #sketch-tools { padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
+        }
+
+        /* ── タグ ─────────────────────────────────────────── */
+        #tag-panel {
+            position: fixed; inset: 0; z-index: 1300; display: none;
+            align-items: center; justify-content: center; background: rgba(0,0,0,0.6);
+        }
+        #tag-panel.open { display: flex; }
+        #tag-box {
+            background: #1b1b1b; border: 1px solid #333; border-radius: 14px;
+            width: min(440px, 92vw); max-height: 80vh; display: flex; flex-direction: column;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+        }
+        #tag-box-header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #2c2c2c; color: var(--accent); font-weight: bold; }
+        #tag-box-header .spacer { flex: 1; }
+        #tag-list { overflow-y: auto; padding: 8px 12px; }
+        .tag-row { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px solid #242424; }
+        .tag-row label { display: flex; align-items: center; gap: 8px; flex: 1; cursor: pointer; font-size: 0.9rem; min-width: 0; }
+        .tag-row label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tag-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); flex: 0 0 auto; }
+        .tag-count { color: #777; font-size: 0.75rem; flex: 0 0 auto; }
+        .tag-mini-btn { background: #2c2c2c; border: none; color: #ccc; border-radius: 7px; padding: 6px 9px; font-size: 0.72rem; cursor: pointer; flex: 0 0 auto; }
+        .tag-mini-btn.danger { color: #ff7a7a; }
+        #tag-newrow { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #2c2c2c; }
+        #tag-newrow input { flex: 1; min-width: 0; background: #222; border: 1px solid #3a3a3a; color: #fff; border-radius: 9px; padding: 9px 12px; font-size: 16px; outline: none; }
+        #tag-filter-info { padding: 0 16px 10px; font-size: 0.75rem; color: #999; }
+
+        /* ── 統計 ─────────────────────────────────────────── */
+        #stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 0; }
+        .stat-card { background: #1d1d1d; border: 1px solid #2c2c2c; border-radius: 10px; padding: 10px 12px; }
+        .stat-card .stat-v { font-size: 1.25rem; font-weight: bold; color: var(--accent); }
+        .stat-card .stat-k { font-size: 0.7rem; color: #888; margin-top: 2px; }
+    </style>
+
+    <!-- ── オンライン素材パネル ── -->
+    <div id="online-overlay" class="v2-overlay">
+        <div class="v2-header">
+            <span>🌐 オンライン素材ライブラリ</span>
+            <span class="v2-note">Wikimedia Commons / メトロポリタン美術館 オープンアクセス</span>
+            <span class="spacer"></span>
+            <button class="v2-btn ghost" onclick="toggleOnlinePanel()">✕ 閉じる</button>
+        </div>
+        <div id="online-cats"></div>
+        <div id="online-searchrow">
+            <select id="online-source" class="v2-btn">
+                <option value="commons">写真 (Commons)</option>
+                <option value="met">美術 (MET)</option>
+            </select>
+            <input type="text" id="online-query" placeholder="キーワード検索（例: dancer, hand, horse…）英語推奨"
+                onkeydown="if(event.key==='Enter'){olSearch();}">
+            <button class="v2-btn accent" onclick="olSearch()">検索</button>
+        </div>
+        <div id="online-status"></div>
+        <div id="online-grid"></div>
+        <div id="online-actions">
+            <span id="online-sel-count">0枚 選択中</span>
+            <button class="v2-btn ghost" onclick="olSelectAll()">全選択</button>
+            <button class="v2-btn" onclick="olApply(false)">＋ 今のプールに追加</button>
+            <button class="v2-btn accent" onclick="olApply(true)">▶ これだけで開始</button>
+        </div>
+    </div>
+
+    <!-- ── 記憶スケッチ ── -->
+    <div id="sketch-overlay" class="v2-overlay">
+        <div class="v2-header">
+            <span>✏️ スケッチ</span>
+            <select id="sketch-memsec" class="v2-btn">
+                <option value="3">3秒見る</option>
+                <option value="5" selected>5秒見る</option>
+                <option value="10">10秒見る</option>
+                <option value="20">20秒見る</option>
+                <option value="30">30秒見る</option>
+            </select>
+            <button class="v2-btn" id="sketch-mem-btn" onclick="skStartMemory()">🧠 記憶モード開始</button>
+            <button class="v2-btn" id="sketch-peek-btn" onclick="skPeek()" style="display:none;">👁 ちら見(1秒)</button>
+            <button class="v2-btn" id="sketch-reveal-btn" onclick="skToggleReveal()" style="display:none;">✅ 答え合わせ</button>
+            <div id="sketch-imgopacity-wrap">
+                <span>画像の濃さ</span>
+                <input type="range" id="sketch-imgopacity" min="10" max="100" value="50" oninput="skSetImgOpacity(this.value)">
+            </div>
+            <span class="spacer"></span>
+            <button class="v2-btn" onclick="skNextImage()">⏭ 次の画像</button>
+            <button class="v2-btn" onclick="skSave()">💾 保存</button>
+            <button class="v2-btn ghost" onclick="toggleSketch()">✕ 閉じる</button>
+        </div>
+        <div id="sketch-stage">
+            <img id="sketch-img" draggable="false" alt="">
+            <canvas id="sketch-canvas"></canvas>
+            <div id="sketch-countdown"></div>
+            <div id="sketch-msg" style="display:none;"></div>
+        </div>
+        <div id="sketch-tools">
+            <button class="sk-color on" data-c="#ff4d5e" style="background:#ff4d5e" title="赤"></button>
+            <button class="sk-color" data-c="#1a1a1a" style="background:#1a1a1a" title="黒"></button>
+            <button class="sk-color" data-c="#f5f5f5" style="background:#f5f5f5" title="白"></button>
+            <button class="sk-color" data-c="#3d8bff" style="background:#3d8bff" title="青"></button>
+            <input type="range" id="sketch-size" min="2" max="30" value="5" title="ペンの太さ">
+            <button class="v2-btn" id="sketch-eraser-btn" onclick="skToggleEraser()">🧽 消しゴム</button>
+            <button class="v2-btn" onclick="skUndo()">↩ 元に戻す</button>
+            <button class="v2-btn ghost" onclick="skClear()">🗑 全消去</button>
+        </div>
+    </div>
+
+    <!-- ── タグ管理 ── -->
+    <div id="tag-panel" onclick="if(event.target===this)toggleTagPanel()">
+        <div id="tag-box">
+            <div id="tag-box-header">
+                <span>🏷️ タグ（フォルダ分け）</span>
+                <span class="spacer"></span>
+                <button class="tag-mini-btn" onclick="toggleTagPanel()">✕</button>
+            </div>
+            <div id="tag-filter-info"></div>
+            <div id="tag-list"></div>
+            <div id="tag-newrow">
+                <input type="text" id="tag-new-name" placeholder="新しいタグ名（例: 手の練習）" onkeydown="if(event.key==='Enter'){tagCreate();}">
+                <button class="v2-btn accent" onclick="tagCreate()">追加</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function(){
+        'use strict';
+
+        /* ════════════════════════════════════════════════════════
+           1) セッション統計
+        ════════════════════════════════════════════════════════ */
+        const STATS_KEY = 'croquis_stats_v1';
+        function loadStats(){ try { return JSON.parse(localStorage.getItem(STATS_KEY)) || { days:{}, total:{count:0,sec:0} }; } catch(_) { return { days:{}, total:{count:0,sec:0} }; } }
+        function saveStats(s){ try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch(_){} }
+        function todayKey(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+        window.recordSessionStat = function(){
+            try {
+                const s = loadStats(); const k = todayKey();
+                if (!s.days[k]) s.days[k] = { count:0, sec:0 };
+                const sec = (typeof hmActive !== 'undefined' && hmActive) ? hmPhases[hmPhase].s : timerSeconds;
+                s.days[k].count++; s.days[k].sec += sec;
+                s.total.count++;   s.total.sec   += sec;
+                // 90日より古い日次データは削除
+                const keys = Object.keys(s.days);
+                if (keys.length > 90) { keys.sort(); while (keys.length > 90) delete s.days[keys.shift()]; }
+                saveStats(s);
+            } catch(_){}
+        };
+        function fmtMin(sec){
+            if (sec < 60) return sec + '秒';
+            const h = Math.floor(sec/3600), m = Math.round((sec%3600)/60);
+            return h > 0 ? (h + '時間' + m + '分') : (m + '分');
+        }
+        window.renderStatsPanel = function(){
+            const el = document.getElementById('stats-grid'); if (!el) return;
+            const s = loadStats(); const t = s.days[todayKey()] || { count:0, sec:0 };
+            el.innerHTML =
+                '<div class="stat-card"><div class="stat-v">' + t.count + '枚</div><div class="stat-k">今日 描いた枚数</div></div>' +
+                '<div class="stat-card"><div class="stat-v">' + fmtMin(t.sec) + '</div><div class="stat-k">今日 の練習時間</div></div>' +
+                '<div class="stat-card"><div class="stat-v">' + s.total.count + '枚</div><div class="stat-k">累計 枚数</div></div>' +
+                '<div class="stat-card"><div class="stat-v">' + fmtMin(s.total.sec) + '</div><div class="stat-k">累計 時間</div></div>';
+        };
+        window.resetStats = function(){
+            if (confirm('統計をリセットしますか？')) { saveStats({ days:{}, total:{count:0,sec:0} }); renderStatsPanel(); }
+        };
+        // 設定パネルを開いたときに統計を更新
+        const settingsBtnEl = document.getElementById('settings-btn');
+        if (settingsBtnEl) settingsBtnEl.addEventListener('click', function(){ setTimeout(renderStatsPanel, 0); });
+        renderStatsPanel();
+
+        /* ════════════════════════════════════════════════════════
+           2) カスタムタイマー
+        ════════════════════════════════════════════════════════ */
+        window.onTimeSelectChange = function(v){
+            if (v === 'custom') {
+                const input = prompt('時間を入力してください（例: 45 → 45秒 / 1:30 → 1分30秒 / 7m → 7分）', '45');
+                if (input === null) { ui.timeSelect.value = timerSeconds; return; }
+                let sec = 0; const t = String(input).trim();
+                if (/^\d+:\d+$/.test(t)) { const p = t.split(':'); sec = parseInt(p[0],10)*60 + parseInt(p[1],10); }
+                else if (/^\d+\s*m$/i.test(t)) { sec = parseInt(t,10)*60; }
+                else { sec = parseInt(t,10); }
+                if (!sec || sec < 1 || sec > 36000) { alert('1秒〜10時間の範囲で入力してください'); ui.timeSelect.value = timerSeconds; return; }
+                ensureTimeOption(sec);
+                setTimer(sec);
+            } else {
+                setTimer(parseInt(v, 10));
+            }
+        };
+        function ensureTimeOption(sec){
+            const sel = ui.timeSelect; if (!sel) return;
+            let exists = false;
+            for (let i = 0; i < sel.options.length; i++) { if (sel.options[i].value === String(sec)) { exists = true; break; } }
+            if (!exists) {
+                const o = document.createElement('option'); o.value = String(sec);
+                const m = Math.floor(sec/60), s = sec%60;
+                o.textContent = m > 0 ? (s > 0 ? (m+'m'+s+'s') : (m+'m')) : (s+'s');
+                const customOpt = sel.querySelector('option[value="custom"]');
+                sel.insertBefore(o, customOpt);
+            }
+        }
+
+        /* ════════════════════════════════════════════════════════
+           3) タグ（フォルダ分け）
+        ════════════════════════════════════════════════════════ */
+        const TAGS_KEY = 'croquis_tags_v1';
+        let tagsData = (function(){ try { return JSON.parse(localStorage.getItem(TAGS_KEY)) || {}; } catch(_) { return {}; } })();
+        let tagSets = {};
+        function rebuildTagSets(){ tagSets = {}; Object.keys(tagsData).forEach(function(t){ tagSets[t] = new Set(tagsData[t]); }); }
+        rebuildTagSets();
+        function saveTags(){ try { localStorage.setItem(TAGS_KEY, JSON.stringify(tagsData)); } catch(_){} }
+
+        window.croquisTagFilter = null;
+
+        window.toggleTagPanel = function(){
+            const p = document.getElementById('tag-panel');
+            const opening = !p.classList.contains('open');
+            p.classList.toggle('open', opening);
+            if (opening) renderTagPanel();
+            if (typeof ui !== 'undefined' && ui.managePopup) ui.managePopup.classList.toggle('show', false);
+        };
+        window.tagCreate = function(){
+            const inp = document.getElementById('tag-new-name');
+            const name = (inp.value || '').trim();
+            if (!name) return;
+            if (!tagsData[name]) { tagsData[name] = []; rebuildTagSets(); saveTags(); }
+            inp.value = '';
+            renderTagPanel();
+        };
+        window.tagToggleCurrent = function(tag, checked){
+            if (images.length === 0) return;
+            const fname = images[currentIndex] && images[currentIndex].name;
+            if (!fname) return;
+            const arr = tagsData[tag] || (tagsData[tag] = []);
+            const idx = arr.indexOf(fname);
+            if (checked && idx === -1) arr.push(fname);
+            if (!checked && idx > -1) arr.splice(idx, 1);
+            rebuildTagSets(); saveTags(); renderTagPanel();
+        };
+        window.tagDelete = function(tag){
+            if (!confirm('タグ「' + tag + '」を削除しますか？（画像自体は消えません）')) return;
+            delete tagsData[tag]; rebuildTagSets(); saveTags();
+            if (croquisTagFilter === tag) tagClearFilter();
+            renderTagPanel();
+        };
+        window.tagApplyFilter = function(tag){
+            if (isFavMode) { alert('お気に入りモード中はタグ絞り込みできません。先に「全て」に戻してください。'); return; }
+            const set = tagSets[tag];
+            if (!set || set.size === 0) { alert('このタグにはまだ画像がありません'); return; }
+            const filtered = sourceImages.filter(function(it){ return set.has(it.name); });
+            if (filtered.length === 0) { alert('現在読み込まれている画像の中に、このタグの画像がありません'); return; }
+            croquisTagFilter = tag;
+            images = filtered;
+            currentIndex = 0; historyList = [0]; historyPos = 0;
+            loadImage(); resetTimer(); updateImageCounter();
+            renderTagPanel();
+            toggleTagPanel();
+        };
+        window.tagClearFilter = function(){
+            if (!croquisTagFilter) return;
+            croquisTagFilter = null;
+            if (!isFavMode) {
+                images = sourceImages;
+                currentIndex = 0; historyList = [0]; historyPos = 0;
+                loadImage(); resetTimer(); updateImageCounter();
+            }
+            renderTagPanel();
+        };
+        function renderTagPanel(){
+            const list = document.getElementById('tag-list');
+            const info = document.getElementById('tag-filter-info');
+            const fname = (images.length > 0 && images[currentIndex]) ? images[currentIndex].name : null;
+            info.textContent = croquisTagFilter
+                ? ('絞り込み中: 🏷️ ' + croquisTagFilter + '（' + images.length + '枚）')
+                : (fname ? ('現在の画像: ' + fname) : '画像が読み込まれていません');
+            const tags = Object.keys(tagsData).sort();
+            if (tags.length === 0) { list.innerHTML = '<div style="padding:16px 6px;color:#777;font-size:0.85rem;">まだタグがありません。下の欄から作成できます。<br>タグ＝自分専用フォルダ。「手の練習」「好きなポーズ」など自由に分類できます。</div>'; return; }
+            list.innerHTML = '';
+            tags.forEach(function(tag){
+                const row = document.createElement('div'); row.className = 'tag-row';
+                const label = document.createElement('label');
+                const cb = document.createElement('input'); cb.type = 'checkbox';
+                cb.checked = !!(fname && tagSets[tag] && tagSets[tag].has(fname));
+                cb.disabled = !fname;
+                cb.addEventListener('change', function(){ tagToggleCurrent(tag, cb.checked); });
+                const span = document.createElement('span'); span.textContent = tag;
+                label.appendChild(cb); label.appendChild(span);
+                const count = document.createElement('span'); count.className = 'tag-count'; count.textContent = (tagsData[tag] || []).length + '枚';
+                const fbtn = document.createElement('button'); fbtn.className = 'tag-mini-btn';
+                if (croquisTagFilter === tag) { fbtn.textContent = '解除'; fbtn.addEventListener('click', tagClearFilter); }
+                else { fbtn.textContent = '絞り込み'; fbtn.addEventListener('click', function(){ tagApplyFilter(tag); }); }
+                const dbtn = document.createElement('button'); dbtn.className = 'tag-mini-btn danger'; dbtn.textContent = '削除';
+                dbtn.addEventListener('click', function(){ tagDelete(tag); });
+                row.appendChild(label); row.appendChild(count); row.appendChild(fbtn); row.appendChild(dbtn);
+                list.appendChild(row);
+            });
+        }
+
+        // タグ絞り込み中はカウンター表示を絞り込み枚数に
+        const _origUpdateImageCounter = window.updateImageCounter;
+        window.updateImageCounter = function(){
+            if (croquisTagFilter && !isFavMode && ui.imageCounter) {
+                ui.imageCounter.textContent = (historyPos + 1) + ' / ' + images.length + ' 🏷️';
+                return;
+            }
+            _origUpdateImageCounter();
+        };
+
+        /* ════════════════════════════════════════════════════════
+           4) オンライン素材ライブラリ
+        ════════════════════════════════════════════════════════ */
+        const OL_PRESETS = [
+            { label: '🧍 人物ポーズ', src: 'commons', q: 'gesture figure pose model' },
+            { label: '💃 ダンス・動き', src: 'commons', q: 'ballet dancer performance' },
+            { label: '🏃 スポーツ', src: 'commons', q: 'athletics athlete action' },
+            { label: '🙂 顔・ポートレート', src: 'commons', q: 'portrait photograph face' },
+            { label: '✋ 手', src: 'commons', q: 'human hands close-up' },
+            { label: '🗿 彫刻・石膏像', src: 'met', q: 'marble sculpture figure' },
+            { label: '🦴 解剖・骨格', src: 'commons', q: 'human anatomy muscles' },
+            { label: '🐎 馬', src: 'commons', q: 'horse running' },
+            { label: '🐈 動物', src: 'commons', q: 'wildlife animal photography' },
+            { label: '🐦 鳥', src: 'commons', q: 'bird flying' },
+            { label: '🏞 風景', src: 'commons', q: 'landscape photography mountains' },
+            { label: '🍎 静物', src: 'met', q: 'still life painting' },
+            { label: '🎲 ランダム写真', src: 'picsum', q: '' },
+        ];
+        let olResults = [];
+        let olSelected = new Set();
+        let olSearchToken = 0;
+
+        window.toggleOnlinePanel = function(){
+            const p = document.getElementById('online-overlay');
+            const opening = !p.classList.contains('open');
+            p.classList.toggle('open', opening);
+            if (opening) {
+                if (!navigator.onLine) { olStatus('⚠ オフラインです。オンライン素材はインターネット接続時に利用できます。'); }
+                else if (olResults.length === 0) { olStatus('カテゴリを選ぶか、キーワードで検索してください（個人の練習用途を想定。素材の利用条件は各提供元に従ってください）'); }
+                if (document.getElementById('online-cats').children.length === 0) olBuildCats();
+            }
+        };
+        function olBuildCats(){
+            const wrap = document.getElementById('online-cats');
+            OL_PRESETS.forEach(function(p){
+                const b = document.createElement('button'); b.className = 'v2-chip'; b.textContent = p.label;
+                b.addEventListener('click', function(){
+                    document.getElementById('online-source').value = (p.src === 'picsum') ? 'commons' : p.src;
+                    document.getElementById('online-query').value = p.q;
+                    if (p.src === 'picsum') olLoadPicsum(); else olSearch();
+                });
+                wrap.appendChild(b);
+            });
+        }
+        function olStatus(msg){ document.getElementById('online-status').textContent = msg || ''; }
+        function olRenderGrid(){
+            const grid = document.getElementById('online-grid');
+            grid.innerHTML = '';
+            olResults.forEach(function(r, i){
+                const d = document.createElement('div'); d.className = 'ol-thumb' + (olSelected.has(i) ? ' sel' : '');
+                const img = document.createElement('img'); img.loading = 'lazy'; img.decoding = 'async'; img.src = r.thumb; img.alt = '';
+                img.onerror = function(){ d.style.display = 'none'; };
+                d.appendChild(img);
+                d.addEventListener('click', function(){
+                    if (olSelected.has(i)) olSelected.delete(i); else olSelected.add(i);
+                    d.classList.toggle('sel', olSelected.has(i));
+                    olUpdateSelCount();
+                });
+                grid.appendChild(d);
+            });
+            olUpdateSelCount();
+        }
+        function olUpdateSelCount(){ document.getElementById('online-sel-count').textContent = olSelected.size + '枚 選択中'; }
+        window.olSelectAll = function(){
+            if (olSelected.size === olResults.length) olSelected.clear();
+            else { olSelected.clear(); olResults.forEach(function(_, i){ olSelected.add(i); }); }
+            olRenderGrid();
+        };
+
+        window.olSearch = async function(){
+            const q = (document.getElementById('online-query').value || '').trim();
+            const src = document.getElementById('online-source').value;
+            if (!q) { olStatus('キーワードを入力してください'); return; }
+            if (!navigator.onLine) { olStatus('⚠ オフラインのため検索できません'); return; }
+            const token = ++olSearchToken;
+            olSelected.clear(); olResults = []; olRenderGrid();
+            olStatus('検索中…');
+            try {
+                let results = [];
+                if (src === 'met') results = await olFetchMet(q);
+                else results = await olFetchCommons(q);
+                if (token !== olSearchToken) return;
+                olResults = results;
+                olResults.forEach(function(_, i){ olSelected.add(i); }); // デフォルト全選択
+                olRenderGrid();
+                olStatus(results.length > 0 ? (results.length + '枚 見つかりました（タップで選択を切り替え）') : '見つかりませんでした。別のキーワードを試してください（英語推奨）');
+            } catch (e) {
+                if (token !== olSearchToken) return;
+                olStatus('⚠ 取得に失敗しました。通信環境を確認してもう一度お試しください。');
+            }
+        };
+
+        async function olFetchCommons(q){
+            const url = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*'
+                + '&generator=search&gsrsearch=' + encodeURIComponent(q)
+                + '&gsrnamespace=6&gsrlimit=40&prop=imageinfo&iiprop=url|mime&iiurlwidth=1280';
+            const res = await fetch(url);
+            const data = await res.json();
+            const pages = (data.query && data.query.pages) ? Object.values(data.query.pages) : [];
+            const out = [];
+            pages.forEach(function(p){
+                const ii = p.imageinfo && p.imageinfo[0];
+                if (!ii) return;
+                if (ii.mime !== 'image/jpeg' && ii.mime !== 'image/png') return;
+                const full = ii.thumburl || ii.url;
+                if (!full) return;
+                out.push({ name: 'web_' + (p.title || ('commons_' + p.pageid)).replace(/^File:/, ''), url: full, thumb: ii.thumburl || full, cors: true });
+            });
+            return out;
+        }
+
+        async function olFetchMet(q){
+            const sres = await fetch('https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=' + encodeURIComponent(q));
+            const sdata = await sres.json();
+            const ids = (sdata.objectIDs || []).slice(0, 30);
+            const out = [];
+            // 10件ずつ並列取得
+            for (let i = 0; i < ids.length; i += 10) {
+                const chunk = ids.slice(i, i + 10);
+                const settled = await Promise.allSettled(chunk.map(function(id){
+                    return fetch('https://collectionapi.metmuseum.org/public/collection/v1/objects/' + id).then(function(r){ return r.json(); });
+                }));
+                settled.forEach(function(s){
+                    if (s.status !== 'fulfilled') return;
+                    const o = s.value;
+                    const img = o && (o.primaryImageSmall || o.primaryImage);
+                    if (!img) return;
+                    out.push({ name: 'web_met_' + o.objectID + '_' + (o.title || '').slice(0, 40), url: img, thumb: o.primaryImageSmall || img, cors: true });
+                });
+                if (out.length >= 24) break;
+            }
+            return out;
+        }
+
+        function olLoadPicsum(){
+            if (!navigator.onLine) { olStatus('⚠ オフラインのため取得できません'); return; }
+            olSelected.clear(); olResults = [];
+            for (let i = 0; i < 24; i++) {
+                const seed = Math.random().toString(36).slice(2, 10);
+                olResults.push({
+                    name: 'web_random_' + seed,
+                    url:  'https://picsum.photos/seed/' + seed + '/1200/1500',
+                    thumb:'https://picsum.photos/seed/' + seed + '/300/375',
+                    cors: true
+                });
+            }
+            olResults.forEach(function(_, i){ olSelected.add(i); });
+            olRenderGrid();
+            olStatus('ランダム写真 24枚（もう一度押すと別の写真になります）');
+        }
+
+        window.olApply = function(replace){
+            const items = [];
+            olSelected.forEach(function(i){
+                const r = olResults[i]; if (!r) return;
+                items.push({ name: r.name, data: r.url, cors: !!r.cors, online: true });
+            });
+            if (items.length === 0) { olStatus('画像が選択されていません'); return; }
+            croquisTagFilter = null;
+            if (replace || sourceImages.length === 0) {
+                applyLoadedFiles(items);
+            } else {
+                items.forEach(function(it){ sourceImages.push(it); originalOrder.push(it); });
+                if (!isFavMode) images = sourceImages;
+                updateImageCounter();
+                if (typeof updatePreloadQueue === 'function') updatePreloadQueue();
+            }
+            toggleOnlinePanel();
+        };
+
+        /* ════════════════════════════════════════════════════════
+           5) 記憶スケッチ（画面に直接描画 + 答え合わせ）
+        ════════════════════════════════════════════════════════ */
+        const skOverlay   = document.getElementById('sketch-overlay');
+        const skStage     = document.getElementById('sketch-stage');
+        const skImg       = document.getElementById('sketch-img');
+        const skCanvas    = document.getElementById('sketch-canvas');
+        const skCtx       = skCanvas.getContext('2d');
+        const skCountdown = document.getElementById('sketch-countdown');
+        const skMsg       = document.getElementById('sketch-msg');
+        let skOpen = false, skDrawing = false, skEraser = false;
+        let skColor = '#ff4d5e', skLastX = 0, skLastY = 0;
+        let skUndoStack = [];
+        let skMemTimer = null, skState = 'free'; // free | memorize | hidden | reveal
+        let skImgOpacity = 0.5;
+        let skWasRunning = false;
+
+        function skShowMsg(t){ if (!t) { skMsg.style.display = 'none'; return; } skMsg.textContent = t; skMsg.style.display = 'block'; }
+
+        window.toggleSketch = function(){
+            skOpen = !skOpen;
+            skOverlay.classList.toggle('open', skOpen);
+            if (skOpen) {
+                if (images.length === 0) { alert('先に画像を読み込んでください（フォルダ / 画像 / オンライン素材）'); skOpen = false; skOverlay.classList.remove('open'); return; }
+                // メインタイマーが動いていたら一時停止（スケッチに集中）
+                skWasRunning = isRunning;
+                if (isRunning) stopTimer();
+                skSyncImage();
+                skResizeCanvas(true);
+                skSetState('free');
+                skShowMsg('そのまま上から描けます。「記憶モード」で見て→隠して→描く練習ができます');
+                setTimeout(function(){ skShowMsg(''); }, 4000);
+            } else {
+                skCancelMemory();
+                if (skWasRunning) startTimer();
+            }
+        };
+
+        function skSyncImage(){
+            const co = ui.img.getAttribute('crossorigin');
+            if (co) skImg.setAttribute('crossorigin', co); else skImg.removeAttribute('crossorigin');
+            skImg.src = ui.img.src || '';
+            let t = '';
+            if (settings.flipH) t += 'scaleX(-1) ';
+            if (settings.flipV) t += 'scaleY(-1) ';
+            skImg.style.transform = t;
+        }
+        // メイン画像が切り替わったらスケッチ画像も追従
+        ui.img.addEventListener('load', function(){ if (skOpen) skSyncImage(); });
+
+        function skResizeCanvas(clear){
+            const rect = skStage.getBoundingClientRect();
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            let saved = null;
+            if (!clear && skCanvas.width > 0) { try { saved = skCanvas.toDataURL(); } catch(_){} }
+            skCanvas.width  = Math.max(1, Math.round(rect.width  * dpr));
+            skCanvas.height = Math.max(1, Math.round(rect.height * dpr));
+            skCanvas.style.width  = rect.width + 'px';
+            skCanvas.style.height = rect.height + 'px';
+            skCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            skCtx.lineCap = 'round'; skCtx.lineJoin = 'round';
+            if (clear) { skUndoStack = []; }
+            else if (saved) { const im = new Image(); im.onload = function(){ skCtx.drawImage(im, 0, 0, rect.width, rect.height); }; im.src = saved; }
+        }
+        window.addEventListener('resize', function(){ if (skOpen) skResizeCanvas(false); });
+
+        function skSetState(st){
+            skState = st;
+            const memBtn    = document.getElementById('sketch-mem-btn');
+            const peekBtn   = document.getElementById('sketch-peek-btn');
+            const revealBtn = document.getElementById('sketch-reveal-btn');
+            const opWrap    = document.getElementById('sketch-imgopacity-wrap');
+            skCountdown.style.display = 'none';
+            if (st === 'free') {
+                skImg.style.visibility = 'visible'; skImg.style.opacity = '1';
+                memBtn.style.display = ''; peekBtn.style.display = 'none'; revealBtn.style.display = 'none'; opWrap.style.display = 'none';
+            } else if (st === 'memorize') {
+                skImg.style.visibility = 'visible'; skImg.style.opacity = '1';
+                memBtn.style.display = 'none'; peekBtn.style.display = 'none'; revealBtn.style.display = 'none'; opWrap.style.display = 'none';
+            } else if (st === 'hidden') {
+                skImg.style.visibility = 'hidden';
+                memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = ''; revealBtn.textContent = '✅ 答え合わせ'; opWrap.style.display = 'none';
+            } else if (st === 'reveal') {
+                skImg.style.visibility = 'visible'; skImg.style.opacity = String(skImgOpacity);
+                memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = ''; revealBtn.textContent = '🙈 また隠す'; opWrap.style.display = 'flex';
+            }
+        }
+
+        window.skStartMemory = function(){
+            skCancelMemory();
+            skClearSilent();
+            let sec = parseInt(document.getElementById('sketch-memsec').value, 10) || 5;
+            skSetState('memorize');
+            skShowMsg('よく見て覚えてください…');
+            skCountdown.style.display = 'block'; skCountdown.textContent = sec;
+            skMemTimer = setInterval(function(){
+                sec--;
+                if (sec <= 0) {
+                    skCancelMemory();
+                    skSetState('hidden');
+                    skShowMsg('記憶を頼りに描いてみよう！描けたら「答え合わせ」');
+                    setTimeout(function(){ skShowMsg(''); }, 3500);
+                } else { skCountdown.textContent = sec; }
+            }, 1000);
+        };
+        function skCancelMemory(){ if (skMemTimer) { clearInterval(skMemTimer); skMemTimer = null; } skCountdown.style.display = 'none'; }
+        window.skPeek = function(){
+            if (skState !== 'hidden') return;
+            skImg.style.visibility = 'visible'; skImg.style.opacity = '1';
+            setTimeout(function(){ if (skState === 'hidden') { skImg.style.visibility = 'hidden'; } }, 1000);
+        };
+        window.skToggleReveal = function(){
+            if (skState === 'hidden') { skSetState('reveal'); skShowMsg('自分の線と見比べてみよう'); setTimeout(function(){ skShowMsg(''); }, 2500); }
+            else if (skState === 'reveal') skSetState('hidden');
+        };
+        window.skSetImgOpacity = function(v){ skImgOpacity = Math.max(0.1, Math.min(1, v / 100)); if (skState === 'reveal') skImg.style.opacity = String(skImgOpacity); };
+        window.skNextImage = function(){
+            skCancelMemory();
+            nextImage();
+            skClearSilent();
+            skSetState('free');
+        };
+
+        // ── 描画 ──
+        function skPushUndo(){
+            try {
+                skUndoStack.push(skCanvas.toDataURL());
+                if (skUndoStack.length > 15) skUndoStack.shift();
+            } catch(_){}
+        }
+        window.skUndo = function(){
+            const prev = skUndoStack.pop();
+            const rect = skStage.getBoundingClientRect();
+            skCtx.clearRect(0, 0, rect.width, rect.height);
+            if (prev) { const im = new Image(); im.onload = function(){ skCtx.drawImage(im, 0, 0, rect.width, rect.height); }; im.src = prev; }
+        };
+        function skClearSilent(){ const rect = skStage.getBoundingClientRect(); skCtx.clearRect(0, 0, rect.width, rect.height); skUndoStack = []; }
+        window.skClear = function(){ skPushUndo(); const rect = skStage.getBoundingClientRect(); skCtx.clearRect(0, 0, rect.width, rect.height); };
+        window.skToggleEraser = function(){
+            skEraser = !skEraser;
+            document.getElementById('sketch-eraser-btn').classList.toggle('accent', skEraser);
+        };
+        document.querySelectorAll('.sk-color').forEach(function(b){
+            b.addEventListener('click', function(){
+                document.querySelectorAll('.sk-color').forEach(function(x){ x.classList.remove('on'); });
+                b.classList.add('on');
+                skColor = b.getAttribute('data-c');
+                if (skEraser) skToggleEraser();
+            });
+        });
+
+        function skPos(e){
+            const rect = skCanvas.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+        skCanvas.addEventListener('pointerdown', function(e){
+            if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+            e.preventDefault();
+            skCanvas.setPointerCapture(e.pointerId);
+            skPushUndo();
+            skDrawing = true;
+            const p = skPos(e); skLastX = p.x; skLastY = p.y;
+            // 点を打つ
+            skCtx.globalCompositeOperation = skEraser ? 'destination-out' : 'source-over';
+            skCtx.strokeStyle = skColor;
+            const size = parseInt(document.getElementById('sketch-size').value, 10) || 5;
+            skCtx.lineWidth = skEraser ? size * 3 : size;
+            skCtx.beginPath();
+            skCtx.moveTo(p.x, p.y);
+            skCtx.lineTo(p.x + 0.01, p.y + 0.01);
+            skCtx.stroke();
+        }, { passive: false });
+        skCanvas.addEventListener('pointermove', function(e){
+            if (!skDrawing) return;
+            e.preventDefault();
+            const events = (typeof e.getCoalescedEvents === 'function') ? e.getCoalescedEvents() : [e];
+            skCtx.globalCompositeOperation = skEraser ? 'destination-out' : 'source-over';
+            skCtx.strokeStyle = skColor;
+            const size = parseInt(document.getElementById('sketch-size').value, 10) || 5;
+            for (let i = 0; i < events.length; i++) {
+                const p = skPos(events[i]);
+                const pw = (events[i].pointerType === 'pen' && events[i].pressure > 0) ? (0.4 + events[i].pressure * 1.2) : 1;
+                skCtx.lineWidth = (skEraser ? size * 3 : size) * pw;
+                const midX = (skLastX + p.x) / 2, midY = (skLastY + p.y) / 2;
+                skCtx.beginPath();
+                skCtx.moveTo(skLastX, skLastY);
+                skCtx.quadraticCurveTo(skLastX, skLastY, midX, midY);
+                skCtx.lineTo(p.x, p.y);
+                skCtx.stroke();
+                skLastX = p.x; skLastY = p.y;
+            }
+        }, { passive: false });
+        function skEnd(e){ if (skDrawing) { skDrawing = false; } }
+        skCanvas.addEventListener('pointerup', skEnd, { passive: true });
+        skCanvas.addEventListener('pointercancel', skEnd, { passive: true });
+
+        window.skSave = function(){
+            const rect = skStage.getBoundingClientRect();
+            const out = document.createElement('canvas');
+            out.width = Math.round(rect.width * 2); out.height = Math.round(rect.height * 2);
+            const ctx = out.getContext('2d');
+            ctx.fillStyle = '#1e1e1e'; ctx.fillRect(0, 0, out.width, out.height);
+            // 画像（表示中のみ・現在の不透明度）
+            try {
+                if (skImg.style.visibility !== 'hidden' && skImg.naturalWidth > 0) {
+                    const ratio = Math.min(out.width / skImg.naturalWidth, out.height / skImg.naturalHeight);
+                    const w = skImg.naturalWidth * ratio, h = skImg.naturalHeight * ratio;
+                    ctx.globalAlpha = parseFloat(skImg.style.opacity || '1') || 1;
+                    ctx.save();
+                    ctx.translate(out.width / 2, out.height / 2);
+                    if (settings.flipH) ctx.scale(-1, 1);
+                    if (settings.flipV) ctx.scale(1, -1);
+                    ctx.drawImage(skImg, -w / 2, -h / 2, w, h);
+                    ctx.restore();
+                    ctx.globalAlpha = 1;
+                }
+            } catch(_){ /* CORS不可画像は描画スキップ */ }
+            try {
+                ctx.drawImage(skCanvas, 0, 0, out.width, out.height);
+                const a = document.createElement('a');
+                a.download = 'croquis_sketch_' + Date.now() + '.png';
+                a.href = out.toDataURL('image/png');
+                a.click();
+            } catch(_) {
+                alert('この画像は保存に対応していません（外部画像の制限）。描画のみ保存します。');
+                try {
+                    const a = document.createElement('a');
+                    a.download = 'croquis_sketch_' + Date.now() + '.png';
+                    a.href = skCanvas.toDataURL('image/png');
+                    a.click();
+                } catch(__){ }
+            }
+        };
+
+        /* ════════════════════════════════════════════════════════
+           6) キーボードショートカット追加（PC）
+        ════════════════════════════════════════════════════════ */
+        window.v2OverlayOpen = function(){
+            return skOpen
+                || document.getElementById('online-overlay').classList.contains('open')
+                || document.getElementById('tag-panel').classList.contains('open');
+        };
+        document.addEventListener('keydown', function(e){
+            const ae = document.activeElement;
+            if (ae && (ae.tagName === 'SELECT' || ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
+            if (skOpen) {
+                if (e.code === 'Escape') { toggleSketch(); }
+                else if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); skUndo(); }
+                return;
+            }
+            const onlineOpen = document.getElementById('online-overlay').classList.contains('open');
+            const tagOpen = document.getElementById('tag-panel').classList.contains('open');
+            if (e.code === 'Escape') {
+                if (onlineOpen) { toggleOnlinePanel(); return; }
+                if (tagOpen) { toggleTagPanel(); return; }
+            }
+            if (onlineOpen || tagOpen) return;
+            if (e.code === 'KeyF') { toggleFavCurrent(); }
+            else if (e.code === 'KeyG') { toggle('grid'); }
+            else if (e.code === 'KeyH') { toggle('flipH'); }
+            else if (e.code === 'KeyV') { toggle('flipV'); }
+            else if (e.code === 'KeyD') { toggleSketch(); }
+            else if (e.code === 'KeyO') { toggleOnlinePanel(); }
+            else if (e.code === 'KeyT') { toggleTagPanel(); }
+            else if (e.code === 'KeyP') { togglePiP(); }
+            else if (e.code === 'KeyM') { toggleMute(); }
+        });
+    })();
+    </script>
+
 </body>
 </html>
