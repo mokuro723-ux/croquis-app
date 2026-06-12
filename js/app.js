@@ -293,7 +293,7 @@
         const saveSkipList = debounce(flushSkipList, TIMING.SAVE_DEBOUNCE_MS);
         /** skipList を localStorage に即時保存（beforeunload用） */
         function flushSkipList() {
-            try { localStorage.setItem('croquis_skips', JSON.stringify(skipList)); } catch(_) {}
+            try { localStorage.setItem('croquis_skips', JSON.stringify(skipList)); } catch(e) { console.warn('croquis: skip一覧の保存に失敗', e); }
         }
 
         function rebuildFavNameSet() { favNameSet = new Set(dbFavImages.map(function(f){ return f.name; })); }
@@ -355,7 +355,7 @@
                 gridColor: gridColor,
                 gridOpacity: gridOpacity
             };
-            try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (_) {}
+            try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (e) { console.warn('croquis: 設定の保存に失敗', e); }
         }
         /** 設定を debounce 付きで localStorage に保存する */
         const saveUiSettings = debounce(flushUiSettings, TIMING.SAVE_DEBOUNCE_MS);
@@ -399,7 +399,7 @@
                     && ['gray','white','black','red','green','blue','yellow'].includes(saved.gridColor)) gridColor = saved.gridColor;
                 if (saved && typeof saved.gridOpacity === 'number')
                     gridOpacity = Math.max(1, Math.min(10, saved.gridOpacity));
-            } catch (_) {}
+            } catch (e) { console.warn('croquis: 設定の読み込みに失敗', e); }
         }
 
         function reflectUiSettings() {
@@ -1981,7 +1981,7 @@
             if (!document.hidden) animationFrameId = requestAnimationFrame(updateSmoothTimerRAF);
             updateMediaSession();
             if (isPiP) {
-                if (pipVideo && pipVideo.paused) pipVideo.play().catch(function(){});
+                if (pipVideo && pipVideo.paused) pipVideo.play().catch(function(){ /* 自動再生やPiPの制限で失敗しても無害なため無視 */ });
                 updatePiP();
             }
             // iOS Safari 向けオーディオ事前起動（初回のみ）
@@ -1992,7 +1992,7 @@
                     ui.sound.pause();
                     ui.sound.currentTime = 0;
                     ui.sound.volume = 1;
-                }).catch(function(){});
+                }).catch(function(){ /* 自動再生やPiPの制限で失敗しても無害なため無視 */ });
             }
         }
 
@@ -2129,7 +2129,7 @@
             const volMap = [0, 0.4, 1.0];
             ui.sound.volume = volMap[soundVolume];
             ui.sound.currentTime = 0;
-            ui.sound.play().catch(function(){});
+            ui.sound.play().catch(function(){ /* 自動再生やPiPの制限で失敗しても無害なため無視 */ });
         }
 
         const FLASH_ALPHA_MAP = [0, 0.25, 0.45, 0.7];
@@ -2164,7 +2164,7 @@
                             container.classList.remove('timer-flash');
                         }, { once: true });
                     }
-                } catch(e) {}
+                } catch(e) { console.warn("croquis: タイマー点滅の処理に失敗", e); }
             }
 
             if (isPiP && !documentPipWindow && pipInitialized) {
@@ -2386,7 +2386,7 @@
 
             // 2. 非対応ブラウザ（iOS/Safariなど）へのVideo PiPフォールバック
             if (!initPiP() || typeof pipCanvas.captureStream !== 'function') { alert("お使いの環境はPiP機能に対応していません。"); return; }
-            if (document.pictureInPictureElement) { await document.exitPictureInPicture().catch(function(){}); }
+            if (document.pictureInPictureElement) { await document.exitPictureInPicture().catch(function(){ /* 自動再生やPiPの制限で失敗しても無害なため無視 */ }); }
             else if (pipVideo && pipVideo.webkitPresentationMode === 'picture-in-picture') { pipVideo.webkitSetPresentationMode('inline'); } 
             else {
                 try {
@@ -2397,7 +2397,7 @@
                         await pipVideo.requestPictureInPicture();
                     } else if (pipVideo.webkitSupportsPresentationMode && pipVideo.webkitSupportsPresentationMode('picture-in-picture')) {
                         // iPhone / iPad Safari のネイティブPiP機構
-                        if (pipVideo.paused) { await pipVideo.play().catch(function(){}); }
+                        if (pipVideo.paused) { await pipVideo.play().catch(function(){ /* 自動再生やPiPの制限で失敗しても無害なため無視 */ }); }
                         pipVideo.webkitSetPresentationMode('picture-in-picture');
                     } else { throw new Error('PiP unsupported'); }
                     updateMediaSession();

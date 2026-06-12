@@ -6,7 +6,7 @@
         ════════════════════════════════════════════════════════ */
         const STATS_KEY = 'croquis_stats_v1';
         function loadStats(){ try { return JSON.parse(localStorage.getItem(STATS_KEY)) || { days:{}, total:{count:0,sec:0} }; } catch(_) { return { days:{}, total:{count:0,sec:0} }; } }
-        function saveStats(s){ try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch(_){} }
+        function saveStats(s){ try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch(e){ console.warn("croquis: 統計の保存に失敗", e); } }
         function todayKey(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
         window.recordSessionStat = function(){
             try {
@@ -19,7 +19,7 @@
                 const keys = Object.keys(s.days);
                 if (keys.length > 90) { keys.sort(); while (keys.length > 90) delete s.days[keys.shift()]; }
                 saveStats(s);
-            } catch(_){}
+            } catch(e){ console.warn("croquis: 統計の記録に失敗", e); }
         };
         function fmtMin(sec){
             if (sec < 60) return sec + '秒';
@@ -95,7 +95,7 @@
         let tagSets = {};
         function rebuildTagSets(){ tagSets = {}; Object.keys(tagsData).forEach(function(t){ tagSets[t] = new Set(tagsData[t]); }); }
         rebuildTagSets();
-        function saveTags(){ try { localStorage.setItem(TAGS_KEY, JSON.stringify(tagsData)); } catch(_){} }
+        function saveTags(){ try { localStorage.setItem(TAGS_KEY, JSON.stringify(tagsData)); } catch(e){ console.warn("croquis: タグの保存に失敗", e); } }
 
         window.croquisTagFilter = null;
 
@@ -431,7 +431,7 @@
 
         window.skToggleLayout = function(){
             skSide = !skSide;
-            try { localStorage.setItem('croquis_sketch_side', skSide ? '1' : '0'); } catch(_){}
+            try { localStorage.setItem('croquis_sketch_side', skSide ? '1' : '0'); } catch(e){ console.warn("croquis: スケッチ表示位置の保存に失敗", e); }
             skApplyLayout(true);
         };
         function skApplyLayout(preserve){
@@ -464,7 +464,7 @@
             const left = skSide ? (Math.floor(r.width) - skCW) : 0;
             let saved = null, savedW = 0, savedH = 0;
             if (!clear && skCanvas.width > 0) {
-                try { saved = skCanvas.toDataURL(); } catch(_){}
+                try { saved = skCanvas.toDataURL(); } catch(e){ console.warn("croquis: 描画の読み取りに失敗", e); }
                 savedW = skCW; savedH = skCH;
             }
             [skCanvas, skLive].forEach(function(cv){
@@ -623,7 +623,7 @@
             if (skLiveActive) {
                 skCtx.globalCompositeOperation = 'source-over';
                 skCtx.globalAlpha = skAlpha;
-                try { skCtx.drawImage(skLive, 0, 0, skCW, skCH); } catch(_){}
+                try { skCtx.drawImage(skLive, 0, 0, skCW, skCH); } catch(e){ console.warn("croquis: 描画の合成に失敗", e); }
                 skCtx.globalAlpha = 1;
                 skLiveCtx.clearRect(0, 0, skCW, skCH);
                 skLive.style.opacity = '1';
@@ -649,7 +649,7 @@
         skCanvas.addEventListener('pointerdown', function(e){
             if (e.pointerType === 'mouse' && e.button !== 0) return;
             e.preventDefault();
-            try { skCanvas.setPointerCapture(e.pointerId); } catch(_){}
+            try { skCanvas.setPointerCapture(e.pointerId); } catch(_){ /* 一部ブラウザ非対応でも無害なため無視 */ }
             if (e.pointerType === 'touch') {
                 skTouches.set(e.pointerId, { sx: e.clientX, sy: e.clientY });
                 skMaxTouch = Math.max(skMaxTouch, skTouches.size);
@@ -735,7 +735,7 @@
                     a.download = 'croquis_sketch_' + Date.now() + '.png';
                     a.href = skCanvas.toDataURL('image/png');
                     a.click();
-                } catch(__){ }
+                } catch(e){ console.warn("croquis: スケッチ保存に失敗", e); }
             }
         };
 

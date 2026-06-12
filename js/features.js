@@ -86,13 +86,13 @@
             zPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
             if (zPts.size === 2) {
                 zGesture = true;
-                try { zArea.setPointerCapture(e.pointerId); } catch(_){}
+                try { zArea.setPointerCapture(e.pointerId); } catch(_){ /* 一部ブラウザ非対応でも無害なため無視 */ }
                 const a = Array.from(zPts.values());
                 zPinchD = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
                 zPinchS = zS;
             } else if (zPts.size === 1 && zS > 1) {
                 zGesture = true;
-                try { zArea.setPointerCapture(e.pointerId); } catch(_){}
+                try { zArea.setPointerCapture(e.pointerId); } catch(_){ /* 一部ブラウザ非対応でも無害なため無視 */ }
             }
         }, { passive: true });
         zArea.addEventListener('pointermove', function(e){
@@ -197,7 +197,7 @@
         window.startClassFromEditor = function(){
             const plan = clEdit.filter(function(s){ return s.s > 0 && (s.b || s.c > 0); });
             if (!plan.length) { v3toast('ステップを追加してください'); return; }
-            try { localStorage.setItem('croquis_class_v1', JSON.stringify(plan)); } catch(_){}
+            try { localStorage.setItem('croquis_class_v1', JSON.stringify(plan)); } catch(e){ console.warn("croquis: クラス設定の保存に失敗", e); }
             closeClassPanel();
             if (hmActive) exitHardMode();
             clPrevSec = timerSeconds;
@@ -353,7 +353,7 @@
                     if (m) url = m[1];
                 }
                 if (!url) url = (dt.getData('text/uri-list') || dt.getData('text/plain') || '').split(/[\r\n]/)[0];
-            } catch(_) {}
+            } catch(e) { console.warn("croquis: ドロップ内容の解析に失敗", e); }
             if (!url || !/^https?:\/\//.test(url)) return false;
             return addUrlToPool(url, true);
         };
