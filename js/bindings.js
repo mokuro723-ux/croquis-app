@@ -1,0 +1,98 @@
+    (function(){
+        'use strict';
+        /* ════════════════════════════════════════════════════════
+           ボタン配線表（旧: HTMLのonclick属性。動きの中身は元のまま）
+           「このボタン何やってる?」はこのファイルを見れば全部わかる
+        ════════════════════════════════════════════════════════ */
+        function bind(id, ev, fn){
+            const el = document.getElementById(id);
+            if (!el) { console.warn('croquis: 配線先が見つかりません #' + id); return; }
+            el.addEventListener(ev, fn);
+        }
+
+        bind('je-togglehistorypanel', 'click', function(event){ toggleHistoryPanel(); });
+        bind('settings-btn', 'click', function(event){ toggleSettingsPanel(); });
+        bind('btn-hm-show', 'click', function(event){ isImageHidden=false; applyFilters(); });
+        bind('btn-hm-hide', 'click', function(event){ isImageHidden=true; applyFilters(); });
+        bind('bg-btn', 'click', function(event){ cycleBg(); });
+        bind('mute-btn', 'click', function(event){ toggleMute(); });
+        bind('je-togglebottompanel', 'click', function(event){ toggleBottomPanel(); });
+        bind('history-filter-btn', 'click', function(event){ toggleHistoryFilter(); });
+        bind('je-togglehistorypanel-2', 'click', function(event){ toggleHistoryPanel(); });
+        bind('bw-bar-slider', 'input', function(event){ onBwContrastChange(parseInt(this.value)); });
+        bind('je-document-getelementbyid-folder-input-cli', 'click', function(event){ document.getElementById('folder-input').click(); });
+        bind('je-document-getelementbyid-file-input-click', 'click', function(event){ document.getElementById('file-input').click(); });
+        bind('manage-btn', 'click', function(event){ toggleManagePopup(); });
+        bind('prev-btn', 'click', function(event){ handlePrevButtonClick(event); });
+        bind('play-btn', 'click', function(event){ toggleTimer(); });
+        bind('next-btn', 'click', function(event){ handleNextButtonClick(event); });
+        bind('time-select', 'change', function(event){ onTimeSelectChange(this.value); });
+        bind('shuffle-btn', 'click', function(event){ toggle('shuffle'); });
+        bind('flipH-btn', 'click', function(event){ toggle('flipH'); });
+        bind('flipV-btn', 'click', function(event){ toggle('flipV'); });
+        bind('randomFlip-btn', 'click', function(event){ toggleRandomFlip(); });
+        bind('grid-btn', 'click', function(event){ toggle('grid'); });
+        bind('mono-btn', 'click', function(event){ toggle('mono'); });
+        bind('bw-btn', 'click', function(event){ toggleBW(); });
+        bind('pip-btn', 'click', function(event){ togglePiP(); });
+        bind('eye-btn', 'click', function(event){ toggleEyeHide(); });
+        bind('online-btn', 'click', function(event){ toggleOnlinePanel(); });
+        bind('sketch-btn', 'click', function(event){ toggleSketch(); });
+        bind('hm-btn', 'click', function(event){ toggleHardMode(); });
+        bind('je-togglefavcurrent', 'click', function(event){ toggleFavCurrent(); });
+        bind('je-toggletagpanel', 'click', function(event){ toggleTagPanel(); });
+        bind('je-skipcurrent', 'click', function(event){ skipCurrent(); });
+        bind('je-openmultiselect', 'click', function(event){ openMultiSelect(); });
+        bind('je-clearmanagedata', 'click', function(event){ clearManageData(); });
+        bind('settings-overlay', 'click', function(event){ toggleSettingsPanel(); });
+        bind('settings-close-btn', 'click', function(event){ toggleSettingsPanel(); });
+        bind('break-reminder-toggle', 'change', function(event){ onBreakReminderToggle(this.checked); });
+        bind('break-interval-select', 'change', function(event){ onBreakIntervalChange(parseInt(this.value)); });
+        bind('break-duration-select', 'change', function(event){ onBreakDurationChange(parseInt(this.value)); });
+        bind('eye-hide-delay-select', 'change', function(event){ onEyeHideDelayChange(parseInt(this.value)); });
+        bind('focus-idle-delay-select', 'change', function(event){ onFocusIdleDelayChange(parseInt(this.value)); });
+        bind('flash-intensity-select', 'change', function(event){ onFlashIntensityChange(parseInt(this.value)); });
+        bind('progress-size-select', 'change', function(event){ onProgressSizeChange(parseInt(this.value)); });
+        bind('bw-contrast-slider', 'input', function(event){ onBwContrastChange(parseInt(this.value)); });
+        bind('grid-color-select', 'change', function(event){ onGridColorChange(this.value); });
+        bind('grid-opacity-slider', 'input', function(event){ onGridOpacityChange(parseInt(this.value)); });
+        bind('je-resetstats', 'click', function(event){ resetStats(); });
+        bind('sound-volume-select', 'change', function(event){ onSoundVolumeChange(parseInt(this.value)); });
+        bind('break-skip-btn', 'click', function(event){ endBreak(); });
+        bind('multiselect-select-all', 'click', function(event){ multiSelectAll(); });
+        bind('multiselect-deselect-all', 'click', function(event){ multiDeselectAll(); });
+        bind('multiselect-close-btn', 'click', function(event){ closeMultiSelect(); });
+        bind('multiselect-fav-btn', 'click', function(event){ multiSelectFav(); });
+        bind('multiselect-unfav-btn', 'click', function(event){ multiSelectUnfav(); });
+        bind('multiselect-skip-btn', 'click', function(event){ multiSelectSkip(); });
+        bind('je-toggleonlinepanel', 'click', function(event){ toggleOnlinePanel(); });
+        bind('online-query', 'keydown', function(event){ if(event.key==='Enter'){olSearch();} });
+        bind('je-olsearch', 'click', function(event){ olSearch(); });
+        bind('je-olselectall', 'click', function(event){ olSelectAll(); });
+        bind('je-olapply-false', 'click', function(event){ olApply(false); });
+        bind('je-olapply-true', 'click', function(event){ olApply(true); });
+        bind('sketch-layout-btn', 'click', function(event){ skToggleLayout(); });
+        bind('sketch-mem-btn', 'click', function(event){ skStartMemory(); });
+        bind('sketch-peek-btn', 'click', function(event){ skPeek(); });
+        bind('sketch-reveal-btn', 'click', function(event){ skToggleReveal(); });
+        bind('sketch-imgopacity', 'input', function(event){ skSetImgOpacity(this.value); });
+        bind('je-sknextimage', 'click', function(event){ skNextImage(); });
+        bind('je-sksave', 'click', function(event){ skSave(); });
+        bind('je-togglesketch', 'click', function(event){ toggleSketch(); });
+        bind('sk-tools-fab', 'click', function(event){ skToggleTools(); });
+        bind('je-sktoggletools', 'click', function(event){ skToggleTools(); });
+        bind('sketch-eraser-btn', 'click', function(event){ skToggleEraser(); });
+        bind('je-skundo', 'click', function(event){ skUndo(); });
+        bind('je-skredo', 'click', function(event){ skRedo(); });
+        bind('je-skclear', 'click', function(event){ skClear(); });
+        bind('tag-panel', 'click', function(event){ if(event.target===this)toggleTagPanel(); });
+        bind('je-toggletagpanel-2', 'click', function(event){ toggleTagPanel(); });
+        bind('tag-new-name', 'keydown', function(event){ if(event.key==='Enter'){tagCreate();} });
+        bind('je-tagcreate', 'click', function(event){ tagCreate(); });
+        bind('class-panel', 'click', function(event){ if(event.target===this)closeClassPanel(); });
+        bind('je-closeclasspanel', 'click', function(event){ closeClassPanel(); });
+        bind('je-claddrow', 'click', function(event){ clAddRow(); });
+        bind('je-closeclasspanel-2', 'click', function(event){ closeClassPanel(); });
+        bind('je-startclassfromeditor', 'click', function(event){ startClassFromEditor(); });
+        bind('je-skipclassrest', 'click', function(event){ skipClassRest(); });
+    })();

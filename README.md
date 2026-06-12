@@ -14,6 +14,7 @@
 | `js/app.js` | アプリ本体。タイマー、画像読み込み・履歴・お気に入り(IndexedDB)、表示加工、複数選択、PiP、設定保存、キーボード/タッチ操作 など中心機能 |
 | `js/stats.js` | 練習の統計（今日/累計の枚数・時間、直近7日のグラフ）。`window.recordSessionStat` などを公開 |
 | `js/features.js` | 追加機能。巡回シャッフル（一巡するまで同じ画像を出さない）、ズーム＆パン など。`window.pickShuffledIndex` を上書き |
+| `js/bindings.js` | ボタン配線表。画面のボタンと動き（関数）のつながりをここで一括登録。「このボタン何やってる?」はまずここ |
 | `sw.js` | Service Worker。オフライン用のキャッシュ管理 |
 | `manifest.json` | PWA情報（アプリ名・アイコン・起動URL） |
 | `vercel.json` | 配信時のキャッシュ設定（CDNが古いファイルを配り続けないように） |
@@ -57,7 +58,7 @@
 今回はファイル分割（CSS/JSの外部化）とPWAキャッシュの安全化までを実施済みです。
 以下は「やると良いが、1つずつ動作確認しながら進めるべき」項目です。
 
-- HTML属性の `onclick=` を `addEventListener` に統一（計画3-1）
+- ~~HTML属性の `onclick=` を `addEventListener` に統一（計画3-1）~~ ✅実施済み（`js/bindings.js` に集約）
 - 長い関数の分割（`loadImage` ほか）（計画3-2）
 - ~~空の `catch {}`（エラー握りつぶし）の整理（計画3-3）~~ ✅実施済み
 - `v2` / `v3` という世代名のリネーム（計画3-5）
