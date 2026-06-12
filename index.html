@@ -17,8 +17,8 @@
     
     <style>
         :root { 
-            --bg-color: #1e1e1e; --panel-bg: #111; --text-color: #fff; --border-color: #333;
-            --btn-bg: #333; --accent: #00d4ff; --hm-color: #ffb020; 
+            --bg-color: #1e1e1e; --panel-bg: #141414; --text-color: #fff; --border-color: #3d3d3d;
+            --btn-bg: #2e2e2e; --accent: #00d4ff; --hm-color: #ffb020; 
             --accent-urgent: #5be7ff;
             --app-height: 100dvh;
             --bottom-safe: 0px;
@@ -72,7 +72,7 @@
         #history-panel.open { transform: translateX(0); }
         #history-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 1px solid var(--border-color); font-size: 0.9rem; color: var(--accent); font-weight: bold; }
         #history-header > span { flex: 0 0 auto; white-space: nowrap; }
-        #history-filter-btn { flex: 0 0 110px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #history-filter-btn { flex: 0 0 110px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background-color: #444; color: #fff; font-size: 0.75rem; padding: 4px 10px; min-width: auto; font-weight: bold; border-radius: 4px; }
         #history-content { flex: 1; overflow-y: auto; padding: 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; align-content: start; }
         .history-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; cursor: pointer; border: 2px solid transparent; background-color: #222; }
         .history-thumb.current { border-color: var(--accent); }
@@ -168,11 +168,11 @@
         #manage-popup {
             position: fixed; bottom: calc(var(--bottom-safe) + 80px); left: 10px;
             background-color: rgba(22, 22, 22, 0.97);
-            border: 1px solid var(--border-color); border-radius: 8px; padding: 6px;
+            border: 1px solid var(--border-color); border-radius: 12px; padding: 6px;
             display: flex; flex-direction: column; gap: 4px; z-index: 150;
             opacity: 0; pointer-events: none; transform: translateY(8px);
             transition: opacity 0.18s ease, transform 0.18s ease;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            box-shadow: 0 8px 28px rgba(0,0,0,0.55);
             min-width: 180px;
         }
         #manage-popup.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
@@ -262,9 +262,9 @@
             background: #1a1a1a; color: #bbb; cursor: pointer; font-weight: bold;
         }
         #multiselect-actions button:active { background: #252525; }
-        #multiselect-fav-btn { color: #ffd700 !important; border-color: #554400 !important; }
-        #multiselect-unfav-btn { color: #888 !important; }
-        #multiselect-skip-btn { color: #ff6b6b !important; border-color: #4a1f1f !important; }
+        #multiselect-actions #multiselect-fav-btn { color: #ffd700; border-color: #554400; }
+        #multiselect-actions #multiselect-unfav-btn { color: #888; }
+        #multiselect-actions #multiselect-skip-btn { color: #ff6b6b; border-color: #4a1f1f; }
 
         #settings-panel {
             position: fixed; top: env(safe-area-inset-top, 0px); right: 0; bottom: 0;
@@ -338,7 +338,6 @@
         .settings-slider::-moz-range-thumb {
             width: 18px; height: 18px; border-radius: 50%; background: var(--accent); cursor: pointer; border: none;
         }
-        #bw-float-val { font-size: 0.82rem; color: var(--accent); min-width: 22px; text-align: right; }
 
 
         /* 全画面休憩オーバーレイ */
@@ -382,7 +381,7 @@
         #break-corner-icon { font-size: 1.4rem; margin-bottom: 4px; }
         #break-corner-count { font-size: 2.4rem; font-weight: bold; color: var(--accent); line-height: 1; animation: countPulse 1s ease-in-out infinite; }
         #break-corner-msg { font-size: 0.75rem; color: #aaa; margin-top: 4px; letter-spacing: 0.5px; }
-        .popup-danger { color: #ff5555 !important; }
+        .popup-danger { color: #ff5555; }
 
         @media (max-width: 440px) {
             :root {
@@ -416,6 +415,255 @@
             .text-btn { font-size: 0.75rem; padding: 4px 7px; }
             #history-panel { width: 60%; }
         }
+
+        /* ── v2追加スタイル（オンライン素材・スケッチ・タグ・統計） ── */
+        /* ── UI ポリッシュ（既存スタイルの上書き） ───────────── */
+        #bottom-panel button, .text-btn, select, .settings-select {
+            border-radius: 9px;
+            transition: background-color .15s ease, color .15s ease, transform .06s ease, box-shadow .15s ease;
+        }
+        #bottom-panel button:active { transform: scale(0.93); }
+        #bottom-panel button.active, #bottom-panel button.pip-active {
+            box-shadow: 0 0 0 1px rgba(0,212,255,0.35), 0 0 10px rgba(0,212,255,0.15);
+        }
+        #history-panel, #settings-panel { border-radius: 0 0 12px 0; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+
+        /* ── 共通フルオーバーレイ ───────────────────────────── */
+        .v2-overlay {
+            position: fixed; inset: 0; z-index: 1200; display: none;
+            flex-direction: column; background: #0e0e0e;
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        .v2-overlay.open { display: flex; }
+        .v2-header .spacer { flex: 1; }
+        .v2-btn:active { transform: scale(0.95); }
+        .v2-btn.accent { background: var(--accent); color: #00222b; font-weight: bold; }
+        .v2-btn:disabled { opacity: 0.4; cursor: default; }
+        .v2-chip.on { background: rgba(0,212,255,0.16); border-color: var(--accent); color: var(--accent); }
+
+        /* ── オンライン素材パネル ───────────────────────────── */
+        #online-searchrow input[type="text"]:focus { border-color: var(--accent); }
+
+        /* ── スケッチ v4（左右分割 / 半透明ペン / ジェスチャ対応） ── */
+        #sketch-overlay .v2-header { padding: 8px 10px; gap: 6px; }
+        #sketch-overlay .v2-header .v2-btn { padding: 8px 11px; font-size: 0.78rem; }
+        #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; background: #000; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+        #sketch-img {
+            position: absolute; left: 0; top: 0; height: 100%; width: 100%;
+            object-fit: contain; pointer-events: none; user-select: none;
+        }
+        #sketch-overlay.side #sketch-img { width: 50%; }
+        #sketch-overlay.side #sketch-stage::before {
+            content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+            background: #3d3d3d; z-index: 3;
+        }
+        #sketch-canvas, #sketch-live { position: absolute; left: 0; top: 0; touch-action: none; }
+        #sketch-canvas { cursor: crosshair; }
+        #sketch-live { pointer-events: none; }
+        #sketch-countdown {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            font-size: 2.4rem; font-weight: bold; color: var(--hm-color, #ffd75e);
+            text-shadow: 0 2px 8px rgba(0,0,0,0.8); pointer-events: none; display: none; z-index: 5;
+        }
+        #sketch-msg {
+            position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+            font-size: 0.82rem; color: #f0f0f0; background: rgba(0,0,0,0.7); border-radius: 999px;
+            padding: 7px 16px; pointer-events: none; white-space: nowrap; z-index: 5; max-width: 92vw;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+        #sketch-tools {
+            display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; overflow-x: auto;
+            padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
+            border-top: 1px solid var(--border-color); background: var(--panel-bg); scrollbar-width: none;
+        }
+        #sketch-tools::-webkit-scrollbar { display: none; }
+        #sketch-overlay.tools-hidden #sketch-tools { display: none; }
+        #sk-tools-fab {
+            position: absolute; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+            z-index: 8; width: 42px; height: 42px; border-radius: 50%; border: 1px solid #4a4a4a;
+            background: rgba(30,30,30,0.92); color: #eee; font-size: 1.05rem; cursor: pointer; display: none;
+        }
+        #sketch-overlay.tools-hidden #sk-tools-fab { display: block; }
+        .sk-color { width: 27px; height: 27px; border-radius: 50%; border: 2px solid #4a4a4a; cursor: pointer; padding: 0; flex: 0 0 auto; }
+        .sk-color.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
+        .sk-color.half { background: linear-gradient(135deg, rgba(61,139,255,0.85) 50%, rgba(61,139,255,0.3) 50%); }
+        #sketch-size { width: 84px; accent-color: var(--accent); flex: 0 0 auto; }
+        #sketch-tools .v2-btn { padding: 7px 10px; font-size: 0.74rem; flex: 0 0 auto; }
+        #sketch-imgopacity-wrap { display: none; align-items: center; gap: 6px; font-size: 0.72rem; color: #ccc; }
+        #sketch-imgopacity { width: 84px; accent-color: var(--accent); }
+        #sk-gesture-hint { font-size: 0.66rem; color: #888; white-space: nowrap; flex: 0 0 auto; margin-left: 4px; }
+        @media (max-width: 700px) {
+            #sketch-overlay .v2-header { padding: 6px 8px; gap: 5px; }
+            #sketch-overlay .v2-header .v2-btn { padding: 7px 9px; font-size: 0.72rem; }
+            #sketch-tools { padding: 5px 8px calc(5px + env(safe-area-inset-bottom, 0px)); }
+            #sk-gesture-hint { display: none; }
+        }
+
+        /* ── タグ ─────────────────────────────────────────── */
+        #tag-panel {
+            position: fixed; inset: 0; z-index: 1300; display: none;
+            align-items: center; justify-content: center; background: rgba(0,0,0,0.6);
+        }
+        #tag-panel.open { display: flex; }
+        #tag-box {
+            background: #1b1b1b; border: 1px solid #333; border-radius: 14px;
+            width: min(440px, 92vw); max-height: 80vh; display: flex; flex-direction: column;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+        }
+        #tag-box-header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #2c2c2c; color: var(--accent); font-weight: bold; }
+        #tag-box-header .spacer { flex: 1; }
+        #tag-list { overflow-y: auto; padding: 8px 12px; }
+        .tag-row { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px solid #242424; }
+        .tag-row label { display: flex; align-items: center; gap: 8px; flex: 1; cursor: pointer; font-size: 0.9rem; min-width: 0; }
+        .tag-row label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tag-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); flex: 0 0 auto; }
+        .tag-count { color: #777; font-size: 0.75rem; flex: 0 0 auto; }
+        .tag-mini-btn { background: #2c2c2c; border: none; color: #ccc; border-radius: 7px; padding: 6px 9px; font-size: 0.72rem; cursor: pointer; flex: 0 0 auto; }
+        .tag-mini-btn.danger { color: #ff7a7a; }
+        #tag-newrow { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #2c2c2c; }
+        #tag-newrow input { flex: 1; min-width: 0; background: #222; border: 1px solid #3a3a3a; color: #fff; border-radius: 9px; padding: 9px 12px; font-size: 16px; outline: none; }
+        #tag-filter-info { padding: 0 16px 10px; font-size: 0.75rem; color: #999; }
+
+        /* ── 統計 ─────────────────────────────────────────── */
+        #stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 0; }
+        .stat-card { background: #1d1d1d; border: 1px solid #2c2c2c; border-radius: 10px; padding: 10px 12px; }
+        .stat-card .stat-v { font-size: 1.25rem; font-weight: bold; color: var(--accent); }
+        .stat-card .stat-k { font-size: 0.7rem; color: #888; margin-top: 2px; }
+        #stats-week { display: flex; gap: 5px; align-items: flex-end; height: 62px; margin-top: 10px; }
+        .sw-bar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; }
+        .sw-bar i { width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 2px; opacity: .85; }
+        .sw-bar s { text-decoration: none; font-size: .58rem; color: #777; }
+
+        /* ── 視認性向上・クラスモード・トースト・ズーム ── */
+        /* ── ズーム表示チップ ── */
+        #zoom-chip {
+            position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+            background: rgba(0,0,0,0.65); border: 1px solid var(--border-color); color: #fff;
+            font-size: 0.72rem; padding: 6px 14px; border-radius: 999px; z-index: 60;
+            display: none; cursor: pointer; white-space: nowrap; user-select: none; -webkit-user-select: none;
+        }
+        #zoom-chip.show { display: block; }
+        /* ── クラスモード進行チップ（phase-label 流用） ── */
+        #phase-label.cl-chip { cursor: pointer; }
+        /* ── クラスモード設定パネル ── */
+        #class-panel {
+            position: fixed; inset: 0; z-index: 1300; display: none;
+            align-items: center; justify-content: center; background: rgba(0,0,0,0.6); padding: 14px;
+        }
+        #class-panel.open { display: flex; }
+        #class-box {
+            background: #1b1b1b; border: 1px solid #333; border-radius: 14px;
+            width: min(480px, 100%); max-height: 84vh; display: flex; flex-direction: column;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+        }
+        #class-box-header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #2c2c2c; color: var(--accent); font-weight: bold; }
+        #class-box-header .spacer { flex: 1; }
+        #class-body { overflow-y: auto; padding: 12px 16px; }
+        #class-note { font-size: 0.73rem; color: #888; line-height: 1.6; margin-bottom: 10px; }
+        #cl-presets { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
+        .cl-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+        .cl-row .cl-n { color: #666; width: 18px; text-align: right; font-size: 0.82rem; flex: 0 0 auto; }
+        .cl-row select { background: #222; color: #eee; border: 1px solid #3a3a3a; border-radius: 9px; padding: 9px 8px; font-size: 0.84rem; }
+        #class-foot { display: flex; gap: 8px; align-items: center; padding: 12px 16px; border-top: 1px solid #2c2c2c; flex-wrap: wrap; }
+        #cl-total { margin-right: auto; font-size: 0.76rem; color: #999; }
+        /* ── クラス間の休憩 ── */
+        #cl-rest {
+            position: fixed; inset: 0; z-index: 1400; display: none;
+            align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+            background: rgba(12,12,12,0.96); text-align: center;
+        }
+        #cl-rest.on { display: flex; }
+        #cl-rest .cr-icon { font-size: 2rem; }
+        #cl-rest .cr-count { font-size: 4rem; font-weight: bold; color: var(--hm-color, #ffd75e); line-height: 1; }
+        #cl-rest .cr-msg { color: #aaa; font-size: 0.9rem; }
+        /* ── ミニトースト ── */
+        #v3-toast {
+            position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+            transform: translateX(-50%) translateY(14px);
+            background: #262626; border: 1px solid #3a3a3a; color: #eee; font-size: 0.8rem;
+            padding: 10px 18px; border-radius: 999px; z-index: 1500; opacity: 0; pointer-events: none;
+            transition: opacity .25s, transform .25s; max-width: 88vw; text-align: center;
+        }
+        #v3-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* ════════ 視認性向上（全体） ════════ */
+        #bottom-panel button { color: #e2e2e2; }
+        #bottom-panel button:hover { color: #fff; }
+        .v2-btn { color: #f2f2f2; }
+        .v2-btn.ghost { border-color: #4d4d4d; }
+        .v2-chip { color: #e8e8e8; border-color: #4a4a4a; background: #2b2b2b; font-size: 0.84rem; padding: 9px 16px; }
+        .v2-note { color: #9c9c9c; }
+        .v2-header { font-size: 0.95rem; }
+
+        /* ════════ オンライン素材庫の視認性（特にiPhone） ════════ */
+        #online-status { color: #d6d6d6; font-size: 0.85rem; padding: 6px 14px 0; }
+
+        /* チェックマークを丸バッジに */
+        .ol-thumb { position: relative; aspect-ratio: 3/4; border-radius: 11px; overflow: hidden; cursor: pointer; background: #232323; border: 3px solid transparent; }
+        .ol-thumb.sel { border-color: var(--accent); }
+        .ol-thumb.sel::after {
+            content: '✓'; position: absolute; top: 6px; right: 6px; width: 26px; height: 26px;
+            background: var(--accent); color: #00222b; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.95rem; font-weight: bold; text-shadow: none;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+        }
+        #online-sel-count { font-size: 0.9rem; color: #fff; }
+        #online-actions .v2-btn { padding: 12px 16px; font-size: 0.9rem; }
+        #online-searchrow .v2-btn { padding: 11px 14px; }
+
+        /* ── カテゴリタグ：常時 ── */
+        #online-cats .v2-chip {
+            white-space: nowrap;
+            flex-shrink: 0;
+            min-width: max-content;
+            background: #2a2a2a; border: 1px solid #555; color: #e8e8e8;
+        }
+        #online-cats .v2-chip.on {
+            background: rgba(0,212,255,0.18); border-color: var(--accent); color: var(--accent);
+        }
+
+        @media (max-width: 600px) {
+            #online-overlay .v2-header { padding: 10px 12px; gap: 6px; }
+            #online-overlay .v2-header .v2-note { display: none; }
+
+            /* タグ行：スクロールバー非表示、チップを大きく */
+            #online-cats { padding: 10px 12px 4px; gap: 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+            #online-cats::-webkit-scrollbar { display: none; }
+            #online-cats .v2-chip { font-size: 0.9rem; padding: 10px 15px; border-color: #666; flex-shrink: 0; min-width: max-content; }
+
+            /* 検索行 */
+            #online-searchrow { flex-wrap: wrap; gap: 7px; padding: 8px 12px 2px; }
+            #online-searchrow input[type="text"] { flex: 1 1 100%; order: -1; padding: 12px 14px; }
+            #online-source { flex: 1 1 auto; padding: 11px 8px; font-size: 0.84rem; }
+
+            /* グリッド：aspect-ratioをgrid-auto-rowsで明示（iOS対策） */
+            #online-grid {
+                grid-template-columns: repeat(2, 1fr);
+                grid-auto-rows: calc((100vw - 36px) / 2 * 4 / 3);
+                gap: 10px; padding: 10px 12px;
+            }
+            .ol-thumb { border-radius: 12px; width: 100%; height: 100%; aspect-ratio: unset; }
+            .ol-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+            /* アクションバー */
+            #online-actions { gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
+            #online-sel-count { flex-basis: 100%; margin: 0 0 2px; }
+            #online-actions .v2-btn { flex: 1; }
+        }
+
+        /* ── 初期非表示要素 ── */
+        #btn-hm-show, #btn-hm-hide { display: none; }
+        #sketch-peek-btn, #sketch-reveal-btn { display: none; }
+        #sketch-msg { display: none; }
+        #folder-input, #file-input { display: none; }
+        /* ── 個別調整 ── */
+        .cl-add-btn { margin-top: 8px; }
+        #cl-rest-skip { margin-top: 6px; }
     </style>
 </head>
 <body>
@@ -426,8 +674,8 @@
             <div id="image-counter"></div>
             <div id="phase-label"></div>
             <div id="hm-step-mini"></div>
-            <button class="text-btn" id="btn-hm-show" onclick="isImageHidden=false; applyFilters();" style="display:none;">表示</button>
-            <button class="text-btn" id="btn-hm-hide" onclick="isImageHidden=true; applyFilters();" style="display:none;">隠す</button>
+            <button class="text-btn" id="btn-hm-show" onclick="isImageHidden=false; applyFilters();">表示</button>
+            <button class="text-btn" id="btn-hm-hide" onclick="isImageHidden=true; applyFilters();">隠す</button>
         </div>
         <div id="timer-label">00:30</div>
         <div class="top-right">
@@ -442,7 +690,7 @@
     <div id="history-panel">
         <div id="history-header">
             <span>履歴管理</span>
-            <button id="history-filter-btn" onclick="toggleHistoryFilter()" style="background-color:#444; color:#fff; font-size:0.75rem; padding:4px 10px; min-width:auto; font-weight:bold; border-radius:4px;">全て (履歴)</button>
+            <button id="history-filter-btn" onclick="toggleHistoryFilter()">全て (履歴)</button>
             <button class="icon-btn" onclick="toggleHistoryPanel()"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
         </div>
         <div id="history-content"></div>
@@ -467,8 +715,8 @@
     <div id="progress-container"><div id="progress-bar"></div></div>
 
     <div id="bottom-panel">
-        <input type="file" id="folder-input" webkitdirectory directory multiple style="display:none;">
-        <input type="file" id="file-input" multiple accept="image/*" style="display:none;">
+        <input type="file" id="folder-input" webkitdirectory directory multiple>
+        <input type="file" id="file-input" multiple accept="image/*">
         
         <button onclick="document.getElementById('folder-input').click()" title="フォルダ"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></button>
         <button onclick="document.getElementById('file-input').click()" title="複数画像"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg></button>
@@ -3292,169 +3540,7 @@
         }, { passive: true });
     </script>
     <!-- ════════════ v2 追加機能（オンライン素材 / 記憶スケッチ / タグ / 統計） ════════════ -->
-    <style>
-        /* ── UI ポリッシュ（既存スタイルの上書き） ───────────── */
-        :root { --panel-bg: #141414; --border-color: #2c2c2c; --btn-bg: #2e2e2e; }
-        #bottom-panel button, .text-btn, select, .settings-select {
-            border-radius: 9px;
-            transition: background-color .15s ease, color .15s ease, transform .06s ease, box-shadow .15s ease;
-        }
-        #bottom-panel button:active { transform: scale(0.93); }
-        #bottom-panel button.active, #bottom-panel button.pip-active {
-            box-shadow: 0 0 0 1px rgba(0,212,255,0.35), 0 0 10px rgba(0,212,255,0.15);
-        }
-        #history-panel, #settings-panel, #manage-popup { border-radius: 0 0 12px 0; }
-        #manage-popup { border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,0.55); }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
 
-        /* ── 共通フルオーバーレイ ───────────────────────────── */
-        .v2-overlay {
-            position: fixed; inset: 0; z-index: 1200; display: none;
-            flex-direction: column; background: #0e0e0e;
-            padding-top: env(safe-area-inset-top, 0px);
-            padding-bottom: env(safe-area-inset-bottom, 0px);
-        }
-        .v2-overlay.open { display: flex; }
-        .v2-header {
-            display: flex; align-items: center; gap: 10px;
-            padding: 12px 14px; border-bottom: 1px solid var(--border-color);
-            font-weight: bold; color: var(--accent); flex-wrap: wrap;
-        }
-        .v2-header .spacer { flex: 1; }
-        .v2-btn {
-            background: var(--btn-bg); color: #eee; border: none; border-radius: 9px;
-            padding: 8px 14px; font-size: 0.85rem; cursor: pointer; white-space: nowrap;
-            transition: background-color .15s ease, transform .06s ease;
-        }
-        .v2-btn:active { transform: scale(0.95); }
-        .v2-btn.accent { background: var(--accent); color: #00222b; font-weight: bold; }
-        .v2-btn.ghost { background: transparent; border: 1px solid #444; }
-        .v2-btn:disabled { opacity: 0.4; cursor: default; }
-        .v2-chip {
-            background: #262626; border: 1px solid #3a3a3a; color: #ddd; border-radius: 999px;
-            padding: 7px 13px; font-size: 0.8rem; cursor: pointer; white-space: nowrap;
-        }
-        .v2-chip.on { background: rgba(0,212,255,0.16); border-color: var(--accent); color: var(--accent); }
-        .v2-note { font-size: 0.7rem; color: #777; font-weight: normal; }
-
-        /* ── オンライン素材パネル ───────────────────────────── */
-        #online-cats { display: flex; gap: 8px; padding: 10px 14px 4px; overflow-x: auto; flex-wrap: nowrap; }
-        #online-searchrow { display: flex; gap: 8px; padding: 8px 14px; align-items: center; }
-        #online-searchrow input[type="text"] {
-            flex: 1; min-width: 0; background: #222; border: 1px solid #3a3a3a; color: #fff;
-            border-radius: 9px; padding: 9px 12px; font-size: 16px; outline: none;
-        }
-        #online-searchrow input[type="text"]:focus { border-color: var(--accent); }
-        #online-source { background: #222; color: #ddd; border: 1px solid #3a3a3a; }
-        #online-status { padding: 4px 14px 0; font-size: 0.78rem; color: #999; min-height: 1.2em; }
-        #online-grid {
-            flex: 1; overflow-y: auto; padding: 10px 14px;
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-content: start;
-            overscroll-behavior: contain;
-        }
-        .ol-thumb { position: relative; aspect-ratio: 3/4; border-radius: 8px; overflow: hidden; cursor: pointer; background: #1c1c1c; border: 2px solid transparent; }
-        .ol-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .ol-thumb.sel { border-color: var(--accent); }
-        .ol-thumb.sel::after { content: '✓'; position: absolute; top: 4px; right: 6px; color: var(--accent); font-weight: bold; text-shadow: 0 0 4px #000; }
-        #online-actions {
-            display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
-            border-top: 1px solid var(--border-color); flex-wrap: wrap; align-items: center;
-        }
-        #online-sel-count { font-size: 0.8rem; color: #aaa; margin-right: auto; }
-
-        /* ── スケッチ v4（左右分割 / 半透明ペン / ジェスチャ対応） ── */
-        #sketch-overlay .v2-header { padding: 8px 10px; gap: 6px; }
-        #sketch-overlay .v2-header .v2-btn { padding: 8px 11px; font-size: 0.78rem; }
-        #sk-stage-wrap { flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column; }
-        #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; background: #000; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-        #sketch-img {
-            position: absolute; left: 0; top: 0; height: 100%; width: 100%;
-            object-fit: contain; pointer-events: none; user-select: none;
-        }
-        #sketch-overlay.side #sketch-img { width: 50%; }
-        #sketch-overlay.side #sketch-stage::before {
-            content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
-            background: #3d3d3d; z-index: 3;
-        }
-        #sketch-canvas, #sketch-live { position: absolute; left: 0; top: 0; touch-action: none; }
-        #sketch-canvas { cursor: crosshair; }
-        #sketch-live { pointer-events: none; }
-        #sketch-countdown {
-            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-            font-size: 2.4rem; font-weight: bold; color: var(--hm-color, #ffd75e);
-            text-shadow: 0 2px 8px rgba(0,0,0,0.8); pointer-events: none; display: none; z-index: 5;
-        }
-        #sketch-msg {
-            position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
-            font-size: 0.82rem; color: #f0f0f0; background: rgba(0,0,0,0.7); border-radius: 999px;
-            padding: 7px 16px; pointer-events: none; white-space: nowrap; z-index: 5; max-width: 92vw;
-            overflow: hidden; text-overflow: ellipsis;
-        }
-        #sketch-tools {
-            display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; overflow-x: auto;
-            padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
-            border-top: 1px solid var(--border-color); background: var(--panel-bg); scrollbar-width: none;
-        }
-        #sketch-tools::-webkit-scrollbar { display: none; }
-        #sketch-overlay.tools-hidden #sketch-tools { display: none; }
-        #sk-tools-fab {
-            position: absolute; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-            z-index: 8; width: 42px; height: 42px; border-radius: 50%; border: 1px solid #4a4a4a;
-            background: rgba(30,30,30,0.92); color: #eee; font-size: 1.05rem; cursor: pointer; display: none;
-        }
-        #sketch-overlay.tools-hidden #sk-tools-fab { display: block; }
-        .sk-color { width: 27px; height: 27px; border-radius: 50%; border: 2px solid #4a4a4a; cursor: pointer; padding: 0; flex: 0 0 auto; }
-        .sk-color.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
-        .sk-color.half { background: linear-gradient(135deg, rgba(61,139,255,0.85) 50%, rgba(61,139,255,0.3) 50%) !important; }
-        #sketch-size { width: 84px; accent-color: var(--accent); flex: 0 0 auto; }
-        #sketch-tools .v2-btn { padding: 7px 10px; font-size: 0.74rem; flex: 0 0 auto; }
-        #sketch-imgopacity-wrap { display: none; align-items: center; gap: 6px; font-size: 0.72rem; color: #ccc; }
-        #sketch-imgopacity { width: 84px; accent-color: var(--accent); }
-        #sk-gesture-hint { font-size: 0.66rem; color: #888; white-space: nowrap; flex: 0 0 auto; margin-left: 4px; }
-        @media (max-width: 700px) {
-            #sketch-overlay .v2-header { padding: 6px 8px; gap: 5px; }
-            #sketch-overlay .v2-header .v2-btn { padding: 7px 9px; font-size: 0.72rem; }
-            #sketch-tools { padding: 5px 8px calc(5px + env(safe-area-inset-bottom, 0px)); }
-            #sk-gesture-hint { display: none; }
-        }
-
-        /* ── タグ ─────────────────────────────────────────── */
-        #tag-panel {
-            position: fixed; inset: 0; z-index: 1300; display: none;
-            align-items: center; justify-content: center; background: rgba(0,0,0,0.6);
-        }
-        #tag-panel.open { display: flex; }
-        #tag-box {
-            background: #1b1b1b; border: 1px solid #333; border-radius: 14px;
-            width: min(440px, 92vw); max-height: 80vh; display: flex; flex-direction: column;
-            box-shadow: 0 12px 40px rgba(0,0,0,0.6);
-        }
-        #tag-box-header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #2c2c2c; color: var(--accent); font-weight: bold; }
-        #tag-box-header .spacer { flex: 1; }
-        #tag-list { overflow-y: auto; padding: 8px 12px; }
-        .tag-row { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px solid #242424; }
-        .tag-row label { display: flex; align-items: center; gap: 8px; flex: 1; cursor: pointer; font-size: 0.9rem; min-width: 0; }
-        .tag-row label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .tag-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); flex: 0 0 auto; }
-        .tag-count { color: #777; font-size: 0.75rem; flex: 0 0 auto; }
-        .tag-mini-btn { background: #2c2c2c; border: none; color: #ccc; border-radius: 7px; padding: 6px 9px; font-size: 0.72rem; cursor: pointer; flex: 0 0 auto; }
-        .tag-mini-btn.danger { color: #ff7a7a; }
-        #tag-newrow { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #2c2c2c; }
-        #tag-newrow input { flex: 1; min-width: 0; background: #222; border: 1px solid #3a3a3a; color: #fff; border-radius: 9px; padding: 9px 12px; font-size: 16px; outline: none; }
-        #tag-filter-info { padding: 0 16px 10px; font-size: 0.75rem; color: #999; }
-
-        /* ── 統計 ─────────────────────────────────────────── */
-        #stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 0; }
-        .stat-card { background: #1d1d1d; border: 1px solid #2c2c2c; border-radius: 10px; padding: 10px 12px; }
-        .stat-card .stat-v { font-size: 1.25rem; font-weight: bold; color: var(--accent); }
-        .stat-card .stat-k { font-size: 0.7rem; color: #888; margin-top: 2px; }
-        #stats-week { display: flex; gap: 5px; align-items: flex-end; height: 62px; margin-top: 10px; }
-        .sw-bar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; }
-        .sw-bar i { width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 2px; opacity: .85; }
-        .sw-bar s { text-decoration: none; font-size: .58rem; color: #777; }
-    </style>
 
     <!-- ── オンライン素材パネル ── -->
     <div id="online-overlay" class="v2-overlay">
@@ -3498,8 +3584,8 @@
                 <option value="30">30秒</option>
             </select>
             <button class="v2-btn" id="sketch-mem-btn" onclick="skStartMemory()">🧠 記憶モード</button>
-            <button class="v2-btn" id="sketch-peek-btn" onclick="skPeek()" style="display:none;">👁 1秒見る</button>
-            <button class="v2-btn" id="sketch-reveal-btn" onclick="skToggleReveal()" style="display:none;">✅ 答え合わせ</button>
+            <button class="v2-btn" id="sketch-peek-btn" onclick="skPeek()">👁 1秒見る</button>
+            <button class="v2-btn" id="sketch-reveal-btn" onclick="skToggleReveal()">✅ 答え合わせ</button>
             <div id="sketch-imgopacity-wrap">
                 <span>画像</span>
                 <input type="range" id="sketch-imgopacity" min="10" max="100" value="50" oninput="skSetImgOpacity(this.value)">
@@ -3514,7 +3600,7 @@
             <canvas id="sketch-canvas"></canvas>
             <canvas id="sketch-live"></canvas>
             <div id="sketch-countdown"></div>
-            <div id="sketch-msg" style="display:none;"></div>
+            <div id="sketch-msg"></div>
             <button id="sk-tools-fab" onclick="skToggleTools()" title="ツールを表示">🖌</button>
         </div>
         <div id="sketch-tools">
@@ -4331,125 +4417,7 @@
     </script>
 
     <!-- ════════════ v3 追加機能（クラスモード / シルエット / ズーム / 巡回シャッフル） ════════════ -->
-    <style>
-        /* ── ズーム表示チップ ── */
-        #zoom-chip {
-            position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
-            background: rgba(0,0,0,0.65); border: 1px solid var(--border-color); color: #fff;
-            font-size: 0.72rem; padding: 6px 14px; border-radius: 999px; z-index: 60;
-            display: none; cursor: pointer; white-space: nowrap; user-select: none; -webkit-user-select: none;
-        }
-        #zoom-chip.show { display: block; }
-        /* ── クラスモード進行チップ（phase-label 流用） ── */
-        #phase-label.cl-chip { cursor: pointer; }
-        /* ── クラスモード設定パネル ── */
-        #class-panel {
-            position: fixed; inset: 0; z-index: 1300; display: none;
-            align-items: center; justify-content: center; background: rgba(0,0,0,0.6); padding: 14px;
-        }
-        #class-panel.open { display: flex; }
-        #class-box {
-            background: #1b1b1b; border: 1px solid #333; border-radius: 14px;
-            width: min(480px, 100%); max-height: 84vh; display: flex; flex-direction: column;
-            box-shadow: 0 12px 40px rgba(0,0,0,0.6);
-        }
-        #class-box-header { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #2c2c2c; color: var(--accent); font-weight: bold; }
-        #class-box-header .spacer { flex: 1; }
-        #class-body { overflow-y: auto; padding: 12px 16px; }
-        #class-note { font-size: 0.73rem; color: #888; line-height: 1.6; margin-bottom: 10px; }
-        #cl-presets { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
-        .cl-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
-        .cl-row .cl-n { color: #666; width: 18px; text-align: right; font-size: 0.82rem; flex: 0 0 auto; }
-        .cl-row select { background: #222; color: #eee; border: 1px solid #3a3a3a; border-radius: 9px; padding: 9px 8px; font-size: 0.84rem; }
-        #class-foot { display: flex; gap: 8px; align-items: center; padding: 12px 16px; border-top: 1px solid #2c2c2c; flex-wrap: wrap; }
-        #cl-total { margin-right: auto; font-size: 0.76rem; color: #999; }
-        /* ── クラス間の休憩 ── */
-        #cl-rest {
-            position: fixed; inset: 0; z-index: 1400; display: none;
-            align-items: center; justify-content: center; flex-direction: column; gap: 12px;
-            background: rgba(12,12,12,0.96); text-align: center;
-        }
-        #cl-rest.on { display: flex; }
-        #cl-rest .cr-icon { font-size: 2rem; }
-        #cl-rest .cr-count { font-size: 4rem; font-weight: bold; color: var(--hm-color, #ffd75e); line-height: 1; }
-        #cl-rest .cr-msg { color: #aaa; font-size: 0.9rem; }
-        /* ── ミニトースト ── */
-        #v3-toast {
-            position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom, 0px));
-            transform: translateX(-50%) translateY(14px);
-            background: #262626; border: 1px solid #3a3a3a; color: #eee; font-size: 0.8rem;
-            padding: 10px 18px; border-radius: 999px; z-index: 1500; opacity: 0; pointer-events: none;
-            transition: opacity .25s, transform .25s; max-width: 88vw; text-align: center;
-        }
-        #v3-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-        /* ════════ 視認性向上（全体） ════════ */
-        :root { --border-color: #3d3d3d; }
-        #bottom-panel button { color: #e2e2e2; }
-        #bottom-panel button:hover { color: #fff; }
-        .v2-btn { color: #f2f2f2; }
-        .v2-btn.ghost { border-color: #4d4d4d; }
-        .v2-chip { color: #e8e8e8; border-color: #4a4a4a; background: #2b2b2b; font-size: 0.84rem; padding: 9px 16px; }
-        .v2-note { color: #9c9c9c; }
-        .v2-header { font-size: 0.95rem; }
-
-        /* ════════ オンライン素材庫の視認性（特にiPhone） ════════ */
-        #online-status { color: #d6d6d6; font-size: 0.85rem; padding: 6px 14px 0; }
-
-        /* チェックマークを丸バッジに */
-        .ol-thumb { border-width: 3px; border-radius: 11px; background: #232323; }
-        .ol-thumb.sel { border-color: var(--accent); }
-        .ol-thumb.sel::after {
-            content: '✓'; position: absolute; top: 6px; right: 6px; width: 26px; height: 26px;
-            background: var(--accent); color: #00222b; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.95rem; font-weight: bold; text-shadow: none;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.5);
-        }
-        #online-sel-count { font-size: 0.9rem; color: #fff; }
-        #online-actions .v2-btn { padding: 12px 16px; font-size: 0.9rem; }
-        #online-searchrow .v2-btn { padding: 11px 14px; }
-
-        /* ── カテゴリタグ：常時 ── */
-        #online-cats .v2-chip {
-            white-space: nowrap;
-            flex-shrink: 0;
-            min-width: max-content;
-            background: #2a2a2a; border: 1px solid #555; color: #e8e8e8;
-        }
-        #online-cats .v2-chip.on {
-            background: rgba(0,212,255,0.18); border-color: var(--accent); color: var(--accent);
-        }
-
-        @media (max-width: 600px) {
-            #online-overlay .v2-header { padding: 10px 12px; gap: 6px; }
-            #online-overlay .v2-header .v2-note { display: none; }
-
-            /* タグ行：スクロールバー非表示、チップを大きく */
-            #online-cats { padding: 10px 12px 4px; gap: 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-            #online-cats::-webkit-scrollbar { display: none; }
-            #online-cats .v2-chip { font-size: 0.9rem; padding: 10px 15px; border-color: #666; flex-shrink: 0; min-width: max-content; }
-
-            /* 検索行 */
-            #online-searchrow { flex-wrap: wrap; gap: 7px; padding: 8px 12px 2px; }
-            #online-searchrow input[type="text"] { flex: 1 1 100%; order: -1; padding: 12px 14px; }
-            #online-source { flex: 1 1 auto; padding: 11px 8px; font-size: 0.84rem; }
-
-            /* グリッド：aspect-ratioをgrid-auto-rowsで明示（iOS対策） */
-            #online-grid {
-                grid-template-columns: repeat(2, 1fr);
-                grid-auto-rows: calc((100vw - 36px) / 2 * 4 / 3);
-                gap: 10px; padding: 10px 12px;
-            }
-            .ol-thumb { border-radius: 12px; width: 100%; height: 100%; aspect-ratio: unset; }
-            .ol-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-            /* アクションバー */
-            #online-actions { gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
-            #online-sel-count { flex-basis: 100%; margin: 0 0 2px; }
-            #online-actions .v2-btn { flex: 1; }
-        }
-    </style>
 
     <!-- クラスモード設定 -->
     <div id="class-panel" onclick="if(event.target===this)closeClassPanel()">
@@ -4463,7 +4431,7 @@
                 <div id="class-note">実際のクロッキー会のように「30秒×10枚 → 1分×5枚 → 休憩 →…」と自動で進行します。タイマーの時間選択「クラス…」からいつでも開けます。</div>
                 <div id="cl-presets"></div>
                 <div id="cl-rows"></div>
-                <button class="tag-mini-btn" onclick="clAddRow()" style="margin-top:8px">＋ ステップを追加</button>
+                <button class="tag-mini-btn cl-add-btn" onclick="clAddRow()">＋ ステップを追加</button>
             </div>
             <div id="class-foot">
                 <span id="cl-total"></span>
@@ -4478,7 +4446,7 @@
         <div class="cr-icon">☕</div>
         <div class="cr-count" id="cl-rest-count">30</div>
         <div class="cr-msg" id="cl-rest-msg">インターバル — 手を休めて</div>
-        <button class="v2-btn ghost" onclick="skipClassRest()" style="margin-top:6px">スキップ</button>
+        <button class="v2-btn ghost" id="cl-rest-skip" onclick="skipClassRest()">スキップ</button>
     </div>
 
     <div id="v3-toast"></div>
