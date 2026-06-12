@@ -4,9 +4,9 @@
         /* ════════════════════════════════════════════════════════
            1) セッション統計
         ════════════════════════════════════════════════════════ */
-        const STATS_KEY = 'croquis_stats_v1';
-        function loadStats(){ try { return JSON.parse(localStorage.getItem(STATS_KEY)) || { days:{}, total:{count:0,sec:0} }; } catch(_) { return { days:{}, total:{count:0,sec:0} }; } }
-        function saveStats(s){ try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch(e){ console.warn("croquis: 統計の保存に失敗", e); } }
+        const STATS_KEY = window.CROQUIS_KEYS.STATS;
+        function loadStats(){ return window.CroquisStore.getJSON(STATS_KEY, { days:{}, total:{count:0,sec:0} }); }
+        function saveStats(s){ window.CroquisStore.setJSON(STATS_KEY, s, '統計'); }
         function todayKey(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
         window.recordSessionStat = function(){
             try {
@@ -90,12 +90,12 @@
         /* ════════════════════════════════════════════════════════
            3) タグ（フォルダ分け）
         ════════════════════════════════════════════════════════ */
-        const TAGS_KEY = 'croquis_tags_v1';
-        let tagsData = (function(){ try { return JSON.parse(localStorage.getItem(TAGS_KEY)) || {}; } catch(_) { return {}; } })();
+        const TAGS_KEY = window.CROQUIS_KEYS.TAGS;
+        let tagsData = window.CroquisStore.getJSON(TAGS_KEY, {});
         let tagSets = {};
         function rebuildTagSets(){ tagSets = {}; Object.keys(tagsData).forEach(function(t){ tagSets[t] = new Set(tagsData[t]); }); }
         rebuildTagSets();
-        function saveTags(){ try { localStorage.setItem(TAGS_KEY, JSON.stringify(tagsData)); } catch(e){ console.warn("croquis: タグの保存に失敗", e); } }
+        function saveTags(){ window.CroquisStore.setJSON(TAGS_KEY, tagsData, 'タグ'); }
 
         window.croquisTagFilter = null;
 
@@ -405,7 +405,7 @@
         let skUndoStack = [], skRedoStack = [];
         let skMemTimer = null, skState = 'free';
         let skImgOpacity = 0.5, skWasRunning = false;
-        let skSide = (function(){ try { return localStorage.getItem('croquis_sketch_side') === '1'; } catch(_) { return false; } })();
+        let skSide = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_SIDE) === '1';
         let skCW = 0, skCH = 0; // 描画キャンバスのCSSサイズ
 
         function skShowMsg(t){ if (!t) { skMsgEl.style.display = 'none'; return; } skMsgEl.textContent = t; skMsgEl.style.display = 'block'; }
@@ -431,7 +431,7 @@
 
         window.skToggleLayout = function(){
             skSide = !skSide;
-            try { localStorage.setItem('croquis_sketch_side', skSide ? '1' : '0'); } catch(e){ console.warn("croquis: スケッチ表示位置の保存に失敗", e); }
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_SIDE, skSide ? '1' : '0', 'スケッチ表示位置');
             skApplyLayout(true);
         };
         function skApplyLayout(preserve){

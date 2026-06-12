@@ -143,7 +143,7 @@
 
         window.openClassPanel = function(){
             if (images.length === 0) { alert('先に画像を読み込んでください'); return; }
-            try { clEdit = JSON.parse(localStorage.getItem('croquis_class_v1')) || []; } catch(_) { clEdit = []; }
+            clEdit = window.CroquisStore.getJSON(window.CROQUIS_KEYS.CLASS, []);
             if (!clEdit.length) clEdit = JSON.parse(JSON.stringify(CL_PRESETS[0].plan));
             const pr = document.getElementById('cl-presets');
             pr.innerHTML = '';
@@ -197,7 +197,7 @@
         window.startClassFromEditor = function(){
             const plan = clEdit.filter(function(s){ return s.s > 0 && (s.b || s.c > 0); });
             if (!plan.length) { v3toast('ステップを追加してください'); return; }
-            try { localStorage.setItem('croquis_class_v1', JSON.stringify(plan)); } catch(e){ console.warn("croquis: クラス設定の保存に失敗", e); }
+            window.CroquisStore.setJSON(window.CROQUIS_KEYS.CLASS, plan, 'クラス設定');
             closeClassPanel();
             if (hmActive) exitHardMode();
             clPrevSec = timerSeconds;

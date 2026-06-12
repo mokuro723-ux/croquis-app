@@ -46,8 +46,9 @@
 ## データ保存の仕組み
 
 - **IndexedDB** … お気に入り画像の実データ（重い画像データ）。`js/app.js` が管理。
-- **localStorage** … 軽い設定・状態。キーは現状ばらつきあり（例: `croquis_stats_v1`, `croquis_class_v1`, `croquis_skips`, `croquis_sketch_side` など）。
-  - ※ 将来の改善候補：キー名の統一と保存処理の一元化（リファクタリング計画書のフェーズ4-1）。実施時は旧キーからの自動移行を必ず入れること。
+- **localStorage** … 軽い設定・状態。キー名は `js/app.js` 冒頭の `CROQUIS_KEYS` 一覧表で一元管理（すべて `croquis_〇〇_v1` 形式に統一済み）。
+  - 読み書きは必ず `CroquisStore`（同じく app.js 冒頭の「保存係」）経由で行うこと。直接 `localStorage` を触らない。
+  - 旧キー（`croquis_skips` / `croquis_sketch_side`）からの自動引き継ぎは初回起動時に1回だけ実行され、`croquis_store_migrated_v1` という印で管理。旧データは保険として残している。
 
 ---
 
@@ -58,9 +59,9 @@
 
 - HTML属性の `onclick=` を `addEventListener` に統一（計画3-1）
 - 長い関数の分割（`loadImage` ほか）（計画3-2）
-- 空の `catch {}`（エラー握りつぶし）の整理（計画3-3）
+- ~~空の `catch {}`（エラー握りつぶし）の整理（計画3-3）~~ ✅実施済み
 - `v2` / `v3` という世代名のリネーム（計画3-5）
-- localStorageキー名の統一と移行（計画4-1）
+- ~~localStorageキー名の統一と移行（計画4-1）~~ ✅実施済み
 - PiP用CSSの二重管理の解消（計画4-4）
 
 これらは「変更案の一覧を先に出して承認してから実施」という進め方が安全です。

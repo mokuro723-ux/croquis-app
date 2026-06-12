@@ -1,5 +1,64 @@
         if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./sw.js').catch(() => {}); }
 
+        // ── 保存名の一覧表（localStorageキーはここで一元管理） ──────
+        const CROQUIS_KEYS = {
+            SETTINGS:    'croquis_ui_settings_v1',
+            STATS:       'croquis_stats_v1',
+            TAGS:        'croquis_tags_v1',
+            CLASS:       'croquis_class_v1',
+            SKIPS:       'croquis_skips_v1',
+            SKETCH_SIDE: 'croquis_sketch_side_v1',
+        };
+
+        // ── 保存係（読み書きと失敗時の記録を一手に引き受ける） ──────
+        const CroquisStore = (function(){
+            // 旧名→新名のデータ引き継ぎ（初回だけ実行。リセット後に復活しないよう印を付ける）
+            const MIGRATED_FLAG = 'croquis_store_migrated_v1';
+            try {
+                if (localStorage.getItem(MIGRATED_FLAG) === null) {
+                    [['croquis_skips', CROQUIS_KEYS.SKIPS],
+                     ['croquis_sketch_side', CROQUIS_KEYS.SKETCH_SIDE]].forEach(function(p){
+                        const oldVal = localStorage.getItem(p[0]);
+                        if (oldVal !== null && localStorage.getItem(p[1]) === null) {
+                            localStorage.setItem(p[1], oldVal);
+                        }
+                        // 旧データは保険としてそのまま残す（手動で消してもOK）
+                    });
+                    localStorage.setItem(MIGRATED_FLAG, '1');
+                }
+            } catch(e) { console.warn('croquis: データ引き継ぎに失敗', e); }
+
+            return {
+                // 生の文字列を読む（無ければ null）
+                getRaw: function(key) {
+                    try { return localStorage.getItem(key); }
+                    catch(e) { console.warn('croquis: 読み込みに失敗 (' + key + ')', e); return null; }
+                },
+                // JSONとして読む（無い・壊れている場合は fallback を返す）
+                getJSON: function(key, fallback) {
+                    try {
+                        const raw = localStorage.getItem(key);
+                        if (raw === null) return fallback;
+                        const v = JSON.parse(raw);
+                        return (v === null || v === undefined) ? fallback : v;
+                    } catch(e) { console.warn('croquis: 読み込みに失敗 (' + key + ')', e); return fallback; }
+                },
+                setRaw: function(key, value, label) {
+                    try { localStorage.setItem(key, value); }
+                    catch(e) { console.warn('croquis: ' + (label || key) + 'の保存に失敗', e); }
+                },
+                setJSON: function(key, value, label) {
+                    this.setRaw(key, JSON.stringify(value), label);
+                },
+                remove: function(key) {
+                    try { localStorage.removeItem(key); }
+                    catch(e) { console.warn('croquis: 削除に失敗 (' + key + ')', e); }
+                }
+            };
+        })();
+        window.CROQUIS_KEYS = CROQUIS_KEYS;
+        window.CroquisStore = CroquisStore;
+
         // ── タイミング定数 ────────────────────────────────────────
         const TIMING = {
             TICK_INTERVAL_MS:     250,   // timerTickLoop 間隔
@@ -95,9 +154,9 @@
         let showFavsOnly   = false;
         let showHiddenOnly = false;
 
-        let skipList = (function(){ try { return JSON.parse(localStorage.getItem('croquis_skips') || '[]'); } catch(_){ return []; } })();
+        let skipList = CroquisStore.getJSON(CROQUIS_KEYS.SKIPS, []);
         let skipNameSet = new Set(skipList);
-        const settingsKey = 'croquis_ui_settings_v1';
+        const settingsKey = CROQUIS_KEYS.SETTINGS;
         let favNameSet = new Set();
         
         let pipVideo, pipCanvas, pipCtx, isPiP = false, pipInitialized = false;
@@ -293,7 +352,7 @@
         const saveSkipList = debounce(flushSkipList, TIMING.SAVE_DEBOUNCE_MS);
         /** skipList を localStorage に即時保存（beforeunload用） */
         function flushSkipList() {
-            try { localStorage.setItem('croquis_skips', JSON.stringify(skipList)); } catch(e) { console.warn('croquis: skip一覧の保存に失敗', e); }
+            CroquisStore.setJSON(CROQUIS_KEYS.SKIPS, skipList, 'skip一覧');
         }
 
         function rebuildFavNameSet() { favNameSet = new Set(dbFavImages.map(function(f){ return f.name; })); }
@@ -355,14 +414,14 @@
                 gridColor: gridColor,
                 gridOpacity: gridOpacity
             };
-            try { localStorage.setItem(settingsKey, JSON.stringify(payload)); } catch (e) { console.warn('croquis: 設定の保存に失敗', e); }
+            CroquisStore.setJSON(settingsKey, payload, '設定');
         }
         /** 設定を debounce 付きで localStorage に保存する */
         const saveUiSettings = debounce(flushUiSettings, TIMING.SAVE_DEBOUNCE_MS);
 
         function loadUiSettings() {
             try {
-                const raw = localStorage.getItem(settingsKey);
+                const raw = CroquisStore.getRaw(settingsKey);
                 if (!raw) return;
                 const saved = JSON.parse(raw);
                 if (saved && saved.settings) {
@@ -1614,7 +1673,7 @@
 
         function clearManageData() {
             if(!confirm("お気に入り画像データ、スキップ設定をすべて削除して初期化しますか？")) return;
-            skipList = []; dbFavImages = []; localStorage.removeItem('croquis_skips');
+            skipList = []; dbFavImages = []; CroquisStore.remove(CROQUIS_KEYS.SKIPS); CroquisStore.remove('croquis_skips');
             rebuildFavNameSet();
             rebuildSkipNameSet();
             if (db) { const tx = db.transaction(storeName, "readwrite"); tx.onerror = function(){}; tx.objectStore(storeName).clear(); }
