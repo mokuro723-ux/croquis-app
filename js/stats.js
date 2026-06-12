@@ -402,7 +402,7 @@
         let skOpen = false, skDrawing = false, skEraser = false;
         let skColor = '#ff4d5e', skAlpha = 1, skLiveActive = false;
         let skLastX = 0, skLastY = 0;
-        let skUndoStack = [], skRedoStack = [];
+        let skUndoStack = [], skRedoStack = [], skRedoBackup = [];
         let skMemTimer = null, skState = 'free';
         let skImgOpacity = 0.5, skWasRunning = false;
         let skSide = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_SIDE) === '1';
@@ -583,7 +583,7 @@
         }
         function skTargetCtx(){ return (skLiveActive ? skLiveCtx : skCtx); }
         function skBeginStroke(e){
-            skPushUndo(); skRedoStack = [];
+            skPushUndo(); skRedoBackup = skRedoStack; skRedoStack = [];
             skDrawing = true;
             skLiveActive = (!skEraser && skAlpha < 1);
             if (skLiveActive) { skLiveCtx.clearRect(0, 0, skCW, skCH); skLive.style.opacity = String(skAlpha); }
@@ -633,6 +633,7 @@
         function skCancelStroke(){
             if (!skDrawing) return;
             skDrawing = false;
+            skRedoStack = skRedoBackup; // 描き始めで消したやり直し履歴を復元（2/3本指ジェスチャー時）
             if (skLiveActive) {
                 skLiveCtx.clearRect(0, 0, skCW, skCH);
                 skLive.style.opacity = '1';
@@ -643,57 +644,71 @@
             }
         }
 
-        /* ── ポインタ処理（指のジェスチャ: 2本指タップ=戻る / 3本指=やり直し） ── */
+        /* ── 描画（ペン/マウス/1本指）はポインタイベントで処理 ── */
         const skTouches = new Map();
-        let skMaxTouch = 0, skTapStart = 0, skTapMoved = false;
         skCanvas.addEventListener('pointerdown', function(e){
             if (e.pointerType === 'mouse' && e.button !== 0) return;
             e.preventDefault();
             try { skCanvas.setPointerCapture(e.pointerId); } catch(_){ /* 一部ブラウザ非対応でも無害なため無視 */ }
             if (e.pointerType === 'touch') {
-                skTouches.set(e.pointerId, { sx: e.clientX, sy: e.clientY });
-                skMaxTouch = Math.max(skMaxTouch, skTouches.size);
-                if (skTouches.size === 1) {
-                    skTapStart = Date.now(); skTapMoved = false;
-                    skBeginStroke(e);
-                } else {
-                    // 2本目以降の指 → ジェスチャ。描きかけの点は取り消す
-                    skCancelStroke();
-                }
+                skTouches.set(e.pointerId, true);
+                if (skTouches.size === 1) skBeginStroke(e);
+                else skCancelStroke(); // 2本目以降 → 描きかけ取消（本数判定はtouchイベント側）
                 return;
             }
             skBeginStroke(e); // ペン / マウス
         }, { passive: false });
         skCanvas.addEventListener('pointermove', function(e){
-            if (e.pointerType === 'touch' && skTouches.has(e.pointerId)) {
-                const t = skTouches.get(e.pointerId);
-                if (Math.hypot(e.clientX - t.sx, e.clientY - t.sy) > 14) skTapMoved = true;
-                if (skTouches.size > 1) return; // ジェスチャ中は描かない
-            }
+            if (e.pointerType === 'touch' && skTouches.size > 1) return; // ジェスチャ中は描かない
             if (!skDrawing) return;
             e.preventDefault();
             skStrokeMove(e);
         }, { passive: false });
         function skPointerEnd(e){
-            if (e.pointerType === 'touch') {
-                skTouches.delete(e.pointerId);
-                if (skTouches.size === 0) {
-                    const dur = Date.now() - skTapStart;
-                    if (skMaxTouch >= 2 && !skTapMoved && dur < 450) {
-                        if (skMaxTouch === 2) { skUndo(); skShowMsg('↩ 元に戻す'); }
-                        else { skRedo(); skShowMsg('↪ やり直し'); }
-                        setTimeout(function(){ skShowMsg(''); }, 700);
-                    }
-                    skMaxTouch = 0;
-                }
-            }
+            if (e.pointerType === 'touch') skTouches.delete(e.pointerId);
             skEndStroke();
         }
         skCanvas.addEventListener('pointerup', skPointerEnd, { passive: true });
         skCanvas.addEventListener('pointercancel', function(e){
-            if (e.pointerType === 'touch') { skTouches.delete(e.pointerId); if (skTouches.size === 0) skMaxTouch = 0; }
+            if (e.pointerType === 'touch') skTouches.delete(e.pointerId);
             skCancelStroke();
         }, { passive: true });
+
+        /* ── 指のジェスチャ判定（タッチイベントで本数を確実に数える）──
+           2本指タップ = 元に戻す / 3本指タップ = やり直し
+           ※ setPointerCapture方式だと一部スマホで3本目を取りこぼすため touches.length を正とする
+           ※ メッセージ末尾の「（N本）」は原因切り分け用の一時表示。確認後に外せます */
+        let gFingerMax = 0, gStart = 0, gMoved = false, gStartX = 0, gStartY = 0;
+        skCanvas.addEventListener('touchstart', function(e){
+            const n = e.touches.length;
+            if (n > gFingerMax) gFingerMax = n;
+            if (n === 1) {
+                gStart = Date.now(); gMoved = false;
+                gStartX = e.touches[0].clientX; gStartY = e.touches[0].clientY;
+            } else {
+                e.preventDefault();   // 2本指以上はジェスチャ。既定動作を抑止
+                skCancelStroke();
+            }
+        }, { passive: false });
+        skCanvas.addEventListener('touchmove', function(e){
+            if (e.touches.length >= 1) {
+                const dx = e.touches[0].clientX - gStartX, dy = e.touches[0].clientY - gStartY;
+                if (Math.hypot(dx, dy) > 16) gMoved = true;
+            }
+            if (e.touches.length >= 2) e.preventDefault();
+        }, { passive: false });
+        function skGestureEnd(e){
+            if (e.touches.length > 0) return;   // まだ指が残っている
+            const n = gFingerMax, dur = Date.now() - gStart;
+            gFingerMax = 0;
+            if (n >= 2 && !gMoved && dur < 900) {
+                if (n === 2) { skUndo(); skShowMsg('↩ 元に戻す'); }
+                else { skRedo(); skShowMsg('↪ やり直し'); }
+                setTimeout(function(){ skShowMsg(''); }, 800);
+            }
+        }
+        skCanvas.addEventListener('touchend', skGestureEnd, { passive: false });
+        skCanvas.addEventListener('touchcancel', skGestureEnd, { passive: false });
         // iOSの長押し選択メニュー・コンテキストメニューを抑制
         skCanvas.addEventListener('contextmenu', function(e){ e.preventDefault(); }, { passive: false });
         skCanvas.addEventListener('selectstart', function(e){ e.preventDefault(); }, { passive: false });
