@@ -1,10 +1,27 @@
-const CACHE_NAME = 'croquis-timer-v11';
+/* ============================================================
+   ★★★ 重要 ★★★
+   index.html / style.css / js配下 などのファイルを変更したら、
+   必ず下の CACHE_NAME の末尾の数字を 1 つ上げてください（例: v12 → v13）。
+   ここを上げ忘れると、利用者の画面に更新が届かず、古いままになります。
+
+   ＜ビルドツールなしで更新忘れを減らす案＞
+   ・各ファイルの末尾に `?v=12` のようなクエリを付けてキャッシュキーにする運用
+   ・将来ビルドを導入できるなら、ファイル内容のハッシュを自動でCACHE_NAMEに埋め込む
+   （今は手動運用なので、上のコメントを目印にしてください）
+   ============================================================ */
+const CACHE_NAME = 'croquis-timer-v12';
+
+// アプリ本体（オフラインでも動かすために事前キャッシュするファイル）
+// ※ sw.js 自身はここに入れない（Service Workerファイルの自己キャッシュはアンチパターン）
+// ※ ナビゲーションの保存キーは './index.html' に一本化（'./' は重複なので入れない）
 const STATIC_CACHE = [
-    './',
     './index.html',
     './manifest.json',
     './icon.png',
-    './sw.js'
+    './style.css',
+    './js/app.js',
+    './js/stats.js',
+    './js/features.js'
 ];
 
 const RUNTIME_CACHE = 'croquis-runtime-v1';
@@ -38,6 +55,7 @@ self.addEventListener('fetch', (e) => {
     const url = new URL(req.url);
 
     // ナビゲーション(HTML)はネット優先で更新反映を早める
+    // 保存先キーは './index.html' に統一（リクエストURLが './' でもここに保存・取得する）
     if (req.mode === 'navigate') {
         e.respondWith(
             (async () => {
@@ -55,7 +73,7 @@ self.addEventListener('fetch', (e) => {
         return;
     }
 
-    // 同一オリジンの静的ファイルはキャッシュ優先
+    // 同一オリジンの静的ファイル(css/js/画像など)はキャッシュ優先
     if (url.origin === self.location.origin) {
         e.respondWith(
             (async () => {
