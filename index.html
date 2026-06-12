@@ -3368,7 +3368,7 @@
         #sketch-overlay .v2-header { padding: 8px 10px; gap: 6px; }
         #sketch-overlay .v2-header .v2-btn { padding: 8px 11px; font-size: 0.78rem; }
         #sk-stage-wrap { flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column; }
-        #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; background: #000; }
+        #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; background: #000; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
         #sketch-img {
             position: absolute; left: 0; top: 0; height: 100%; width: 100%;
             object-fit: contain; pointer-events: none; user-select: none;
@@ -4244,6 +4244,10 @@
             if (e.pointerType === 'touch') { skTouches.delete(e.pointerId); if (skTouches.size === 0) skMaxTouch = 0; }
             skCancelStroke();
         }, { passive: true });
+        // iOSの長押し選択メニュー・コンテキストメニューを抑制
+        skCanvas.addEventListener('contextmenu', function(e){ e.preventDefault(); }, { passive: false });
+        skCanvas.addEventListener('selectstart', function(e){ e.preventDefault(); }, { passive: false });
+        document.getElementById('sketch-stage').addEventListener('contextmenu', function(e){ e.preventDefault(); }, { passive: false });
 
         /* ── 保存（レイアウトに応じて合成） ── */
         window.skSave = function(){
