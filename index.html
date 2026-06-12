@@ -3312,8 +3312,7 @@
         /* ── 共通フルオーバーレイ ───────────────────────────── */
         .v2-overlay {
             position: fixed; inset: 0; z-index: 1200; display: none;
-            flex-direction: column; background: rgba(14,14,14,0.97);
-            backdrop-filter: blur(6px);
+            flex-direction: column; background: #0e0e0e;
             padding-top: env(safe-area-inset-top, 0px);
             padding-bottom: env(safe-area-inset-bottom, 0px);
         }
@@ -3369,7 +3368,7 @@
         #sketch-overlay .v2-header { padding: 8px 10px; gap: 6px; }
         #sketch-overlay .v2-header .v2-btn { padding: 8px 11px; font-size: 0.78rem; }
         #sk-stage-wrap { flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column; }
-        #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; }
+        #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; background: #000; }
         #sketch-img {
             position: absolute; left: 0; top: 0; height: 100%; width: 100%;
             object-fit: contain; pointer-events: none; user-select: none;
@@ -4047,7 +4046,7 @@
                 skImg.style.visibility = 'visible'; skImg.style.opacity = '1';
                 memBtn.style.display = 'none'; peekBtn.style.display = 'none'; revealBtn.style.display = 'none'; opWrap.style.display = 'none';
             } else if (st === 'hidden') {
-                skImg.style.visibility = 'hidden';
+                skImg.style.visibility = 'visible'; skImg.style.opacity = '0';
                 memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = ''; revealBtn.textContent = '✅ 答え合わせ'; opWrap.style.display = 'none';
             } else if (st === 'reveal') {
                 skImg.style.visibility = 'visible'; skImg.style.opacity = String(skImgOpacity);
@@ -4075,8 +4074,8 @@
         function skCancelMemory(){ if (skMemTimer) { clearInterval(skMemTimer); skMemTimer = null; } skCountdown.style.display = 'none'; }
         window.skPeek = function(){
             if (skState !== 'hidden') return;
-            skImg.style.visibility = 'visible'; skImg.style.opacity = '1';
-            setTimeout(function(){ if (skState === 'hidden') { skImg.style.visibility = 'hidden'; } }, 1000);
+            skImg.style.opacity = '1';
+            setTimeout(function(){ if (skState === 'hidden') { skImg.style.opacity = '0'; } }, 1000);
         };
         window.skToggleReveal = function(){
             if (skState === 'hidden') { skSetState('reveal'); skShowMsg('自分の線と見比べてみよう'); setTimeout(function(){ skShowMsg(''); }, 2500); }
