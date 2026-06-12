@@ -4407,6 +4407,8 @@
         /* ── カテゴリタグ：常時 ── */
         #online-cats .v2-chip {
             white-space: nowrap;
+            flex-shrink: 0;
+            min-width: max-content;
             background: #2a2a2a; border: 1px solid #555; color: #e8e8e8;
         }
         #online-cats .v2-chip.on {
@@ -4420,7 +4422,7 @@
             /* タグ行：スクロールバー非表示、チップを大きく */
             #online-cats { padding: 10px 12px 4px; gap: 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
             #online-cats::-webkit-scrollbar { display: none; }
-            #online-cats .v2-chip { font-size: 0.9rem; padding: 10px 15px; border-color: #666; }
+            #online-cats .v2-chip { font-size: 0.9rem; padding: 10px 15px; border-color: #666; flex-shrink: 0; min-width: max-content; }
 
             /* 検索行 */
             #online-searchrow { flex-wrap: wrap; gap: 7px; padding: 8px 12px 2px; }
