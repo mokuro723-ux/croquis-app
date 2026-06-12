@@ -4015,8 +4015,11 @@
             skCW = skSide ? Math.floor(r.width / 2) : Math.floor(r.width);
             skCH = Math.floor(r.height);
             const left = skSide ? (Math.floor(r.width) - skCW) : 0;
-            let saved = null;
-            if (!clear && skCanvas.width > 0) { try { saved = skCanvas.toDataURL(); } catch(_){} }
+            let saved = null, savedW = 0, savedH = 0;
+            if (!clear && skCanvas.width > 0) {
+                try { saved = skCanvas.toDataURL(); } catch(_){}
+                savedW = skCW; savedH = skCH;
+            }
             [skCanvas, skLive].forEach(function(cv){
                 cv.width  = Math.max(1, Math.round(skCW * dpr));
                 cv.height = Math.max(1, Math.round(skCH * dpr));
@@ -4028,7 +4031,7 @@
             skCtx.setTransform(dpr, 0, 0, dpr, 0, 0);     skCtx.lineCap = 'round';     skCtx.lineJoin = 'round';
             skLiveCtx.setTransform(dpr, 0, 0, dpr, 0, 0); skLiveCtx.lineCap = 'round'; skLiveCtx.lineJoin = 'round';
             if (clear) { skUndoStack = []; skRedoStack = []; }
-            else if (saved) { const im = new Image(); im.onload = function(){ skCtx.drawImage(im, 0, 0, skCW, skCH); }; im.src = saved; }
+            else if (saved) { const im = new Image(); im.onload = function(){ skCtx.drawImage(im, 0, 0, savedW, savedH); }; im.src = saved; }
         }
         window.addEventListener('resize', function(){ if (skOpen) skResize(false); });
 
