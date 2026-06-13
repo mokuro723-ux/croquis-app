@@ -6,6 +6,7 @@
             t.textContent = msg; t.classList.add('show');
             clearTimeout(showToast._id); showToast._id = setTimeout(function(){ t.classList.remove('show'); }, ms || 2400);
         }
+        window.showToast = showToast; // 他ファイル（stats.js等）からも使えるように公開
 
         /* ════════════════════════════════════════════════════════
            1) 巡回シャッフル — 全画像を一巡するまで同じ画像を出さない
@@ -331,15 +332,24 @@
         window.addUrlToPool = function(url, silent){
             const item = urlToItem(url);
             if (!item) { if (!silent) showToast('http(s)で始まる画像URLを入力してください'); return false; }
-            if (sourceImages.length === 0) {
-                applyLoadedFiles([item]);
-            } else {
-                sourceImages.push(item); originalOrder.push(item);
-                if (!isFavMode) images = sourceImages;
-                updateImageCounter();
-                if (typeof updatePreloadQueue === 'function') updatePreloadQueue();
-            }
-            showToast('画像を追加しました（計' + sourceImages.length + '枚）');
+            // 実際に表示できる画像か先に確認してから追加する（壊れたURLで「計N枚」だけ増えるのを防ぐ）
+            const test = new Image();
+            if (item.cors) test.crossOrigin = 'anonymous';
+            test.onload = function(){
+                if (sourceImages.length === 0) {
+                    applyLoadedFiles([item]);
+                } else {
+                    sourceImages.push(item); originalOrder.push(item);
+                    if (!isFavMode) images = sourceImages;
+                    updateImageCounter();
+                    if (typeof updatePreloadQueue === 'function') updatePreloadQueue();
+                }
+                showToast('画像を追加しました（計' + sourceImages.length + '枚）');
+            };
+            test.onerror = function(){
+                showToast('この画像は表示できませんでした。ページのURLではなく、画像そのものを右クリック→「画像をコピー」して貼り付けてください（pixiv等はこの方法が確実）', 5200);
+            };
+            test.src = item.data;
             return true;
         };
         // 他サイト（Pinterest等）から画像をドラッグ＆ドロップ → URLとして追加

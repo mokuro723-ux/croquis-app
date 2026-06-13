@@ -780,6 +780,19 @@
               全パターンが「一筆書き」できる連続した線で構成されている。
         ════════════════════════════════════════════════════════ */
         function fmMargin(W, H){ return Math.min(W, H) * 0.10; }
+        // 生成した点群を、縦横比を保ったまま画面の余白枠にぴったり収める（はみ出し防止）
+        function fmFit(pts, W, H){
+            const m = fmMargin(W, H), bw = (W - m * 2), bh = (H - m * 2);
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            for (let i = 0; i < pts.length; i++){ const p = pts[i];
+                if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+            const pw = (maxX - minX) || 1, ph = (maxY - minY) || 1;
+            const s = Math.min(bw / pw, bh / ph);
+            const offX = m + (bw - pw * s) / 2 - minX * s;
+            const offY = m + (bh - ph * s) / 2 - minY * s;
+            return pts.map(function(p){ return { x: p.x * s + offX, y: p.y * s + offY }; });
+        }
         // ① 大きなうねり波
         function fmWave(W, H){
             const m = fmMargin(W, H), x0 = m, x1 = W - m, cy = H / 2, amp = (H / 2 - m) * 0.82;
@@ -808,44 +821,40 @@
             for (let i = 0; i <= N; i++){ const t = i / N, th = total * t, r = Rmax * t; P.push({ x: cx + r * Math.cos(th), y: cy + r * Math.sin(th) }); }
             return P;
         }
-        // ⑤ 山なみ（連続アーチ）
-        function fmArches(W, H){
-            const m = fmMargin(W, H), x0 = m, x1 = W - m, r = (H / 2 - m) * 0.80, baseY = H / 2 + (H / 2 - m) * 0.5;
-            const n = Math.max(2, Math.round((x1 - x0) / (r * 2))), aw = (x1 - x0) / n, seg = 48, P = [];
-            for (let k = 0; k < n; k++){
-                const cx = x0 + aw * (k + 0.5);
-                for (let i = 0; i <= seg; i++){ const ang = Math.PI - Math.PI * i / seg; P.push({ x: cx + (aw / 2) * Math.cos(ang), y: baseY - r * Math.sin(ang) }); }
-            }
+        // ⑤ 飾りループ（小さな輪の連なり＝一筆書きの輪っか練習）
+        function fmGarland(W, H){
+            const n = 8, adv = 100 / n, a = adv / (Math.PI * 2), R = adv * 0.9;
+            const total = n * Math.PI * 2, N = 640, P = [];
+            for (let i = 0; i <= N; i++){ const th = total * i / N; P.push({ x: a * th - R * Math.sin(th), y: -R * Math.cos(th) }); }
             return P;
         }
-        // ⑥ ジグザグ
-        function fmZig(W, H){
-            const m = fmMargin(W, H), x0 = m, x1 = W - m, cy = H / 2, amp = (H / 2 - m) * 0.80, n = 7;
-            const aw = (x1 - x0) / n, P = [];
-            for (let k = 0; k <= n; k++){ P.push({ x: x0 + aw * k, y: cy + (k % 2 === 0 ? -amp : amp) }); }
+        // ⑥ 三つ葉ループ（三葉結び目の形・3つの輪）
+        function fmTrefoil(W, H){
+            const N = 520, P = [];
+            for (let i = 0; i <= N; i++){ const t = i / N * Math.PI * 2; P.push({ x: Math.sin(t) + 2 * Math.sin(2 * t), y: Math.cos(t) - 2 * Math.cos(2 * t) }); }
             return P;
         }
-        // ⑦ 花びら（バラ曲線・5枚）
+        // ⑦ 花びら（バラ曲線・5枚＝5つの輪）
         function fmRose(W, H){
-            const m = fmMargin(W, H), cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - m, k = 5, N = 540, P = [];
-            for (let i = 0; i <= N; i++){ const th = i / N * Math.PI * 2, r = R * Math.cos(k * th); P.push({ x: cx + r * Math.cos(th), y: cy + r * Math.sin(th) }); }
+            const k = 5, N = 540, P = [];
+            for (let i = 0; i <= N; i++){ const th = i / N * Math.PI * 2, r = Math.cos(k * th); P.push({ x: r * Math.cos(th), y: r * Math.sin(th) }); }
             return P;
         }
         const FM_PATTERNS = [
-            { name: 'うねり波',   gen: fmWave },
-            { name: '連続ループ', gen: fmLoops },
-            { name: '八の字（∞）', gen: fmEight },
-            { name: '渦巻き',     gen: fmSpiral },
-            { name: '山なみ',     gen: fmArches },
-            { name: 'ジグザグ',   gen: fmZig },
-            { name: '花びら',     gen: fmRose },
+            { name: '連続ループ',   gen: fmLoops },
+            { name: '飾りループ',   gen: fmGarland },
+            { name: '八の字（∞）',  gen: fmEight },
+            { name: '渦巻き',       gen: fmSpiral },
+            { name: '三つ葉ループ', gen: fmTrefoil },
+            { name: '花びら',       gen: fmRose },
+            { name: 'うねり波',     gen: fmWave },
         ];
         function fmRender(){
             if (!skFormenOn || !skFormenSvg) return;
             const r = skStage.getBoundingClientRect();
             const W = Math.max(1, r.width), H = Math.max(1, r.height);
             const pat = FM_PATTERNS[skFormenIdx];
-            const pts = pat.gen(W, H);
+            const pts = fmFit(pat.gen(W, H), W, H); // 必ず画面内に収める
             const sw = Math.max(2.5, Math.min(W, H) * 0.007);
             const dotR = Math.max(5, Math.min(W, H) * 0.014);
             let d = 'M' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
@@ -908,12 +917,27 @@
         window.skSetFormenOpacity = function(v){ skFormenOpacity = Math.max(0.1, Math.min(1, (parseInt(v, 10) || 60) / 100)); fmRender(); };
 
         /* ════════════════════════════════════════════════════════
-           5c) 参考画像を描画モードに直接表示
-              URL貼り付け / コピー＆ペースト(Ctrl+V) / ドラッグ＆ドロップ。
-              Pinterest等は画像を「コピー」または「画像アドレスをコピー」して
-              この画面に貼り付け or ドロップするだけで参考表示できる。
+           5c) 参考画像を取り込む（Pinterest / pixiv 等）
+              一番確実な方法は「画像をコピー → Ctrl+V」。これは画像そのもの（ピクセル）が
+              渡るので、直リンク制限(pixiv等)やCORSに関係なく必ず表示できる。
+              ・描画モード中の貼付/ドロップ → その場の参考画像になる
+              ・通常画面での貼付/ドロップ    → 練習リスト（プール）に追加される
         ════════════════════════════════════════════════════════ */
-        const SK_CORS_HOSTS = /(^|\.)pinimg\.com$|(^|\.)wikimedia\.org$|(^|\.)metmuseum\.org$|(^|\.)artic\.edu$|(^|\.)clevelandart\.org$|(^|\.)picsum\.photos$/;
+        const SK_CORS_HOSTS  = /(^|\.)pinimg\.com$|(^|\.)wikimedia\.org$|(^|\.)metmuseum\.org$|(^|\.)artic\.edu$|(^|\.)clevelandart\.org$|(^|\.)picsum\.photos$/;
+        // 画像かページURLかを判定（ページURLは img で表示できないので案内する）
+        function skClassifyUrl(u){
+            let host = '', path = '';
+            try { const o = new URL(u); host = o.hostname.toLowerCase(); path = o.pathname.toLowerCase(); } catch(_){ return 'unknown'; }
+            if (/(^|\.)pinimg\.com$|(^|\.)pximg\.net$|(^|\.)twimg\.com$|(^|\.)fbcdn\.net$|(^|\.)cdninstagram\.com$/.test(host)) return 'image';
+            if (/\.(jpe?g|png|gif|webp|bmp|avif|svg)(\?|#|$)/.test(path)) return 'image';
+            if (/(^|\.)pinterest\.[a-z.]+$|(^|\.)pin\.it$|(^|\.)pixiv\.net$|(^|\.)x\.com$|(^|\.)twitter\.com$|(^|\.)instagram\.com$|(^|\.)tumblr\.com$/.test(host)) return 'page';
+            return 'unknown';
+        }
+        function skNotify(msg, isErr){
+            const ms = isErr ? 4800 : 2400;
+            if (skOpen) { skFlash(msg, ms); return; }
+            if (typeof window.showToast === 'function') window.showToast(msg, ms); else alert(msg);
+        }
         function skClearRef(){
             skRefOverride = false;
             skImg.onerror = null;
@@ -926,7 +950,8 @@
             if (isObjUrl) skRefObjUrl = src;
             if (host && SK_CORS_HOSTS.test(host)) skImg.setAttribute('crossorigin', 'anonymous');
             else skImg.removeAttribute('crossorigin');
-            skImg.onerror = function(){ skImg.onerror = null; skClearRef(); skFlash('この画像は表示できませんでした（URLを確認、または画像を直接コピー＆ペーストしてみてください）', 4200); };
+            skImg.onerror = function(){ skImg.onerror = null; skClearRef(); skSyncImage();
+                skFlash('この画像は直リンクで表示できませんでした。画像を右クリック→「画像をコピー」して Ctrl+V してください（pixiv等はこの方法が確実）', 4800); };
             skImg.style.transform = '';
             skImg.src = src;
             if (skFormenOn) skSetFormen(false);
@@ -936,6 +961,7 @@
         function skSetRefUrl(u){
             u = String(u || '').trim();
             if (!/^https?:\/\//.test(u)) { skFlash('http(s) で始まる画像URLを貼り付けてください', 2600); return; }
+            if (skClassifyUrl(u) === 'page') { skFlash('ページのURLのようです。画像そのものを右クリック→「画像をコピー」して Ctrl+V してください', 4800); return; }
             u = u.replace(/(pinimg\.com\/)\d+x(\/)/, '$1736x$2'); // Pinterestサムネを大きいサイズに
             let host = ''; try { host = new URL(u).hostname; } catch(_){ }
             skApplyRef(u, false, host);
@@ -944,39 +970,71 @@
             if (!f || (f.type || '').indexOf('image') !== 0) return;
             skApplyRef(URL.createObjectURL(f), true, '');
         }
+        // 練習リスト（プール）に1枚追加（File でも {data:URL} でもOK）
+        function skAddToPool(item){
+            if (sourceImages.length === 0) { applyLoadedFiles([item]); return; }
+            sourceImages.push(item); originalOrder.push(item);
+            if (!isFavMode) images = sourceImages;
+            if (typeof updateImageCounter === 'function') updateImageCounter();
+            if (typeof updatePreloadQueue === 'function') updatePreloadQueue();
+        }
+        // URLが本当に表示できるか確かめてからプールに追加（ダメなら理由を案内）
+        function skTestAndAddUrl(u){
+            let host = ''; try { host = new URL(u).hostname; } catch(_){ }
+            const big = u.replace(/(pinimg\.com\/)\d+x(\/)/, '$1736x$2');
+            const test = new Image();
+            if (SK_CORS_HOSTS.test(host)) test.crossOrigin = 'anonymous';
+            test.onload  = function(){ skAddToPool({ name: 'paste_' + Date.now(), data: big, cors: SK_CORS_HOSTS.test(host) }); skNotify('練習リストに画像を追加しました', false); };
+            test.onerror = function(){ skNotify('この画像は直リンクで表示できませんでした。画像を右クリック→「画像をコピー」して貼り付けてください（pixiv等はこの方法が確実）', true); };
+            test.src = big;
+        }
+        // 取り込みの入口（貼付/ドロップ共通）：描画モード中は参考画像、通常はプール追加
+        function skUseImageFile(f){
+            if (!f || (f.type || '').indexOf('image') !== 0) return;
+            if (skOpen) { skSetRefFile(f); return; }
+            skAddToPool(f); skNotify('練習リストに画像を追加しました', false);
+        }
+        function skUseImageUrl(u){
+            u = String(u || '').trim();
+            if (!/^https?:\/\//.test(u)) { skNotify('http(s) で始まる画像URLを貼り付けてください', true); return; }
+            if (skClassifyUrl(u) === 'page') { skNotify('それはページのURLのようです。画像そのものを右クリック→「画像をコピー」して貼り付けてください（Pinterest / pixiv 共通で確実）', true); return; }
+            if (skOpen) { skSetRefUrl(u); return; }
+            skTestAndAddUrl(u);
+        }
         window.skLoadRef = function(){
-            const u = prompt('参考にしたい画像のURLを貼り付けてください\n（Pinterest等は画像を右クリック →「画像アドレスをコピー」）\n\n※ 画像を直接コピーして Ctrl+V で貼り付け、または画面へドラッグ＆ドロップでもOK');
-            if (u) skSetRefUrl(u);
+            const u = prompt('参考にしたい画像のURLを貼り付けてください。\n\n★一番確実な方法★\n見たい画像を右クリック →「画像をコピー」→ この画面で Ctrl+V\n（pixiv など直リンク不可のサイトでもこの方法なら表示できます）\n\n画面へドラッグ＆ドロップでもOK。');
+            if (u) skUseImageUrl(u);
         };
-        // コピー＆ペースト（画像そのもの / 画像URL）
+        // コピー＆ペースト（画像そのもの＝最も確実 / または画像URL）。アプリ全体で有効。
         document.addEventListener('paste', function(e){
-            if (!skOpen) return;
+            const ae = document.activeElement;
+            if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return; // 入力欄への貼付は邪魔しない
             const dt = e.clipboardData; if (!dt) return;
             if (dt.items) {
                 for (let i = 0; i < dt.items.length; i++){
                     const it = dt.items[i];
                     if (it.kind === 'file' && (it.type || '').indexOf('image') === 0){
-                        const f = it.getAsFile(); if (f){ skSetRefFile(f); e.preventDefault(); return; }
+                        const f = it.getAsFile(); if (f){ skUseImageFile(f); e.preventDefault(); return; }
                     }
                 }
             }
             const txt = ((dt.getData && dt.getData('text/plain')) || '').trim();
-            if (/^https?:\/\//.test(txt)) { skSetRefUrl(txt); e.preventDefault(); }
+            if (/^https?:\/\//.test(txt)) { skUseImageUrl(txt); e.preventDefault(); }
         });
-        // ドラッグ＆ドロップ（PCでPinterestのピンを直接この画面へ）
+        // 描画モード中のドラッグ＆ドロップ（PCでPinterestのピンを直接この画面へ）
         skStage.addEventListener('dragover', function(e){ if (skOpen) { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch(_){ } } });
         skStage.addEventListener('drop', function(e){
             if (!skOpen) return;
             e.preventDefault(); e.stopPropagation();
             const dt = e.dataTransfer; if (!dt) return;
-            if (dt.files && dt.files.length){ const f = dt.files[0]; if (f && (f.type || '').indexOf('image') === 0){ skSetRefFile(f); return; } }
+            if (dt.files && dt.files.length){ const f = dt.files[0]; if (f && (f.type || '').indexOf('image') === 0){ skUseImageFile(f); return; } }
             let url = '';
             try {
                 const html = dt.getData('text/html');
                 if (html){ const mm = html.match(/<img[^>]+src=["']([^"']+)["']/i); if (mm) url = mm[1]; }
                 if (!url) url = (dt.getData('text/uri-list') || dt.getData('text/plain') || '').split(/[\r\n]/)[0];
             } catch(_){ }
-            if (url) skSetRefUrl(url);
+            if (url) skUseImageUrl(url);
         });
 
         /* ════════════════════════════════════════════════════════
