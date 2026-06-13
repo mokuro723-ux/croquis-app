@@ -1,10 +1,10 @@
     (function(){
         'use strict';
         function fmtJa(sec){ if (sec < 60) return sec + '秒'; const m = Math.floor(sec/60), s = sec % 60; return s ? (m + '分' + s + '秒') : (m + '分'); }
-        function v3toast(msg, ms){
-            const t = document.getElementById('v3-toast');
+        function showToast(msg, ms){
+            const t = document.getElementById('app-toast');
             t.textContent = msg; t.classList.add('show');
-            clearTimeout(v3toast._id); v3toast._id = setTimeout(function(){ t.classList.remove('show'); }, ms || 2400);
+            clearTimeout(showToast._id); showToast._id = setTimeout(function(){ t.classList.remove('show'); }, ms || 2400);
         }
 
         /* ════════════════════════════════════════════════════════
@@ -149,7 +149,7 @@
             pr.innerHTML = '';
             CL_PRESETS.forEach(function(p){
                 const b = document.createElement('button');
-                b.className = 'v2-chip'; b.textContent = p.name;
+                b.className = 'panel-chip'; b.textContent = p.name;
                 b.addEventListener('click', function(){ clEdit = JSON.parse(JSON.stringify(p.plan)); renderClRows(); });
                 pr.appendChild(b);
             });
@@ -196,7 +196,7 @@
 
         window.startClassFromEditor = function(){
             const plan = clEdit.filter(function(s){ return s.s > 0 && (s.b || s.c > 0); });
-            if (!plan.length) { v3toast('ステップを追加してください'); return; }
+            if (!plan.length) { showToast('ステップを追加してください'); return; }
             window.CroquisStore.setJSON(window.CROQUIS_KEYS.CLASS, plan, 'クラス設定');
             closeClassPanel();
             if (hmActive) exitHardMode();
@@ -236,7 +236,7 @@
         function finishClass(){
             clExit(false);
             stopTimer();
-            v3toast('クラス完了！おつかれさまでした 🎉', 3600);
+            showToast('クラス完了！おつかれさまでした 🎉', 3600);
         }
         function clExit(skipTimerReset){
             clActive = false;
@@ -300,9 +300,9 @@
         /* ════════════════════════════════════════════════════════
            5) キー操作・ガード統合
         ════════════════════════════════════════════════════════ */
-        const _v2Open = window.v2OverlayOpen;
-        window.v2OverlayOpen = function(){
-            return _v2Open() || document.getElementById('class-panel').classList.contains('open');
+        const _prevOverlayOpen = window.isOverlayOpen;
+        window.isOverlayOpen = function(){
+            return _prevOverlayOpen() || document.getElementById('class-panel').classList.contains('open');
         };
         document.addEventListener('keydown', function(e){
             const ae = document.activeElement;
@@ -330,7 +330,7 @@
         }
         window.addUrlToPool = function(url, silent){
             const item = urlToItem(url);
-            if (!item) { if (!silent) v3toast('http(s)で始まる画像URLを入力してください'); return false; }
+            if (!item) { if (!silent) showToast('http(s)で始まる画像URLを入力してください'); return false; }
             if (sourceImages.length === 0) {
                 applyLoadedFiles([item]);
             } else {
@@ -339,7 +339,7 @@
                 updateImageCounter();
                 if (typeof updatePreloadQueue === 'function') updatePreloadQueue();
             }
-            v3toast('画像を追加しました（計' + sourceImages.length + '枚）');
+            showToast('画像を追加しました（計' + sourceImages.length + '枚）');
             return true;
         };
         // 他サイト（Pinterest等）から画像をドラッグ＆ドロップ → URLとして追加
@@ -362,7 +362,7 @@
             const row = document.getElementById('online-searchrow');
             if (!row) return;
             const pin = document.createElement('button');
-            pin.className = 'v2-btn';
+            pin.className = 'panel-btn';
             pin.textContent = '📌 Pinterest';
             pin.title = 'Pinterestを別ウィンドウで開く（画像をこの画面へドラッグ＆ドロップで追加できます）';
             pin.addEventListener('click', function(){
@@ -370,10 +370,10 @@
                 if (!q) { q = prompt('Pinterestで検索するキーワード（例: pose reference）', 'pose reference') || ''; q = q.trim(); }
                 if (!q) return;
                 window.open('https://www.pinterest.com/search/pins/?q=' + encodeURIComponent(q), 'croquis_pinterest', 'width=920,height=860');
-                v3toast('PCではPinterestの画像をこの画面へドラッグ＆ドロップで追加できます。スマホは画像URLをコピーして「URL追加」へ', 5200);
+                showToast('PCではPinterestの画像をこの画面へドラッグ＆ドロップで追加できます。スマホは画像URLをコピーして「URL追加」へ', 5200);
             });
             const urlBtn = document.createElement('button');
-            urlBtn.className = 'v2-btn ghost';
+            urlBtn.className = 'panel-btn ghost';
             urlBtn.textContent = '🔗 URL追加';
             urlBtn.title = '画像URLを貼り付けてプールに追加';
             urlBtn.addEventListener('click', function(){

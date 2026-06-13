@@ -231,7 +231,7 @@
         function olBuildCats(){
             const wrap = document.getElementById('online-cats');
             OL_PRESETS.forEach(function(p){
-                const b = document.createElement('button'); b.className = 'v2-chip'; b.textContent = p.label;
+                const b = document.createElement('button'); b.className = 'panel-chip'; b.textContent = p.label;
                 b.addEventListener('click', function(){
                     document.getElementById('online-source').value = (p.src === 'picsum') ? 'commons' : p.src;
                     document.getElementById('online-query').value = p.q;
@@ -674,10 +674,9 @@
             skCancelStroke();
         }, { passive: true });
 
-        /* ── 指のジェスチャ判定（タッチイベントで本数を確実に数える）──
-           2本指タップ = 元に戻す / 3本指タップ = やり直し
-           ※ setPointerCapture方式だと一部スマホで3本目を取りこぼすため touches.length を正とする
-           ※ メッセージ末尾の「（N本）」は原因切り分け用の一時表示。確認後に外せます */
+        /* ── 指のジェスチャ判定（タッチイベントで本数を数える）──
+           2本指タップ = 元に戻す（やり直しはツールバーのボタン / Ctrl+Shift+Z を使用）
+           ※ setPointerCapture方式だと一部スマホで本数を取りこぼすため touches.length を正とする */
         let gFingerMax = 0, gStart = 0, gMoved = false, gStartX = 0, gStartY = 0;
         skCanvas.addEventListener('touchstart', function(e){
             const n = e.touches.length;
@@ -701,9 +700,8 @@
             if (e.touches.length > 0) return;   // まだ指が残っている
             const n = gFingerMax, dur = Date.now() - gStart;
             gFingerMax = 0;
-            if (n >= 2 && !gMoved && dur < 900) {
-                if (n === 2) { skUndo(); skShowMsg('↩ 元に戻す'); }
-                else { skRedo(); skShowMsg('↪ やり直し'); }
+            if (n === 2 && !gMoved && dur < 900) {
+                skUndo(); skShowMsg('↩ 元に戻す');
                 setTimeout(function(){ skShowMsg(''); }, 800);
             }
         }
@@ -757,7 +755,7 @@
         /* ════════════════════════════════════════════════════════
            6) キーボードショートカット追加（PC）
         ════════════════════════════════════════════════════════ */
-        window.v2OverlayOpen = function(){
+        window.isOverlayOpen = function(){
             return skOpen
                 || document.getElementById('online-overlay').classList.contains('open')
                 || document.getElementById('tag-panel').classList.contains('open');

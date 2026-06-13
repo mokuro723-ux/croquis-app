@@ -2380,12 +2380,17 @@
                     
                     const pipDoc = documentPipWindow.document;
                     const currentBg = bgMode === 0 ? '#1e1e1e' : (bgMode === 1 ? '#000' : '#fff');
-                    
+
+                    // PiPは別ドキュメントのためメインのCSSを共有できない。
+                    // 色の出どころを style.css の --accent に一本化するため、ここで実際の値を読み取って注入する。
+                    const pipAccent = (getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#00d4ff').trim();
+                    const pipAccentRgb = (function(h){ const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h); return m ? (parseInt(m[1],16)+','+parseInt(m[2],16)+','+parseInt(m[3],16)) : '0,212,255'; })(pipAccent);
+
                     pipDoc.body.innerHTML = `
                         <style>
                             body { margin:0; background-color:${currentBg}; display:flex; flex-direction:column; height:100vh; overflow:hidden; color:#fff; font-family:sans-serif; user-select:none; }
                             #canvas-container { flex:1; display:flex; justify-content:center; align-items:center; position:relative; overflow:hidden; background-color: transparent; }
-                            #canvas-container::after { content:''; position:absolute; inset:0; pointer-events:none; opacity:0; box-shadow:inset 0 0 var(--flash-blur, 60px) 12px rgba(0,212,255,var(--flash-alpha, 0.45)); }
+                            #canvas-container::after { content:''; position:absolute; inset:0; pointer-events:none; opacity:0; box-shadow:inset 0 0 var(--flash-blur, 60px) 12px rgba(${pipAccentRgb},var(--flash-alpha, 0.45)); }
                             #canvas-container.timer-flash::after { animation: timerFlash 0.7s ease-out forwards; }
                             @keyframes timerFlash { 0% { opacity:1; } 100% { opacity:0; } }
                             canvas { max-width:100%; max-height:100%; object-fit:contain; }
@@ -2394,7 +2399,7 @@
                             button:hover { background-color:#444; }
                             button:active { transform: scale(0.95); }
                             svg { width:24px; height:24px; fill:currentColor; pointer-events:none; }
-                            #pip-play-btn.paused { color: #00d4ff; border: 1px solid #00d4ff; background-color: #1a1a1a; }
+                            #pip-play-btn.paused { color: ${pipAccent}; border: 1px solid ${pipAccent}; background-color: #1a1a1a; }
                         </style>
                         <div id="canvas-container"><canvas></canvas></div>
                         <div id="controls">
@@ -2633,7 +2638,7 @@
         document.addEventListener('keydown', function(e) {
             armFocusIdleTimer();
             if (document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'INPUT') return;
-            if (typeof v2OverlayOpen === 'function' && v2OverlayOpen()) return; // v2
+            if (typeof isOverlayOpen === 'function' && isOverlayOpen()) return; // v2
             if (e.code === 'Escape') {
                 const msOverlay = ui.msOverlay;
                 if (msOverlay.classList.contains('open')) { closeMultiSelect(); return; }

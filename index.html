@@ -243,7 +243,7 @@
                     <div id="stats-grid"></div>
                     <div class="settings-row">
                         <div class="settings-label"><span>統計をリセット</span><span class="settings-desc">枚数・練習時間の記録を消去します</span></div>
-                        <button id="je-resetstats" class="v2-btn ghost">リセット</button>
+                        <button id="je-resetstats" class="panel-btn ghost">リセット</button>
                     </div>
                 </div>
                 <div class="settings-section">
@@ -298,16 +298,16 @@
     <!-- ════════════ v2 追加機能（オンライン素材 / 記憶スケッチ / タグ / 統計） ════════════ -->
 
     <!-- ── オンライン素材パネル ── -->
-    <div id="online-overlay" class="v2-overlay">
-        <div class="v2-header">
+    <div id="online-overlay" class="panel-overlay">
+        <div class="panel-header">
             <span>🌐 オンライン素材ライブラリ</span>
-            <span class="v2-note">Wikimedia Commons / メトロポリタン美術館 オープンアクセス</span>
+            <span class="panel-note">Wikimedia Commons / メトロポリタン美術館 オープンアクセス</span>
             <span class="spacer"></span>
-            <button id="je-toggleonlinepanel" class="v2-btn ghost">✕ 閉じる</button>
+            <button id="je-toggleonlinepanel" class="panel-btn ghost">✕ 閉じる</button>
         </div>
         <div id="online-cats"></div>
         <div id="online-searchrow">
-            <select id="online-source" class="v2-btn">
+            <select id="online-source" class="panel-btn">
                 <option value="commons">写真 (Commons)</option>
                 <option value="met">美術 (MET)</option>
                 <option value="aic">素描・名画 (シカゴ美術館)</option>
@@ -315,40 +315,40 @@
             </select>
             <input type="text" id="online-query" placeholder="キーワード検索（例: dancer, hand, horse…）英語推奨"
                >
-            <button id="je-olsearch" class="v2-btn accent">検索</button>
+            <button id="je-olsearch" class="panel-btn accent">検索</button>
         </div>
         <div id="online-status"></div>
         <div id="online-grid"></div>
         <div id="online-actions">
             <span id="online-sel-count">0枚 選択中</span>
-            <button id="je-olselectall" class="v2-btn ghost">全選択</button>
-            <button id="je-olapply-false" class="v2-btn">＋ 今のプールに追加</button>
-            <button id="je-olapply-true" class="v2-btn accent">▶ これだけで開始</button>
+            <button id="je-olselectall" class="panel-btn ghost">全選択</button>
+            <button id="je-olapply-false" class="panel-btn">＋ 今のプールに追加</button>
+            <button id="je-olapply-true" class="panel-btn accent">▶ これだけで開始</button>
         </div>
     </div>
 
     <!-- ── スケッチ v4 ── -->
-    <div id="sketch-overlay" class="v2-overlay">
-        <div class="v2-header">
-            <button class="v2-btn" id="sketch-layout-btn" title="画像と描画スペースを左右に並べる（模写モード）">⬓ 並べる</button>
-            <select id="sketch-memsec" class="v2-btn">
+    <div id="sketch-overlay" class="panel-overlay">
+        <div class="panel-header">
+            <button class="panel-btn" id="sketch-layout-btn" title="画像と描画スペースを左右に並べる（模写モード）">⬓ 並べる</button>
+            <select id="sketch-memsec" class="panel-btn">
                 <option value="3">3秒</option>
                 <option value="5" selected>5秒</option>
                 <option value="10">10秒</option>
                 <option value="20">20秒</option>
                 <option value="30">30秒</option>
             </select>
-            <button class="v2-btn" id="sketch-mem-btn">🧠 記憶モード</button>
-            <button class="v2-btn" id="sketch-peek-btn" style="display:none;">👁 1秒見る</button>
-            <button class="v2-btn" id="sketch-reveal-btn" style="display:none;">✅ 答え合わせ</button>
+            <button class="panel-btn" id="sketch-mem-btn">🧠 記憶モード</button>
+            <button class="panel-btn" id="sketch-peek-btn" style="display:none;">👁 1秒見る</button>
+            <button class="panel-btn" id="sketch-reveal-btn" style="display:none;">✅ 答え合わせ</button>
             <div id="sketch-imgopacity-wrap">
                 <span>画像</span>
                 <input type="range" id="sketch-imgopacity" min="10" max="100" value="50">
             </div>
             <span class="spacer"></span>
-            <button id="je-sknextimage" class="v2-btn">⏭ 次</button>
-            <button id="je-sksave" class="v2-btn">💾 保存</button>
-            <button id="je-togglesketch" class="v2-btn ghost">✕</button>
+            <button id="je-sknextimage" class="panel-btn">⏭ 次</button>
+            <button id="je-sksave" class="panel-btn">💾 保存</button>
+            <button id="je-togglesketch" class="panel-btn ghost">✕</button>
         </div>
         <div id="sketch-stage">
             <img id="sketch-img" draggable="false" alt="">
@@ -359,17 +359,17 @@
             <button id="sk-tools-fab" title="ツールを表示">🖌</button>
         </div>
         <div id="sketch-tools">
-            <button id="je-sktoggletools" class="v2-btn ghost" title="ツールをしまって描画領域を広げる">▾</button>
+            <button id="je-sktoggletools" class="panel-btn ghost" title="ツールをしまって描画領域を広げる">▾</button>
             <button class="sk-color on" data-c="#ff4d5e" data-a="1" style="background:#ff4d5e" title="赤"></button>
             <button class="sk-color" data-c="#1a1a1a" data-a="1" style="background:#1a1a1a" title="黒"></button>
             <button class="sk-color" data-c="#f5f5f5" data-a="1" style="background:#f5f5f5" title="白"></button>
             <button class="sk-color" data-c="#3d8bff" data-a="1" style="background:#3d8bff" title="青"></button>
             <button class="sk-color half" data-c="#3d8bff" data-a="0.3" title="青鉛筆（半透明）— 当たり取りに"></button>
             <input type="range" id="sketch-size" min="2" max="30" value="5" title="ペンの太さ">
-            <button class="v2-btn" id="sketch-eraser-btn">🧽</button>
-            <button id="je-skundo" class="v2-btn" title="元に戻す（2本指タップ / Ctrl+Z）">↩</button>
-            <button id="je-skredo" class="v2-btn" title="やり直し（3本指タップ / Ctrl+Y）">↪</button>
-            <button id="je-skclear" class="v2-btn ghost">🗑 全消去</button>
+            <button class="panel-btn" id="sketch-eraser-btn">🧽</button>
+            <button id="je-skundo" class="panel-btn" title="元に戻す（2本指タップ / Ctrl+Z）">↩</button>
+            <button id="je-skredo" class="panel-btn" title="やり直し（3本指タップ / Ctrl+Y）">↪</button>
+            <button id="je-skclear" class="panel-btn ghost">🗑 全消去</button>
             <span id="sk-gesture-hint">2本指タップ=戻る / 3本指=やり直し</span>
         </div>
     </div>
@@ -386,7 +386,7 @@
             <div id="tag-list"></div>
             <div id="tag-newrow">
                 <input type="text" id="tag-new-name" placeholder="新しいタグ名（例: 手の練習）">
-                <button id="je-tagcreate" class="v2-btn accent">追加</button>
+                <button id="je-tagcreate" class="panel-btn accent">追加</button>
             </div>
         </div>
     </div>
@@ -411,8 +411,8 @@
             </div>
             <div id="class-foot">
                 <span id="cl-total"></span>
-                <button id="je-closeclasspanel-2" class="v2-btn ghost">やめる</button>
-                <button id="je-startclassfromeditor" class="v2-btn accent">▶ クラス開始</button>
+                <button id="je-closeclasspanel-2" class="panel-btn ghost">やめる</button>
+                <button id="je-startclassfromeditor" class="panel-btn accent">▶ クラス開始</button>
             </div>
         </div>
     </div>
@@ -422,10 +422,10 @@
         <div class="cr-icon">☕</div>
         <div class="cr-count" id="cl-rest-count">30</div>
         <div class="cr-msg" id="cl-rest-msg">インターバル — 手を休めて</div>
-        <button id="je-skipclassrest" class="v2-btn ghost" style="margin-top:6px">スキップ</button>
+        <button id="je-skipclassrest" class="panel-btn ghost" style="margin-top:6px">スキップ</button>
     </div>
 
-    <div id="v3-toast"></div>
+    <div id="app-toast"></div>
 
     <script src="./js/features.js"></script>
     <script src="./js/bindings.js"></script>
