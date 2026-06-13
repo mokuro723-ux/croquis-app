@@ -418,15 +418,18 @@
             skOpen = !skOpen;
             skOverlay.classList.toggle('open', skOpen);
             if (skOpen) {
-                if (images.length === 0) { alert('先に画像を読み込んでください（フォルダ / 画像 / オンライン素材）'); skOpen = false; skOverlay.classList.remove('open'); return; }
+                // 画像が無くても開ける（ウォームアップ / 自由描き / 参考画像の読み込みができる）
+                const hasImg = images.length > 0;
                 skWasRunning = isRunning;
                 if (isRunning) stopTimer();
                 skApplyLayout(false);
                 skSyncImage();
                 skResize(true);
                 skSetState('free');
-                skShowMsg(skSide ? '左の画像を見ながら右に描けます（模写）' : 'そのまま上から描けます。「記憶モード」で見る→隠す→描く');
-                setTimeout(function(){ skShowMsg(''); }, 4000);
+                skShowMsg(!hasImg
+                    ? '画像が無くても描けます。「🌀 ウォームアップ」や「🖼 参考画像」をどうぞ'
+                    : (skSide ? '左の画像を見ながら右に描けます（模写）' : 'そのまま上から描けます。「記憶モード」で見る→隠す→描く'));
+                setTimeout(function(){ skShowMsg(''); }, 4200);
             } else {
                 skCancelMemory();
                 if (skFormenOn) skSetFormen(false);
@@ -455,7 +458,8 @@
             if (skRefOverride) return; // 参考画像を手動指定中はプール画像で上書きしない
             const co = ui.img.getAttribute('crossorigin');
             if (co) skImg.setAttribute('crossorigin', co); else skImg.removeAttribute('crossorigin');
-            skImg.src = ui.img.src || '';
+            const src = ui.img.getAttribute('src') || '';
+            if (src) skImg.src = src; else skImg.removeAttribute('src'); // 画像が無いときは壊れアイコンを出さない
             let t = '';
             if (settings.flipH) t += 'scaleX(-1) ';
             if (settings.flipV) t += 'scaleY(-1) ';

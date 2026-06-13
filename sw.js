@@ -9,7 +9,7 @@
    ・将来ビルドを導入できるなら、ファイル内容のハッシュを自動でCACHE_NAMEに埋め込む
    （今は手動運用なので、上のコメントを目印にしてください）
    ============================================================ */
-const CACHE_NAME = 'croquis-timer-v21';
+const CACHE_NAME = 'croquis-timer-v22';
 
 // アプリ本体（オフラインでも動かすために事前キャッシュするファイル）
 // ※ sw.js 自身はここに入れない（Service Workerファイルの自己キャッシュはアンチパターン）
@@ -74,7 +74,30 @@ self.addEventListener('fetch', (e) => {
         return;
     }
 
-    // 同一オリジンの静的ファイル(css/js/画像など)はキャッシュ優先
+    // 同一オリジンの自分のcss/jsは「ネット優先」（更新を確実に届ける）。
+    // オフライン時だけキャッシュにフォールバックする。
+    // ※ 以前はキャッシュ優先だったため、index.htmlだけ新しくJSが古いまま…という
+    //   食い違い（ボタンはあるのに動かない等）が起きていた。
+    if (url.origin === self.location.origin && /\.(?:js|css)$/.test(url.pathname)) {
+        e.respondWith(
+            (async () => {
+                try {
+                    const fresh = await fetch(req);
+                    if (fresh && fresh.status === 200) {
+                        const cache = await caches.open(CACHE_NAME);
+                        cache.put(req, fresh.clone());
+                    }
+                    return fresh;
+                } catch {
+                    const cached = await caches.match(req);
+                    return cached || Response.error();
+                }
+            })()
+        );
+        return;
+    }
+
+    // その他の同一オリジン静的ファイル(画像など)はキャッシュ優先
     if (url.origin === self.location.origin) {
         e.respondWith(
             (async () => {
