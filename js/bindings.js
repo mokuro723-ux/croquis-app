@@ -74,9 +74,12 @@
         bind('sketch-layout-btn', 'click', function(event){ skToggleLayout(); });
         bind('sketch-ref-btn', 'click', function(event){ skLoadRef(); });
         bind('sketch-formen-btn', 'click', function(event){ skToggleFormen(); });
+        bind('sketch-deck', 'change', function(event){ skSetDeck(this.value); });
         bind('je-skformennext', 'click', function(event){ skFormenNext(); });
         bind('je-skformenclose', 'click', function(event){ skToggleFormen(); });
         bind('sketch-formen-op', 'input', function(event){ skSetFormenOpacity(this.value); });
+        bind('sketch-timer-btn', 'click', function(event){ skToggleTimer(); });
+        bind('sketch-hide-btn', 'click', function(event){ skToggleHide(); });
         bind('sketch-mem-btn', 'click', function(event){ skStartMemory(); });
         bind('sketch-peek-btn', 'click', function(event){ skPeek(); });
         bind('sketch-reveal-btn', 'click', function(event){ skToggleReveal(); });
@@ -89,6 +92,7 @@
         bind('sketch-eraser-btn', 'click', function(event){ skToggleEraser(); });
         bind('je-skundo', 'click', function(event){ skUndo(); });
         bind('je-skredo', 'click', function(event){ skRedo(); });
+        bind('je-skfade', 'click', function(event){ skFade(); });
         bind('je-skclear', 'click', function(event){ skClear(); });
         bind('tag-panel', 'click', function(event){ if(event.target===this)toggleTagPanel(); });
         bind('je-toggletagpanel-2', 'click', function(event){ toggleTagPanel(); });

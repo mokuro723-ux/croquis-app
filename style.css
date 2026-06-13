@@ -474,6 +474,9 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 /* ── スケッチ v4（左右分割 / 半透明ペン / ジェスチャ対応） ── */
 #sketch-overlay .panel-header { padding: 8px 10px; gap: 7px; }
 #sketch-overlay .panel-header .panel-btn { padding: 9px 13px; font-size: 0.84rem; }
+/* ヘッダーのグループ区切り（視認性向上のための縦線） */
+.sk-hsep { width: 1px; align-self: stretch; background: #3d3d3d; margin: 2px 1px; flex: 0 0 auto; }
+@media (max-width: 700px) { .sk-hsep { display: none; } }
 #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; background: #000; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 #sketch-img {
     position: absolute; left: 0; top: 0; height: 100%; width: 100%;
@@ -505,7 +508,7 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     padding: 8px 14px; border-radius: 999px; max-width: 94vw; flex-wrap: wrap; justify-content: center;
     background: rgba(20,20,20,0.92); border: 1px solid #4a4a4a; box-shadow: 0 3px 14px rgba(0,0,0,0.55);
 }
-#sketch-formen-name { color: var(--accent); font-weight: bold; font-size: 0.92rem; }
+#sketch-deck { padding-right: 6px; }
 #sketch-formen-bar .sk-fmlabel { color: #cfcfcf; font-size: 0.8rem; }
 #sketch-formen-bar .sk-fmgap { width: 1px; height: 20px; background: #4a4a4a; }
 #sketch-formen-op { width: 90px; accent-color: var(--accent); }
