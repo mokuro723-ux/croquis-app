@@ -72,6 +72,11 @@
         bind('je-olapply-false', 'click', function(event){ olApply(false); });
         bind('je-olapply-true', 'click', function(event){ olApply(true); });
         bind('sketch-layout-btn', 'click', function(event){ skToggleLayout(); });
+        bind('sketch-ref-btn', 'click', function(event){ skLoadRef(); });
+        bind('sketch-formen-btn', 'click', function(event){ skToggleFormen(); });
+        bind('je-skformennext', 'click', function(event){ skFormenNext(); });
+        bind('je-skformenclose', 'click', function(event){ skToggleFormen(); });
+        bind('sketch-formen-op', 'input', function(event){ skSetFormenOpacity(this.value); });
         bind('sketch-mem-btn', 'click', function(event){ skStartMemory(); });
         bind('sketch-peek-btn', 'click', function(event){ skPeek(); });
         bind('sketch-reveal-btn', 'click', function(event){ skToggleReveal(); });

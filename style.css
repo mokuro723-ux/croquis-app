@@ -472,8 +472,8 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 #online-sel-count { font-size: 0.9rem; color: #fff; margin-right: auto; }
 
 /* ── スケッチ v4（左右分割 / 半透明ペン / ジェスチャ対応） ── */
-#sketch-overlay .panel-header { padding: 8px 10px; gap: 6px; }
-#sketch-overlay .panel-header .panel-btn { padding: 8px 11px; font-size: 0.78rem; }
+#sketch-overlay .panel-header { padding: 8px 10px; gap: 7px; }
+#sketch-overlay .panel-header .panel-btn { padding: 9px 13px; font-size: 0.84rem; }
 #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; background: #000; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 #sketch-img {
     position: absolute; left: 0; top: 0; height: 100%; width: 100%;
@@ -485,8 +485,30 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     background: #3d3d3d; z-index: 3;
 }
 #sketch-canvas, #sketch-live { position: absolute; left: 0; top: 0; touch-action: none; }
-#sketch-canvas { cursor: crosshair; }
-#sketch-live { pointer-events: none; }
+#sketch-canvas { cursor: crosshair; z-index: 2; }
+#sketch-live { pointer-events: none; z-index: 3; }
+/* ── ウォームアップ（フォルメン線描）のお題ガイド ── */
+#sketch-formen {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    pointer-events: none; display: none; z-index: 1;   /* 画像より上・描画キャンバスより下 */
+    filter: drop-shadow(0 0 3px rgba(0,0,0,0.85));
+}
+#sketch-formen-bar {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+    z-index: 6; display: none; align-items: center; gap: 9px;
+    padding: 8px 14px; border-radius: 999px; max-width: 94vw; flex-wrap: wrap; justify-content: center;
+    background: rgba(20,20,20,0.92); border: 1px solid #4a4a4a; box-shadow: 0 3px 14px rgba(0,0,0,0.55);
+}
+#sketch-formen-name { color: var(--accent); font-weight: bold; font-size: 0.92rem; }
+#sketch-formen-bar .sk-fmlabel { color: #cfcfcf; font-size: 0.8rem; }
+#sketch-formen-bar .sk-fmgap { width: 1px; height: 20px; background: #4a4a4a; }
+#sketch-formen-op { width: 90px; accent-color: var(--accent); }
+.sk-fmbtn {
+    background: var(--btn-bg); color: #fff; border: 1px solid #555; border-radius: 8px;
+    padding: 7px 13px; font-size: 0.82rem; cursor: pointer; white-space: nowrap;
+}
+.sk-fmbtn:active { transform: scale(0.95); }
+.sk-fmbtn.ghost { background: transparent; border-color: #5a5a5a; color: #ddd; }
 #sketch-countdown {
     position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
     font-size: 2.4rem; font-weight: bold; color: var(--hm-color, #ffd75e);
@@ -511,17 +533,17 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     background: rgba(30,30,30,0.92); color: #eee; font-size: 1.05rem; cursor: pointer; display: none;
 }
 #sketch-overlay.tools-hidden #sk-tools-fab { display: block; }
-.sk-color { width: 27px; height: 27px; border-radius: 50%; border: 2px solid #4a4a4a; cursor: pointer; padding: 0; flex: 0 0 auto; }
+.sk-color { width: 31px; height: 31px; border-radius: 50%; border: 2px solid #5a5a5a; cursor: pointer; padding: 0; flex: 0 0 auto; }
 .sk-color.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
 .sk-color.half { background: linear-gradient(135deg, rgba(61,139,255,0.85) 50%, rgba(61,139,255,0.3) 50%) !important; }
-#sketch-size { width: 84px; accent-color: var(--accent); flex: 0 0 auto; }
-#sketch-tools .panel-btn { padding: 7px 10px; font-size: 0.74rem; flex: 0 0 auto; }
-#sketch-imgopacity-wrap { display: none; align-items: center; gap: 6px; font-size: 0.72rem; color: #ccc; }
-#sketch-imgopacity { width: 84px; accent-color: var(--accent); }
-#sk-gesture-hint { font-size: 0.66rem; color: #888; white-space: nowrap; flex: 0 0 auto; margin-left: 4px; }
+#sketch-size { width: 92px; accent-color: var(--accent); flex: 0 0 auto; }
+#sketch-tools .panel-btn { padding: 8px 12px; font-size: 0.8rem; flex: 0 0 auto; }
+#sketch-imgopacity-wrap { display: none; align-items: center; gap: 6px; font-size: 0.78rem; color: #ddd; }
+#sketch-imgopacity { width: 90px; accent-color: var(--accent); }
+#sk-gesture-hint { font-size: 0.7rem; color: #adadad; white-space: nowrap; flex: 0 0 auto; margin-left: 4px; }
 @media (max-width: 700px) {
-    #sketch-overlay .panel-header { padding: 6px 8px; gap: 5px; }
-    #sketch-overlay .panel-header .panel-btn { padding: 7px 9px; font-size: 0.72rem; }
+    #sketch-overlay .panel-header { padding: 6px 8px; gap: 6px; }
+    #sketch-overlay .panel-header .panel-btn { padding: 8px 11px; font-size: 0.78rem; }
     #sketch-tools { padding: 5px 8px calc(5px + env(safe-area-inset-bottom, 0px)); }
     #sk-gesture-hint { display: none; }
 }

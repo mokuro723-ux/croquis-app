@@ -331,6 +331,8 @@
     <div id="sketch-overlay" class="panel-overlay">
         <div class="panel-header">
             <button class="panel-btn" id="sketch-layout-btn" title="画像と描画スペースを左右に並べる（模写モード）">⬓ 並べる</button>
+            <button class="panel-btn" id="sketch-ref-btn" title="参考画像を読み込む（URL貼り付け / コピー＆ペースト / ドラッグ＆ドロップ）">🖼 参考画像</button>
+            <button class="panel-btn" id="sketch-formen-btn" title="一筆書きのお題（フォルメン線描）をなぞってウォームアップ">🌀 ウォームアップ</button>
             <select id="sketch-memsec" class="panel-btn">
                 <option value="3">3秒</option>
                 <option value="5" selected>5秒</option>
@@ -352,10 +354,19 @@
         </div>
         <div id="sketch-stage">
             <img id="sketch-img" draggable="false" alt="">
+            <svg id="sketch-formen" preserveAspectRatio="none" aria-hidden="true"></svg>
             <canvas id="sketch-canvas"></canvas>
             <canvas id="sketch-live"></canvas>
             <div id="sketch-countdown"></div>
             <div id="sketch-msg" style="display:none;"></div>
+            <div id="sketch-formen-bar">
+                <span id="sketch-formen-name">うねり波</span>
+                <button id="je-skformennext" class="sk-fmbtn">↻ 別の形</button>
+                <span class="sk-fmgap"></span>
+                <span class="sk-fmlabel">線の濃さ</span>
+                <input type="range" id="sketch-formen-op" min="20" max="100" value="60">
+                <button id="je-skformenclose" class="sk-fmbtn ghost">✕ 終了</button>
+            </div>
             <button id="sk-tools-fab" title="ツールを表示">🖌</button>
         </div>
         <div id="sketch-tools">

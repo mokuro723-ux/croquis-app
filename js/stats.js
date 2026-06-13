@@ -406,7 +406,11 @@
         let skMemTimer = null, skState = 'free';
         let skImgOpacity = 0.5, skWasRunning = false;
         let skSide = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_SIDE) === '1';
-        let skCW = 0, skCH = 0; // 描画キャンバスのCSSサイズ
+        let skCW = 0, skCH = 0, skLeft = 0; // 描画キャンバスのCSSサイズと左位置（直前の値）
+        let skFormenOn = false, skFormenIdx = 0, skFormenPrevSide = false, skFormenOpacity = 0.6;
+        let skFormenBackup = null, skFormenBackupW = 0, skFormenBackupH = 0, skFormenBackupLeft = 0;
+        let skRefOverride = false, skRefObjUrl = null; // 参考画像の手動指定（URL/貼り付け/D&D）
+        const skFormenSvg = document.getElementById('sketch-formen');
 
         function skShowMsg(t){ if (!t) { skMsgEl.style.display = 'none'; return; } skMsgEl.textContent = t; skMsgEl.style.display = 'block'; }
 
@@ -425,6 +429,8 @@
                 setTimeout(function(){ skShowMsg(''); }, 4000);
             } else {
                 skCancelMemory();
+                if (skFormenOn) skSetFormen(false);
+                skClearRef();
                 if (skWasRunning) startTimer();
             }
         };
@@ -446,6 +452,7 @@
         };
 
         function skSyncImage(){
+            if (skRefOverride) return; // 参考画像を手動指定中はプール画像で上書きしない
             const co = ui.img.getAttribute('crossorigin');
             if (co) skImg.setAttribute('crossorigin', co); else skImg.removeAttribute('crossorigin');
             skImg.src = ui.img.src || '';
@@ -459,18 +466,20 @@
         function skResize(clear){
             const r = skStage.getBoundingClientRect();
             const dpr = Math.min(window.devicePixelRatio || 1, 2);
-            skCW = skSide ? Math.floor(r.width / 2) : Math.floor(r.width);
-            skCH = Math.floor(r.height);
-            const left = skSide ? (Math.floor(r.width) - skCW) : 0;
-            let saved = null, savedW = 0, savedH = 0;
+            // 直前のレイアウト（並べる⇔重ねる切替時に、描いた線を元の大きさ・位置のまま引き継ぐため控える）
+            const prevCW = skCW, prevCH = skCH, prevLeft = skLeft;
+            const newCW = skSide ? Math.floor(r.width / 2) : Math.floor(r.width);
+            const newCH = Math.floor(r.height);
+            const newLeft = skSide ? (Math.floor(r.width) - newCW) : 0;
+            let saved = null;
             if (!clear && skCanvas.width > 0) {
                 try { saved = skCanvas.toDataURL(); } catch(e){ console.warn("croquis: 描画の読み取りに失敗", e); }
-                savedW = skCW; savedH = skCH;
             }
+            skCW = newCW; skCH = newCH; skLeft = newLeft;
             [skCanvas, skLive].forEach(function(cv){
                 cv.width  = Math.max(1, Math.round(skCW * dpr));
                 cv.height = Math.max(1, Math.round(skCH * dpr));
-                cv.style.left   = left + 'px';
+                cv.style.left   = newLeft + 'px';
                 cv.style.top    = '0px';
                 cv.style.width  = skCW + 'px';
                 cv.style.height = skCH + 'px';
@@ -478,9 +487,15 @@
             skCtx.setTransform(dpr, 0, 0, dpr, 0, 0);     skCtx.lineCap = 'round';     skCtx.lineJoin = 'round';
             skLiveCtx.setTransform(dpr, 0, 0, dpr, 0, 0); skLiveCtx.lineCap = 'round'; skLiveCtx.lineJoin = 'round';
             if (clear) { skUndoStack = []; skRedoStack = []; }
-            else if (saved) { const im = new Image(); im.onload = function(){ skCtx.drawImage(im, 0, 0, savedW, savedH); }; im.src = saved; }
+            else if (saved) {
+                // 拡大縮小せず、画面上の同じ位置に線を戻す（以前は新サイズに引き伸ばしていたため横に広がっていた）
+                const dx = prevLeft - newLeft;
+                const im = new Image();
+                im.onload = function(){ skCtx.drawImage(im, dx, 0, prevCW, prevCH); };
+                im.src = saved;
+            }
         }
-        window.addEventListener('resize', function(){ if (skOpen) skResize(false); });
+        window.addEventListener('resize', function(){ if (skOpen) { skResize(false); if (skFormenOn) fmRender(); } });
 
         function skSetState(st){
             skState = st;
@@ -534,7 +549,10 @@
         window.skSetImgOpacity = function(v){ skImgOpacity = Math.max(0.1, Math.min(1, v / 100)); if (skState === 'reveal') skImg.style.opacity = String(skImgOpacity); };
         window.skNextImage = function(){
             skCancelMemory();
+            if (skFormenOn) skSetFormen(false);
+            skClearRef();        // 参考画像の上書きを解除してプールに戻す
             nextImage();
+            skSyncImage();
             skClearSilent();
             skSetState('free');
         };
@@ -753,6 +771,211 @@
         };
 
         /* ════════════════════════════════════════════════════════
+           5b) ウォームアップ — 一筆書き（フォルメン線描）のお題
+              画面いっぱいにお題を薄く表示し、その上をなぞって練習する。
+              全パターンが「一筆書き」できる連続した線で構成されている。
+        ════════════════════════════════════════════════════════ */
+        function fmMargin(W, H){ return Math.min(W, H) * 0.10; }
+        // ① 大きなうねり波
+        function fmWave(W, H){
+            const m = fmMargin(W, H), x0 = m, x1 = W - m, cy = H / 2, amp = (H / 2 - m) * 0.82;
+            const cycles = 3.5, N = 320, P = [];
+            for (let i = 0; i <= N; i++){ const t = i / N; P.push({ x: x0 + (x1 - x0) * t, y: cy - Math.sin(t * cycles * Math.PI * 2) * amp }); }
+            return P;
+        }
+        // ② 連続ループ（コイル）
+        function fmLoops(W, H){
+            const m = fmMargin(W, H), x0 = m, x1 = W - m, cy = H / 2, R = (H / 2 - m) * 0.80;
+            const loops = 4, total = loops * Math.PI * 2, a = (x1 - x0) / total, N = 520, P = [];
+            for (let i = 0; i <= N; i++){ const th = total * i / N; P.push({ x: x0 + a * th - R * Math.sin(th), y: cy - R * Math.cos(th) }); }
+            return P;
+        }
+        // ③ 八の字（∞）
+        function fmEight(W, H){
+            const m = fmMargin(W, H), cx = W / 2, cy = H / 2, A = (W / 2 - m) * 0.94, B = (H / 2 - m) * 0.94;
+            const N = 320, P = [];
+            for (let i = 0; i <= N; i++){ const t = i / N * Math.PI * 2; P.push({ x: cx + A * Math.sin(t), y: cy + B * Math.sin(t) * Math.cos(t) }); }
+            return P;
+        }
+        // ④ 渦巻き
+        function fmSpiral(W, H){
+            const m = fmMargin(W, H), cx = W / 2, cy = H / 2, Rmax = Math.min(W, H) / 2 - m;
+            const turns = 4, total = turns * Math.PI * 2, N = 520, P = [];
+            for (let i = 0; i <= N; i++){ const t = i / N, th = total * t, r = Rmax * t; P.push({ x: cx + r * Math.cos(th), y: cy + r * Math.sin(th) }); }
+            return P;
+        }
+        // ⑤ 山なみ（連続アーチ）
+        function fmArches(W, H){
+            const m = fmMargin(W, H), x0 = m, x1 = W - m, r = (H / 2 - m) * 0.80, baseY = H / 2 + (H / 2 - m) * 0.5;
+            const n = Math.max(2, Math.round((x1 - x0) / (r * 2))), aw = (x1 - x0) / n, seg = 48, P = [];
+            for (let k = 0; k < n; k++){
+                const cx = x0 + aw * (k + 0.5);
+                for (let i = 0; i <= seg; i++){ const ang = Math.PI - Math.PI * i / seg; P.push({ x: cx + (aw / 2) * Math.cos(ang), y: baseY - r * Math.sin(ang) }); }
+            }
+            return P;
+        }
+        // ⑥ ジグザグ
+        function fmZig(W, H){
+            const m = fmMargin(W, H), x0 = m, x1 = W - m, cy = H / 2, amp = (H / 2 - m) * 0.80, n = 7;
+            const aw = (x1 - x0) / n, P = [];
+            for (let k = 0; k <= n; k++){ P.push({ x: x0 + aw * k, y: cy + (k % 2 === 0 ? -amp : amp) }); }
+            return P;
+        }
+        // ⑦ 花びら（バラ曲線・5枚）
+        function fmRose(W, H){
+            const m = fmMargin(W, H), cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - m, k = 5, N = 540, P = [];
+            for (let i = 0; i <= N; i++){ const th = i / N * Math.PI * 2, r = R * Math.cos(k * th); P.push({ x: cx + r * Math.cos(th), y: cy + r * Math.sin(th) }); }
+            return P;
+        }
+        const FM_PATTERNS = [
+            { name: 'うねり波',   gen: fmWave },
+            { name: '連続ループ', gen: fmLoops },
+            { name: '八の字（∞）', gen: fmEight },
+            { name: '渦巻き',     gen: fmSpiral },
+            { name: '山なみ',     gen: fmArches },
+            { name: 'ジグザグ',   gen: fmZig },
+            { name: '花びら',     gen: fmRose },
+        ];
+        function fmRender(){
+            if (!skFormenOn || !skFormenSvg) return;
+            const r = skStage.getBoundingClientRect();
+            const W = Math.max(1, r.width), H = Math.max(1, r.height);
+            const pat = FM_PATTERNS[skFormenIdx];
+            const pts = pat.gen(W, H);
+            const sw = Math.max(2.5, Math.min(W, H) * 0.007);
+            const dotR = Math.max(5, Math.min(W, H) * 0.014);
+            let d = 'M' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
+            for (let i = 1; i < pts.length; i++) d += 'L' + pts[i].x.toFixed(1) + ' ' + pts[i].y.toFixed(1);
+            const stroke = 'rgba(0,212,255,' + skFormenOpacity.toFixed(2) + ')';
+            skFormenSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+            skFormenSvg.innerHTML =
+                '<path d="' + d + '" fill="none" stroke="' + stroke + '" stroke-width="' + sw.toFixed(2) +
+                '" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<circle cx="' + pts[0].x.toFixed(1) + '" cy="' + pts[0].y.toFixed(1) + '" r="' + dotR.toFixed(1) +
+                '" fill="#39e07a" stroke="#0b3" stroke-width="1.5"/>';   // 緑の●＝描き始め
+            const nm = document.getElementById('sketch-formen-name'); if (nm) nm.textContent = pat.name;
+            const op = document.getElementById('sketch-formen-op'); if (op) op.value = String(Math.round(skFormenOpacity * 100));
+        }
+        function skSetFormen(on){
+            const bar = document.getElementById('sketch-formen-bar');
+            const btn = document.getElementById('sketch-formen-btn');
+            const mem = document.getElementById('sketch-mem-btn');
+            const sec = document.getElementById('sketch-memsec');
+            if (on === skFormenOn) { if (on) fmRender(); return; }
+            skFormenOn = on;
+            if (on) {
+                // 直前の描画（模写など）を退避し、なぞり用にキャンバスを空にする（終了時に復元）
+                try { skFormenBackup = (skCanvas.width > 0) ? skCanvas.toDataURL() : null; } catch(_){ skFormenBackup = null; }
+                skFormenBackupW = skCW; skFormenBackupH = skCH; skFormenBackupLeft = skLeft;
+                skFormenPrevSide = skSide;
+                if (skSide) { skSide = false; skApplyLayout(true); } // ウォームアップは全画面で
+                skImg.style.visibility = 'hidden';                  // 参考画像は隠す
+                skClearSilent();
+                if (mem) mem.style.display = 'none';
+                if (sec) sec.style.display = 'none';
+                if (skFormenSvg) skFormenSvg.style.display = 'block';
+                if (bar) bar.style.display = 'flex';
+                if (btn) btn.classList.add('accent');
+                fmRender();
+                skShowMsg('緑の●から一筆書きでなぞってウォームアップ！「↻ 別の形」で切替');
+                setTimeout(function(){ skShowMsg(''); }, 4200);
+            } else {
+                if (skFormenSvg) skFormenSvg.style.display = 'none';
+                if (bar) bar.style.display = 'none';
+                if (btn) btn.classList.remove('accent');
+                if (mem) mem.style.display = '';
+                if (sec) sec.style.display = '';
+                skImg.style.visibility = '';
+                if (skFormenPrevSide && !skSide) { skSide = true; skApplyLayout(true); }
+                // なぞり描きを消して、退避していた描画を元の大きさ・位置で戻す
+                skCtx.clearRect(0, 0, skCW, skCH); skUndoStack = []; skRedoStack = [];
+                if (skFormenBackup) {
+                    const data = skFormenBackup, bw = skFormenBackupW, bh = skFormenBackupH, bleft = skFormenBackupLeft;
+                    const im = new Image();
+                    im.onload = function(){ skCtx.drawImage(im, bleft - skLeft, 0, bw, bh); };
+                    im.src = data;
+                    skFormenBackup = null;
+                }
+                skSetState('free'); // 参考画像の表示状態を元に戻す
+            }
+        }
+        window.skToggleFormen = function(){ skSetFormen(!skFormenOn); };
+        window.skFormenNext = function(){ skFormenIdx = (skFormenIdx + 1) % FM_PATTERNS.length; skClearSilent(); fmRender(); };
+        window.skSetFormenOpacity = function(v){ skFormenOpacity = Math.max(0.1, Math.min(1, (parseInt(v, 10) || 60) / 100)); fmRender(); };
+
+        /* ════════════════════════════════════════════════════════
+           5c) 参考画像を描画モードに直接表示
+              URL貼り付け / コピー＆ペースト(Ctrl+V) / ドラッグ＆ドロップ。
+              Pinterest等は画像を「コピー」または「画像アドレスをコピー」して
+              この画面に貼り付け or ドロップするだけで参考表示できる。
+        ════════════════════════════════════════════════════════ */
+        const SK_CORS_HOSTS = /(^|\.)pinimg\.com$|(^|\.)wikimedia\.org$|(^|\.)metmuseum\.org$|(^|\.)artic\.edu$|(^|\.)clevelandart\.org$|(^|\.)picsum\.photos$/;
+        function skClearRef(){
+            skRefOverride = false;
+            skImg.onerror = null;
+            if (skRefObjUrl) { try { URL.revokeObjectURL(skRefObjUrl); } catch(_){ } skRefObjUrl = null; }
+        }
+        function skFlash(msg, ms){ skShowMsg(msg); setTimeout(function(){ skShowMsg(''); }, ms || 2200); }
+        function skApplyRef(src, isObjUrl, host){
+            skClearRef();
+            skRefOverride = true;
+            if (isObjUrl) skRefObjUrl = src;
+            if (host && SK_CORS_HOSTS.test(host)) skImg.setAttribute('crossorigin', 'anonymous');
+            else skImg.removeAttribute('crossorigin');
+            skImg.onerror = function(){ skImg.onerror = null; skClearRef(); skFlash('この画像は表示できませんでした（URLを確認、または画像を直接コピー＆ペーストしてみてください）', 4200); };
+            skImg.style.transform = '';
+            skImg.src = src;
+            if (skFormenOn) skSetFormen(false);
+            skSetState('free');
+            skFlash('参考画像を表示しました', 2000);
+        }
+        function skSetRefUrl(u){
+            u = String(u || '').trim();
+            if (!/^https?:\/\//.test(u)) { skFlash('http(s) で始まる画像URLを貼り付けてください', 2600); return; }
+            u = u.replace(/(pinimg\.com\/)\d+x(\/)/, '$1736x$2'); // Pinterestサムネを大きいサイズに
+            let host = ''; try { host = new URL(u).hostname; } catch(_){ }
+            skApplyRef(u, false, host);
+        }
+        function skSetRefFile(f){
+            if (!f || (f.type || '').indexOf('image') !== 0) return;
+            skApplyRef(URL.createObjectURL(f), true, '');
+        }
+        window.skLoadRef = function(){
+            const u = prompt('参考にしたい画像のURLを貼り付けてください\n（Pinterest等は画像を右クリック →「画像アドレスをコピー」）\n\n※ 画像を直接コピーして Ctrl+V で貼り付け、または画面へドラッグ＆ドロップでもOK');
+            if (u) skSetRefUrl(u);
+        };
+        // コピー＆ペースト（画像そのもの / 画像URL）
+        document.addEventListener('paste', function(e){
+            if (!skOpen) return;
+            const dt = e.clipboardData; if (!dt) return;
+            if (dt.items) {
+                for (let i = 0; i < dt.items.length; i++){
+                    const it = dt.items[i];
+                    if (it.kind === 'file' && (it.type || '').indexOf('image') === 0){
+                        const f = it.getAsFile(); if (f){ skSetRefFile(f); e.preventDefault(); return; }
+                    }
+                }
+            }
+            const txt = ((dt.getData && dt.getData('text/plain')) || '').trim();
+            if (/^https?:\/\//.test(txt)) { skSetRefUrl(txt); e.preventDefault(); }
+        });
+        // ドラッグ＆ドロップ（PCでPinterestのピンを直接この画面へ）
+        skStage.addEventListener('dragover', function(e){ if (skOpen) { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch(_){ } } });
+        skStage.addEventListener('drop', function(e){
+            if (!skOpen) return;
+            e.preventDefault(); e.stopPropagation();
+            const dt = e.dataTransfer; if (!dt) return;
+            if (dt.files && dt.files.length){ const f = dt.files[0]; if (f && (f.type || '').indexOf('image') === 0){ skSetRefFile(f); return; } }
+            let url = '';
+            try {
+                const html = dt.getData('text/html');
+                if (html){ const mm = html.match(/<img[^>]+src=["']([^"']+)["']/i); if (mm) url = mm[1]; }
+                if (!url) url = (dt.getData('text/uri-list') || dt.getData('text/plain') || '').split(/[\r\n]/)[0];
+            } catch(_){ }
+            if (url) skSetRefUrl(url);
+        });
+
+        /* ════════════════════════════════════════════════════════
            6) キーボードショートカット追加（PC）
         ════════════════════════════════════════════════════════ */
         window.isOverlayOpen = function(){
@@ -764,10 +987,11 @@
             const ae = document.activeElement;
             if (ae && (ae.tagName === 'SELECT' || ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
             if (skOpen) {
-                if (e.code === 'Escape') { toggleSketch(); }
+                if (e.code === 'Escape') { if (skFormenOn) { skSetFormen(false); } else { toggleSketch(); } }
                 else if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey) && e.shiftKey) { e.preventDefault(); skRedo(); }
                 else if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); skUndo(); }
                 else if (e.code === 'KeyY' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); skRedo(); }
+                else if (e.code === 'KeyW' && !e.ctrlKey && !e.metaKey) { skToggleFormen(); }
                 return;
             }
             const onlineOpen = document.getElementById('online-overlay').classList.contains('open');
