@@ -331,18 +331,27 @@
     <div id="sketch-overlay" class="panel-overlay">
         <div class="panel-header">
             <button class="panel-btn" id="sketch-layout-btn" title="画像と描画スペースを左右に並べる（模写モード）">⬓ 並べる</button>
-            <button class="panel-btn" id="sketch-ref-btn" title="参考画像を読み込む（URL貼り付け / コピー＆ペースト / ドラッグ＆ドロップ）">🖼 参考画像</button>
-            <button class="panel-btn" id="sketch-formen-btn" title="一筆書きのお題（フォルメン線描）をなぞってウォームアップ">🌀 ウォームアップ</button>
-            <select id="sketch-memsec" class="panel-btn">
+            <span class="sk-hsep"></span>
+            <button class="panel-btn" id="sketch-ref-btn" title="参考画像を読み込む（URL / コピー＆ペースト / ドラッグ＆ドロップ）">🖼 参考</button>
+            <button class="panel-btn" id="sketch-formen-btn" title="お題を表示して練習（一筆書き / 基本形 / フラワーサック）">✏️ お題</button>
+            <span class="sk-hsep"></span>
+            <select id="sketch-memsec" class="panel-btn" title="記憶モード・タイマーの秒数">
                 <option value="3">3秒</option>
-                <option value="5" selected>5秒</option>
+                <option value="5">5秒</option>
                 <option value="10">10秒</option>
                 <option value="20">20秒</option>
-                <option value="30">30秒</option>
+                <option value="30" selected>30秒</option>
+                <option value="45">45秒</option>
+                <option value="60">1分</option>
+                <option value="90">90秒</option>
+                <option value="120">2分</option>
+                <option value="300">5分</option>
             </select>
-            <button class="panel-btn" id="sketch-mem-btn">🧠 記憶モード</button>
-            <button class="panel-btn" id="sketch-peek-btn" style="display:none;">👁 1秒見る</button>
-            <button class="panel-btn" id="sketch-reveal-btn" style="display:none;">✅ 答え合わせ</button>
+            <button class="panel-btn" id="sketch-timer-btn" title="指定秒ごとに自動で次の絵へ（描きながらクロッキー）">⏱ タイマー</button>
+            <button class="panel-btn" id="sketch-mem-btn" title="覚える→隠す→描く">🧠 記憶</button>
+            <button class="panel-btn" id="sketch-hide-btn" title="参考画像をすぐ隠して記憶で描く">🙈 隠す</button>
+            <button class="panel-btn" id="sketch-peek-btn" style="display:none;">👁 見る</button>
+            <button class="panel-btn" id="sketch-reveal-btn" style="display:none;">✅ 答え</button>
             <div id="sketch-imgopacity-wrap">
                 <span>画像</span>
                 <input type="range" id="sketch-imgopacity" min="10" max="100" value="50">
@@ -361,11 +370,15 @@
             <div id="sketch-countdown"></div>
             <div id="sketch-msg" style="display:none;"></div>
             <div id="sketch-formen-bar">
-                <span id="sketch-formen-name">連続ループ</span>
-                <button id="je-skformennext" class="sk-fmbtn">↻ 別の形</button>
+                <select id="sketch-deck" class="sk-fmbtn" title="お題の種類">
+                    <option value="0">一筆書き</option>
+                    <option value="1">基本形</option>
+                    <option value="2">フラワーサック</option>
+                </select>
+                <button id="je-skformennext" class="sk-fmbtn">↻ 次のお題</button>
                 <span class="sk-fmgap"></span>
-                <span class="sk-fmlabel">線の濃さ</span>
-                <input type="range" id="sketch-formen-op" min="20" max="100" value="60">
+                <span class="sk-fmlabel">濃さ</span>
+                <input type="range" id="sketch-formen-op" min="20" max="100" value="70">
                 <button id="je-skformenclose" class="sk-fmbtn ghost">✕ 終了</button>
             </div>
             <button id="sk-tools-fab" title="ツールを表示">🖌</button>
@@ -381,6 +394,7 @@
             <button class="panel-btn" id="sketch-eraser-btn">🧽</button>
             <button id="je-skundo" class="panel-btn" title="元に戻す（2本指タップ / Ctrl+Z）">↩</button>
             <button id="je-skredo" class="panel-btn" title="やり直し（Ctrl+Y）">↪</button>
+            <button id="je-skfade" class="panel-btn" title="描いた線を薄くする（下描きを薄くして上から清書）">🌫 薄く</button>
             <button id="je-skclear" class="panel-btn ghost">🗑 全消去</button>
             <span id="sk-gesture-hint">2本指タップ=戻る</span>
         </div>

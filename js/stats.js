@@ -407,8 +407,9 @@
         let skImgOpacity = 0.5, skWasRunning = false;
         let skSide = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_SIDE) === '1';
         let skCW = 0, skCH = 0, skLeft = 0; // 描画キャンバスのCSSサイズと左位置（直前の値）
-        let skFormenOn = false, skFormenIdx = 0, skFormenPrevSide = false, skFormenOpacity = 0.6;
+        let skFormenOn = false, skDeckIdx = 0, skItemIdx = 0, skFormenPrevSide = false, skFormenOpacity = 0.7;
         let skFormenBackup = null, skFormenBackupW = 0, skFormenBackupH = 0, skFormenBackupLeft = 0;
+        let skTimerOn = false, skSessionTimer = null; // 描画モード内の時間制限タイマー
         let skRefOverride = false, skRefObjUrl = null; // 参考画像の手動指定（URL/貼り付け/D&D）
         const skFormenSvg = document.getElementById('sketch-formen');
 
@@ -431,6 +432,7 @@
                     : (skSide ? '左の画像を見ながら右に描けます（模写）' : 'そのまま上から描けます。「記憶モード」で見る→隠す→描く'));
                 setTimeout(function(){ skShowMsg(''); }, 4200);
             } else {
+                skStopTimer();
                 skCancelMemory();
                 if (skFormenOn) skSetFormen(false);
                 skClearRef();
@@ -557,6 +559,7 @@
         }
 
         window.skStartMemory = function(){
+            skStopTimer();
             skCancelMemory();
             skClearSilent();
             let sec = parseInt(document.getElementById('sketch-memsec').value, 10) || 5;
@@ -873,33 +876,105 @@
             for (let i = 0; i <= N; i++){ const th = i / N * Math.PI * 2, r = Math.cos(k * th); P.push({ x: r * Math.cos(th), y: r * Math.sin(th) }); }
             return P;
         }
-        const FM_PATTERNS = [
-            { name: '連続ループ',   gen: fmLoops },
-            { name: '飾りループ',   gen: fmGarland },
-            { name: '八の字（∞）',  gen: fmEight },
-            { name: '渦巻き',       gen: fmSpiral },
-            { name: '三つ葉ループ', gen: fmTrefoil },
-            { name: '花びら',       gen: fmRose },
-            { name: 'うねり波',     gen: fmWave },
+        /* ── 基本形（Basic Forms）：観察して描くお題（SVGで自前生成） ── */
+        function fmN(v){ return (Math.round(v * 10) / 10); }
+        function fmCastShadow(cx, cy, rx, ry, sw){
+            return '<ellipse cx="' + fmN(cx) + '" cy="' + fmN(cy) + '" rx="' + fmN(rx) + '" ry="' + fmN(ry) +
+                '" fill="rgba(150,160,170,0.16)" stroke="#8a949b" stroke-width="' + fmN(sw * 0.7) +
+                '" stroke-dasharray="' + fmN(sw * 2) + ' ' + fmN(sw * 2) + '"/>';
+        }
+        function formSphere(W, H){
+            const cx = W / 2, cy = H * 0.46, R = Math.min(W, H) * 0.27, sw = Math.max(2, Math.min(W, H) * 0.006);
+            const p0x = cx + 0.707 * R, p0y = cy - 0.707 * R, p2x = cx - 0.707 * R, p2y = cy + 0.707 * R;
+            return fmCastShadow(cx + R * 0.35, cy + R * 1.05, R * 1.0, R * 0.26, sw)
+                + '<circle cx="' + fmN(cx) + '" cy="' + fmN(cy) + '" r="' + fmN(R) + '" fill="none" stroke="#e8eef2" stroke-width="' + fmN(sw) + '"/>'
+                + '<path d="M ' + fmN(p0x) + ' ' + fmN(p0y) + ' Q ' + fmN(cx + R * 0.45) + ' ' + fmN(cy + R * 0.45) + ' ' + fmN(p2x) + ' ' + fmN(p2y) + '" fill="none" stroke="#9fb0bb" stroke-width="' + fmN(sw * 0.85) + '"/>';
+        }
+        function formBox(W, H){
+            const cx = W / 2, cy = H / 2, s = Math.min(W, H) * 0.27, sw = Math.max(2, Math.min(W, H) * 0.006);
+            const wx = s * 0.95, wy = s * 0.5, h = s * 1.05, tcy = cy - h * 0.55;
+            const Tb = { x: cx, y: tcy - wy }, Tl = { x: cx - wx, y: tcy }, Tf = { x: cx, y: tcy + wy }, Tr = { x: cx + wx, y: tcy };
+            const Bl = { x: Tl.x, y: Tl.y + h }, Bf = { x: Tf.x, y: Tf.y + h }, Br = { x: Tr.x, y: Tr.y + h };
+            const poly = function(p){ return p.map(function(q){ return fmN(q.x) + ',' + fmN(q.y); }).join(' '); };
+            return '<polygon points="' + poly([Tb, Tl, Tf, Tr]) + '" fill="rgba(232,238,242,0.05)" stroke="#e8eef2" stroke-width="' + fmN(sw) + '" stroke-linejoin="round"/>'
+                + '<polygon points="' + poly([Tl, Tf, Bf, Bl]) + '" fill="rgba(232,238,242,0.04)" stroke="#cfd8de" stroke-width="' + fmN(sw) + '" stroke-linejoin="round"/>'
+                + '<polygon points="' + poly([Tf, Tr, Br, Bf]) + '" fill="rgba(232,238,242,0.11)" stroke="#cfd8de" stroke-width="' + fmN(sw) + '" stroke-linejoin="round"/>';
+        }
+        function formCylinder(W, H){
+            const cx = W / 2, cy = H / 2, rx = Math.min(W, H) * 0.22, ry = rx * 0.34, h = Math.min(W, H) * 0.52, sw = Math.max(2, Math.min(W, H) * 0.006);
+            const ty = cy - h / 2, by = cy + h / 2;
+            return fmCastShadow(cx + rx * 0.3, by + ry * 1.4, rx * 1.15, ry * 0.9, sw)
+                + '<line x1="' + fmN(cx - rx) + '" y1="' + fmN(ty) + '" x2="' + fmN(cx - rx) + '" y2="' + fmN(by) + '" stroke="#e8eef2" stroke-width="' + fmN(sw) + '"/>'
+                + '<line x1="' + fmN(cx + rx) + '" y1="' + fmN(ty) + '" x2="' + fmN(cx + rx) + '" y2="' + fmN(by) + '" stroke="#e8eef2" stroke-width="' + fmN(sw) + '"/>'
+                + '<ellipse cx="' + fmN(cx) + '" cy="' + fmN(by) + '" rx="' + fmN(rx) + '" ry="' + fmN(ry) + '" fill="rgba(232,238,242,0.05)" stroke="#cfd8de" stroke-width="' + fmN(sw) + '"/>'
+                + '<ellipse cx="' + fmN(cx) + '" cy="' + fmN(ty) + '" rx="' + fmN(rx) + '" ry="' + fmN(ry) + '" fill="rgba(232,238,242,0.08)" stroke="#e8eef2" stroke-width="' + fmN(sw) + '"/>';
+        }
+        function formCone(W, H){
+            const cx = W / 2, cy = H / 2, rx = Math.min(W, H) * 0.24, ry = rx * 0.34, h = Math.min(W, H) * 0.56, sw = Math.max(2, Math.min(W, H) * 0.006);
+            const by = cy + h / 2, ax = cx, ay = cy - h / 2;
+            return fmCastShadow(cx + rx * 0.3, by + ry * 1.4, rx * 1.15, ry * 0.9, sw)
+                + '<line x1="' + fmN(ax) + '" y1="' + fmN(ay) + '" x2="' + fmN(cx - rx) + '" y2="' + fmN(by) + '" stroke="#e8eef2" stroke-width="' + fmN(sw) + '"/>'
+                + '<line x1="' + fmN(ax) + '" y1="' + fmN(ay) + '" x2="' + fmN(cx + rx) + '" y2="' + fmN(by) + '" stroke="#e8eef2" stroke-width="' + fmN(sw) + '"/>'
+                + '<ellipse cx="' + fmN(cx) + '" cy="' + fmN(by) + '" rx="' + fmN(rx) + '" ry="' + fmN(ry) + '" fill="rgba(232,238,242,0.06)" stroke="#e8eef2" stroke-width="' + fmN(sw) + '"/>';
+        }
+        function formEgg(W, H){
+            const cx = W / 2, cy = H / 2, w = Math.min(W, H) * 0.20, h = Math.min(W, H) * 0.30, sw = Math.max(2, Math.min(W, H) * 0.006);
+            const d = 'M ' + fmN(cx) + ' ' + fmN(cy - h)
+                + ' C ' + fmN(cx + w * 0.95) + ' ' + fmN(cy - h * 0.45) + ' ' + fmN(cx + w) + ' ' + fmN(cy + h * 0.25) + ' ' + fmN(cx) + ' ' + fmN(cy + h)
+                + ' C ' + fmN(cx - w) + ' ' + fmN(cy + h * 0.25) + ' ' + fmN(cx - w * 0.95) + ' ' + fmN(cy - h * 0.45) + ' ' + fmN(cx) + ' ' + fmN(cy - h) + ' Z';
+            return fmCastShadow(cx + w * 0.4, cy + h * 1.08, w * 1.5, w * 0.5, sw)
+                + '<path d="' + d + '" fill="rgba(232,238,242,0.06)" stroke="#e8eef2" stroke-width="' + fmN(sw) + '"/>';
+        }
+        /* ── フラワーサック（小麦粉袋）：量感・重さの練習。基本形を回転/つぶしでポーズ違いに ── */
+        function sackPathD(){
+            const c = 1.0, e = 1.5;
+            return 'M ' + (-c) + ' ' + (-c)
+                + ' C ' + (-c * 0.4) + ' ' + (-e) + ' ' + (c * 0.4) + ' ' + (-e) + ' ' + c + ' ' + (-c)
+                + ' C ' + (e) + ' ' + (-c * 0.4) + ' ' + (e) + ' ' + (c * 0.4) + ' ' + c + ' ' + c
+                + ' C ' + (c * 0.4) + ' ' + (e) + ' ' + (-c * 0.4) + ' ' + (e) + ' ' + (-c) + ' ' + c
+                + ' C ' + (-e) + ' ' + (c * 0.4) + ' ' + (-e) + ' ' + (-c * 0.4) + ' ' + (-c) + ' ' + (-c) + ' Z';
+        }
+        function sackEars(){
+            const c = 1.0, t = 0.24, tk = function(x, y, dx, dy){
+                return '<line x1="' + x + '" y1="' + y + '" x2="' + (x + dx) + '" y2="' + (y + dy) + '" stroke="#cfd8de" stroke-width="2" vector-effect="non-scaling-stroke"/>';
+            };
+            return tk(-c, -c, -t, -t) + tk(c, -c, t, -t) + tk(c, c, t, t) + tk(-c, c, -t, t);
+        }
+        function makeSack(rot, sx, sy){
+            return function(W, H){
+                const cx = W / 2, cy = H / 2, S = Math.min(W, H) * 0.23, sw = Math.max(2, Math.min(W, H) * 0.006);
+                return fmCastShadow(cx, cy + S * 1.35, S * 1.35, S * 0.3, sw)
+                    + '<g transform="translate(' + fmN(cx) + ' ' + fmN(cy) + ') rotate(' + rot + ') scale(' + (S * sx).toFixed(2) + ' ' + (S * sy).toFixed(2) + ')">'
+                    + '<path d="' + sackPathD() + '" fill="rgba(232,238,242,0.06)" stroke="#e8eef2" stroke-width="' + fmN(sw) + '" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>'
+                    + sackEars() + '</g>';
+            };
+        }
+        // 一筆書き（なぞり用）：点列→path＋始点ドット（緑●）。
+        function fmStrokeSVG(gen, W, H){
+            const pts = fmFit(gen(W, H), W, H);
+            const sw = Math.max(2.5, Math.min(W, H) * 0.007), dotR = Math.max(5, Math.min(W, H) * 0.014);
+            let d = 'M' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
+            for (let i = 1; i < pts.length; i++) d += 'L' + pts[i].x.toFixed(1) + ' ' + pts[i].y.toFixed(1);
+            return '<path d="' + d + '" fill="none" stroke="#00d4ff" stroke-width="' + sw.toFixed(2) + '" stroke-linecap="round" stroke-linejoin="round"/>'
+                + '<circle cx="' + pts[0].x.toFixed(1) + '" cy="' + pts[0].y.toFixed(1) + '" r="' + dotR.toFixed(1) + '" fill="#39e07a" stroke="#0b3" stroke-width="1.5"/>';
+        }
+        // お題のデッキ（カテゴリ）。各お題は (W,H)=>SVG内部マークアップ を返す。
+        const FM_STROKES = [fmLoops, fmGarland, fmEight, fmSpiral, fmTrefoil, fmRose, fmWave];
+        const FM_DECKS = [
+            { name: '一筆書き', trace: true, items: FM_STROKES.map(function(g){ return function(W, H){ return fmStrokeSVG(g, W, H); }; }) },
+            { name: '基本形', trace: false, items: [formSphere, formBox, formCylinder, formCone, formEgg] },
+            { name: 'フラワーサック', trace: false, items: [makeSack(0, 1, 1), makeSack(18, 1, 1), makeSack(0, 1.3, 0.72), makeSack(-22, 0.95, 1.05), makeSack(8, 0.82, 1.25)] }
         ];
         function fmRender(){
             if (!skFormenOn || !skFormenSvg) return;
             const r = skStage.getBoundingClientRect();
             const W = Math.max(1, r.width), H = Math.max(1, r.height);
-            const pat = FM_PATTERNS[skFormenIdx];
-            const pts = fmFit(pat.gen(W, H), W, H); // 必ず画面内に収める
-            const sw = Math.max(2.5, Math.min(W, H) * 0.007);
-            const dotR = Math.max(5, Math.min(W, H) * 0.014);
-            let d = 'M' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
-            for (let i = 1; i < pts.length; i++) d += 'L' + pts[i].x.toFixed(1) + ' ' + pts[i].y.toFixed(1);
-            const stroke = 'rgba(0,212,255,' + skFormenOpacity.toFixed(2) + ')';
+            const deck = FM_DECKS[skDeckIdx] || FM_DECKS[0];
+            if (skItemIdx >= deck.items.length) skItemIdx = 0;
             skFormenSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-            skFormenSvg.innerHTML =
-                '<path d="' + d + '" fill="none" stroke="' + stroke + '" stroke-width="' + sw.toFixed(2) +
-                '" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '<circle cx="' + pts[0].x.toFixed(1) + '" cy="' + pts[0].y.toFixed(1) + '" r="' + dotR.toFixed(1) +
-                '" fill="#39e07a" stroke="#0b3" stroke-width="1.5"/>';   // 緑の●＝描き始め
-            const nm = document.getElementById('sketch-formen-name'); if (nm) nm.textContent = pat.name;
+            skFormenSvg.style.opacity = String(skFormenOpacity);
+            skFormenSvg.innerHTML = deck.items[skItemIdx](W, H);
+            const sel = document.getElementById('sketch-deck'); if (sel) sel.value = String(skDeckIdx);
             const op = document.getElementById('sketch-formen-op'); if (op) op.value = String(Math.round(skFormenOpacity * 100));
         }
         function skSetFormen(on){
@@ -922,10 +997,10 @@
                 if (skFormenSvg) skFormenSvg.style.display = 'block';
                 if (bar) bar.style.display = 'flex';
                 if (btn) btn.classList.add('accent');
-                skUpdateFrameGuide(); // ウォームアップ中は枠を隠す
+                skUpdateFrameGuide(); // お題中は枠を隠す
                 fmRender();
-                skShowMsg('緑の●から一筆書きでなぞってウォームアップ！「↻ 別の形」で切替');
-                setTimeout(function(){ skShowMsg(''); }, 4200);
+                skShowMsg('お題を見て（一筆書きはなぞって）描こう。種類は左下で切替、「↻次のお題」で別の形');
+                setTimeout(function(){ skShowMsg(''); }, 4600);
             } else {
                 if (skFormenSvg) skFormenSvg.style.display = 'none';
                 if (bar) bar.style.display = 'none';
@@ -948,8 +1023,70 @@
             }
         }
         window.skToggleFormen = function(){ skSetFormen(!skFormenOn); };
-        window.skFormenNext = function(){ skFormenIdx = (skFormenIdx + 1) % FM_PATTERNS.length; skClearSilent(); fmRender(); };
-        window.skSetFormenOpacity = function(v){ skFormenOpacity = Math.max(0.1, Math.min(1, (parseInt(v, 10) || 60) / 100)); fmRender(); };
+        window.skSetDeck = function(i){ skDeckIdx = Math.max(0, Math.min(FM_DECKS.length - 1, parseInt(i, 10) || 0)); skItemIdx = 0; skClearSilent(); fmRender(); };
+        window.skFormenNext = function(){ const deck = FM_DECKS[skDeckIdx] || FM_DECKS[0]; skItemIdx = (skItemIdx + 1) % deck.items.length; skClearSilent(); fmRender(); };
+        window.skSetFormenOpacity = function(v){ skFormenOpacity = Math.max(0.1, Math.min(1, (parseInt(v, 10) || 70) / 100)); if (skFormenSvg) skFormenSvg.style.opacity = String(skFormenOpacity); };
+
+        /* ════════════════════════════════════════════════════════
+           5d) すぐ隠す / 時間制限タイマー / 線を薄くする
+        ════════════════════════════════════════════════════════ */
+        function skFmtSec(s){ return s >= 60 ? (Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')) : (s + ''); }
+        // すぐ隠す：カウントダウン無しで参考画像を即オフ（記憶で描く）。もう一度押すと表示。
+        window.skToggleHide = function(){
+            if (skFormenOn) { skFlash('お題モード中は使えません', 1800); return; }
+            if (!skHasRefImage()) { skFlash('隠す画像がありません', 1800); return; }
+            if (skState === 'hidden' || skState === 'reveal') { skSetState('free'); return; }
+            skCancelMemory();
+            skSetState('hidden'); // 「👁見る」でチラ見、「✅答え合わせ」で確認できる
+            skShowMsg('画像を隠しました。記憶で描こう（👁見る / ✅答え合わせ）');
+            setTimeout(function(){ skShowMsg(''); }, 3200);
+        };
+        // 時間制限タイマー：指定秒ごとに自動で次の絵へ（描きながらのクロッキー）
+        function skClearSessionTimer(){ if (skSessionTimer) { clearInterval(skSessionTimer); skSessionTimer = null; } }
+        function skCurSec(){ return parseInt(document.getElementById('sketch-memsec').value, 10) || 30; }
+        function skRunTimer(){
+            let sec = skCurSec();
+            skClearSessionTimer();
+            skCountdown.style.display = 'block'; skCountdown.textContent = skFmtSec(sec);
+            skSessionTimer = setInterval(function(){
+                sec--;
+                if (sec <= 0) {
+                    skNextImage();              // 次の絵へ（キャンバスも自動クリア）
+                    skShowMsg('⏱ 次のポーズ！'); setTimeout(function(){ skShowMsg(''); }, 1200);
+                    sec = skCurSec(); skCountdown.style.display = 'block'; skCountdown.textContent = skFmtSec(sec);
+                } else { skCountdown.textContent = skFmtSec(sec); }
+            }, 1000);
+        }
+        function skStopTimer(){
+            skTimerOn = false; skClearSessionTimer();
+            skCountdown.style.display = 'none';
+            const b = document.getElementById('sketch-timer-btn'); if (b) b.classList.remove('accent');
+        }
+        window.skToggleTimer = function(){
+            if (skTimerOn) { skStopTimer(); skShowMsg('タイマー停止'); setTimeout(function(){ skShowMsg(''); }, 1500); return; }
+            if (images.length === 0) { skFlash('先に画像を読み込んでください', 2600); return; }
+            if (skFormenOn) skSetFormen(false);
+            skCancelMemory();
+            skTimerOn = true;
+            const b = document.getElementById('sketch-timer-btn'); if (b) b.classList.add('accent');
+            skSetState('free');
+            skShowMsg('⏱ タイマー開始：' + skFmtSec(skCurSec()) + 'ごとに次の絵へ'); setTimeout(function(){ skShowMsg(''); }, 2600);
+            skRunTimer();
+        };
+        // 描いた線を一括で薄くする（下描きを「ノックバック」して上から清書するのに便利）
+        window.skFade = function(){
+            if (skFormenOn) { skFlash('お題モード中は使えません', 1800); return; }
+            const snap = skSnap(); if (!snap) { skFlash('まだ何も描かれていません', 1600); return; }
+            skPushUndo(); skRedoStack = [];
+            const im = new Image();
+            im.onload = function(){
+                skCtx.clearRect(0, 0, skCW, skCH);
+                skCtx.globalAlpha = 0.5;            // 1回押すごとに半分の濃さに
+                skCtx.drawImage(im, 0, 0, skCW, skCH);
+                skCtx.globalAlpha = 1;
+            };
+            im.src = snap;
+        };
 
         /* ════════════════════════════════════════════════════════
            5c) 参考画像を取り込む（Pinterest / pixiv 等）
