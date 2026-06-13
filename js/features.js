@@ -367,30 +367,45 @@
             if (!url || !/^https?:\/\//.test(url)) return false;
             return addUrlToPool(url, true);
         };
-        // 素材庫の検索行に「Pinterest」「URL追加」ボタンを追加
+        // 素材庫の検索行に「Pinterest」「pixiv」「URL追加」ボタンを追加
         (function(){
             const row = document.getElementById('online-searchrow');
             if (!row) return;
+            // 別ウィンドウで開く共通処理（ログイン状態はブラウザがそのまま保持する）
+            function openSite(url, name){
+                window.open(url, name, 'width=980,height=900');
+                showToast('画像を右クリック →「画像をコピー」→ この画面で Ctrl+V で取り込めます（一番確実）', 5200);
+            }
             const pin = document.createElement('button');
             pin.className = 'panel-btn';
             pin.textContent = '📌 Pinterest';
-            pin.title = 'Pinterestを別ウィンドウで開く（画像をこの画面へドラッグ＆ドロップで追加できます）';
+            pin.title = 'Pinterestを別ウィンドウで開く（ログイン状態はブラウザが保持。画像をコピー→Ctrl+V／ドラッグ＆ドロップで取り込み）';
             pin.addEventListener('click', function(){
                 let q = (document.getElementById('online-query').value || '').trim();
-                if (!q) { q = prompt('Pinterestで検索するキーワード（例: pose reference）', 'pose reference') || ''; q = q.trim(); }
-                if (!q) return;
-                window.open('https://www.pinterest.com/search/pins/?q=' + encodeURIComponent(q), 'croquis_pinterest', 'width=920,height=860');
-                showToast('PCではPinterestの画像をこの画面へドラッグ＆ドロップで追加できます。スマホは画像URLをコピーして「URL追加」へ', 5200);
+                const url = q ? 'https://www.pinterest.com/search/pins/?q=' + encodeURIComponent(q) : 'https://www.pinterest.com/';
+                openSite(url, 'croquis_pinterest');
+            });
+            const pix = document.createElement('button');
+            pix.className = 'panel-btn';
+            pix.textContent = '🅿 pixiv';
+            pix.title = 'pixivを別ウィンドウで開く（ログイン状態はブラウザが保持。pixivは直リンク不可なので、画像をコピー→Ctrl+Vで取り込み）';
+            pix.addEventListener('click', function(){
+                let q = (document.getElementById('online-query').value || '').trim();
+                const url = q ? 'https://www.pixiv.net/tags/' + encodeURIComponent(q) + '/artworks' : 'https://www.pixiv.net/';
+                openSite(url, 'croquis_pixiv');
             });
             const urlBtn = document.createElement('button');
             urlBtn.className = 'panel-btn ghost';
             urlBtn.textContent = '🔗 URL追加';
-            urlBtn.title = '画像URLを貼り付けてプールに追加';
+            urlBtn.title = '画像URLを貼り付けてプールに追加（改行で区切れば複数まとめて追加できます）';
             urlBtn.addEventListener('click', function(){
-                const u = prompt('画像のURLを貼り付けてください（.jpg / .png などへの直接リンク）');
-                if (u) addUrlToPool(u);
+                const u = prompt('画像のURLを貼り付けてください（.jpg / .png などへの直接リンク）。\n複数行に分けて貼ると、まとめて追加できます。');
+                if (!u) return;
+                const lines = u.split(/[\r\n]+/).map(function(s){ return s.trim(); }).filter(function(s){ return /^https?:\/\//.test(s); });
+                lines.forEach(function(line){ addUrlToPool(line); });
             });
             row.appendChild(pin);
+            row.appendChild(pix);
             row.appendChild(urlBtn);
         })();
 

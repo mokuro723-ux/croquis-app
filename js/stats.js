@@ -448,6 +448,30 @@
             const b = document.getElementById('sketch-layout-btn');
             if (b) b.textContent = skSide ? '⬒ 重ねる' : '⬓ 並べる';
             skResize(!preserve);
+            skUpdateFrameGuide();
+        }
+        // 画像比率 a を box(bw×bh) に contain で収めたときの矩形（object-fit:contain と同じ）
+        function fitRect(a, bw, bh){
+            let w = bw, h = bw / a;
+            if (h > bh) { h = bh; w = bh * a; }
+            return { x: (bw - w) / 2, y: (bh - h) / 2, w: w, h: h };
+        }
+        function skHasRefImage(){
+            return !!(skImg && skImg.naturalWidth > 0 && skImg.naturalHeight > 0 && skImg.getAttribute('src'));
+        }
+        // 「並べる」のとき、描く側（右半分）に画像と同じ縦横比の枠を表示（ズレ確認用）
+        function skUpdateFrameGuide(){
+            const g = document.getElementById('sketch-frame-guide');
+            if (!g) return;
+            if (!skSide || skFormenOn || !skHasRefImage()) { g.style.display = 'none'; return; }
+            const r = skStage.getBoundingClientRect();
+            const W = r.width, H = r.height;
+            const f = fitRect(skImg.naturalWidth / skImg.naturalHeight, W / 2, H);
+            g.style.left = (W / 2 + f.x) + 'px';
+            g.style.top = f.y + 'px';
+            g.style.width = f.w + 'px';
+            g.style.height = f.h + 'px';
+            g.style.display = 'block';
         }
         window.skToggleTools = function(){
             skOverlay.classList.toggle('tools-hidden');
@@ -466,6 +490,7 @@
             skImg.style.transform = t;
         }
         ui.img.addEventListener('load', function(){ if (skOpen) skSyncImage(); });
+        skImg.addEventListener('load', function(){ if (skOpen) skUpdateFrameGuide(); }); // 画像が決まったら枠を更新
 
         function skResize(clear){
             const r = skStage.getBoundingClientRect();
@@ -492,14 +517,22 @@
             skLiveCtx.setTransform(dpr, 0, 0, dpr, 0, 0); skLiveCtx.lineCap = 'round'; skLiveCtx.lineJoin = 'round';
             if (clear) { skUndoStack = []; skRedoStack = []; }
             else if (saved) {
-                // 拡大縮小せず、画面上の同じ位置に線を戻す（以前は新サイズに引き伸ばしていたため横に広がっていた）
-                const dx = prevLeft - newLeft;
                 const im = new Image();
-                im.onload = function(){ skCtx.drawImage(im, dx, 0, prevCW, prevCH); };
+                if (!skFormenOn && skHasRefImage()) {
+                    // 参考画像がある場合：描いた線を画像の表示枠に合わせて重ねる（並べる⇔重ねるでズレ比較ができる）
+                    const a = skImg.naturalWidth / skImg.naturalHeight;
+                    const oldF = fitRect(a, prevCW, prevCH);
+                    const newF = fitRect(a, newCW, newCH);
+                    im.onload = function(){ skCtx.drawImage(im, oldF.x * dpr, oldF.y * dpr, oldF.w * dpr, oldF.h * dpr, newF.x, newF.y, newF.w, newF.h); };
+                } else {
+                    // 画像が無い場合（ウォームアップ/自由描き）：拡大縮小せず画面上の同じ位置に戻す
+                    const dx = prevLeft - newLeft;
+                    im.onload = function(){ skCtx.drawImage(im, dx, 0, prevCW, prevCH); };
+                }
                 im.src = saved;
             }
         }
-        window.addEventListener('resize', function(){ if (skOpen) { skResize(false); if (skFormenOn) fmRender(); } });
+        window.addEventListener('resize', function(){ if (skOpen) { skResize(false); skUpdateFrameGuide(); if (skFormenOn) fmRender(); } });
 
         function skSetState(st){
             skState = st;
@@ -889,6 +922,7 @@
                 if (skFormenSvg) skFormenSvg.style.display = 'block';
                 if (bar) bar.style.display = 'flex';
                 if (btn) btn.classList.add('accent');
+                skUpdateFrameGuide(); // ウォームアップ中は枠を隠す
                 fmRender();
                 skShowMsg('緑の●から一筆書きでなぞってウォームアップ！「↻ 別の形」で切替');
                 setTimeout(function(){ skShowMsg(''); }, 4200);
@@ -910,6 +944,7 @@
                     skFormenBackup = null;
                 }
                 skSetState('free'); // 参考画像の表示状態を元に戻す
+                skUpdateFrameGuide(); // 並べる中なら枠を再表示
             }
         }
         window.skToggleFormen = function(){ skSetFormen(!skFormenOn); };
@@ -1019,7 +1054,12 @@
                 }
             }
             const txt = ((dt.getData && dt.getData('text/plain')) || '').trim();
-            if (/^https?:\/\//.test(txt)) { skUseImageUrl(txt); e.preventDefault(); }
+            const urls = txt.split(/[\r\n]+/).map(function(s){ return s.trim(); }).filter(function(s){ return /^https?:\/\//.test(s); });
+            if (urls.length === 1) { skUseImageUrl(urls[0]); e.preventDefault(); }
+            else if (urls.length > 1) { // 複数URLをまとめて貼り付け → 全部プールへ
+                let n = 0; urls.forEach(function(u){ if (skClassifyUrl(u) !== 'page') { skTestAndAddUrl(u); n++; } });
+                skNotify(n + '件の画像を読み込み中…（表示できたものだけ追加されます）', false); e.preventDefault();
+            }
         });
         // 描画モード中のドラッグ＆ドロップ（PCでPinterestのピンを直接この画面へ）
         skStage.addEventListener('dragover', function(e){ if (skOpen) { e.preventDefault(); try { e.dataTransfer.dropEffect = 'copy'; } catch(_){ } } });
@@ -1027,7 +1067,11 @@
             if (!skOpen) return;
             e.preventDefault(); e.stopPropagation();
             const dt = e.dataTransfer; if (!dt) return;
-            if (dt.files && dt.files.length){ const f = dt.files[0]; if (f && (f.type || '').indexOf('image') === 0){ skUseImageFile(f); return; } }
+            if (dt.files && dt.files.length){
+                const imgs = Array.prototype.slice.call(dt.files).filter(function(f){ return f && (f.type || '').indexOf('image') === 0; });
+                if (imgs.length === 1) { skUseImageFile(imgs[0]); return; }
+                if (imgs.length > 1) { imgs.forEach(function(f){ skAddToPool(f); }); skNotify(imgs.length + '枚を練習リストに追加しました', false); return; }
+            }
             let url = '';
             try {
                 const html = dt.getData('text/html');

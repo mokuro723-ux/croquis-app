@@ -487,6 +487,12 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 #sketch-canvas, #sketch-live { position: absolute; left: 0; top: 0; touch-action: none; }
 #sketch-canvas { cursor: crosshair; z-index: 2; }
 #sketch-live { pointer-events: none; z-index: 3; }
+/* ── 「並べる」で描く側に出す、画像と同じ比率の枠（ズレ確認用） ── */
+#sketch-frame-guide {
+    position: absolute; display: none; z-index: 1; box-sizing: border-box;
+    border: 2px dashed rgba(0,212,255,0.7); border-radius: 4px;
+    pointer-events: none; box-shadow: 0 0 0 1px rgba(0,0,0,0.5) inset;
+}
 /* ── ウォームアップ（フォルメン線描）のお題ガイド ── */
 #sketch-formen {
     position: absolute; left: 0; top: 0; width: 100%; height: 100%;
