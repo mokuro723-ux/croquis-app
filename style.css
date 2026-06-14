@@ -475,20 +475,35 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 #online-sel-count { font-size: 0.9rem; color: #fff; margin-right: auto; }
 
 /* ── スケッチ v4（左右分割 / 半透明ペン / ジェスチャ対応） ── */
-#sketch-overlay .panel-header { padding: 8px 10px; gap: 7px; }
-#sketch-overlay .panel-header .panel-btn { padding: 9px 13px; font-size: 0.84rem; }
+#sketch-overlay .panel-header { padding: 7px 10px; gap: 6px; flex-wrap: wrap; }
 /* ヘッダーのグループ区切り（視認性向上のための縦線） */
 .sk-hsep { width: 1px; align-self: stretch; background: #3d3d3d; margin: 2px 1px; flex: 0 0 auto; }
-@media (max-width: 700px) { #sketch-overlay .sk-hsep { display: none; } }
-/* 描画モードのヘッダーは1行で横スクロール（ボタンが増えても描画領域を圧迫しない） */
-#sketch-overlay .panel-header { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-#sketch-overlay .panel-header::-webkit-scrollbar { display: none; }
-#sketch-overlay .panel-header .spacer { min-width: 8px; }
-/* 次へ・保存・閉じるは右端に貼り付けて、ヘッダーを横スクロールしても常に押せる */
-.sk-header-actions {
-    display: flex; gap: 10px; align-items: center; flex: 0 0 auto;
-    position: sticky; right: 0; background: #0e0e0e; padding-left: 10px;
-    box-shadow: -10px 0 10px -5px #0e0e0e;
+/* アイコン＋文字ラベルのツールボタン（パッと見て分かるように） */
+.sk-tbtn {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--btn-bg); color: #f2f2f2; border: none; border-radius: 9px;
+    padding: 7px 11px; font-size: 0.8rem; cursor: pointer; white-space: nowrap; flex: 0 0 auto;
+    transition: background-color .15s ease, transform .06s ease;
+}
+.sk-tbtn:active { transform: scale(0.95); }
+.sk-tbtn .svg-icon { width: 18px; height: 18px; }
+.sk-tbtn.accent { background: var(--accent); color: #00222b; }
+.sk-tbtn.ghost { background: transparent; border: 1px solid #4d4d4d; color: #ddd; }
+.sk-tbtn .sk-caret { width: 14px; height: 14px; fill: currentColor; opacity: .7; margin-left: -2px; }
+#sketch-overlay .panel-header .spacer { flex: 1 1 auto; min-width: 6px; }
+/* マウスのあるPCだけホバーを付ける（タッチ端末では“押しっぱなし風”の見た目を避ける） */
+@media (hover: hover) and (pointer: fine) {
+    .sk-tbtn:hover { background: #3a3a3a; }
+    .sk-tbtn.ghost:hover { background: rgba(255,255,255,0.07); }
+    .sk-tbtn.accent:hover { filter: brightness(1.08); }
+    .sk-color:hover, .sk-paper:hover { transform: scale(1.1); }
+}
+/* 指で押す端末（スマホ/タブレット）はタップしやすいよう大きめに */
+@media (pointer: coarse) {
+    .sk-tbtn, .panel-btn.sk-ic { min-height: 40px; }
+    .sk-tbtn { padding: 8px 12px; }
+    .sk-color { width: 34px; height: 34px; }
+    .sk-paper { width: 32px; height: 32px; }
 }
 #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; background: #000; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 /* 描画モード全体でタップ時の青いハイライトを消す（ボタンも含め誤選択を防ぐ） */
@@ -544,21 +559,26 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 }
 .sk-fmbtn:active { transform: scale(0.95); }
 .sk-fmbtn.ghost { background: transparent; border-color: #5a5a5a; color: #ddd; }
-/* ── 描画設定ポップ（紙の色・手ブレ補正）。普段は隠す ── */
-#sketch-settings-pop {
-    position: absolute; left: 10px; bottom: 10px; z-index: 7; display: none;
-    flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 12px;
-    background: rgba(20,20,20,0.95); border: 1px solid #4a4a4a; box-shadow: 0 4px 18px rgba(0,0,0,0.6);
+/* ── ドロップダウン・メニュー（表示／練習／設定）。普段は隠す ── */
+.sk-pop {
+    position: absolute; z-index: 9; display: none;
+    flex-direction: column; gap: 8px; padding: 11px 13px; border-radius: 12px;
+    background: rgba(22,22,22,0.97); border: 1px solid #4a4a4a; box-shadow: 0 6px 22px rgba(0,0,0,0.6);
+    max-width: min(94vw, 380px);
 }
-#sketch-settings-pop.open { display: flex; }
-#sketch-settings-pop .sk-set-row { display: flex; align-items: center; gap: 8px; }
-#sketch-settings-pop .sk-set-label { color: #cfcfcf; font-size: 0.8rem; min-width: 4.5em; }
-#sketch-settings-pop #sketch-stab-strength { width: 120px; accent-color: var(--accent); }
-#sketch-settings-pop .panel-btn { padding: 7px 12px; font-size: 0.8rem; }
+.sk-pop.open { display: flex; }
+.sk-pop .sk-pop-title { font-size: 0.7rem; color: #9a9a9a; letter-spacing: .03em; }
+.sk-pop .sk-pop-row, .sk-pop .sk-set-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.sk-pop .sk-set-label { color: #cfcfcf; font-size: 0.8rem; }
+.sk-pop #sketch-stab-strength { width: 120px; accent-color: var(--accent); }
+.sk-pop .panel-btn { padding: 7px 12px; font-size: 0.8rem; }
+.sk-pop .panel-btn.accent, .sk-pop .sk-tbtn.accent { background: var(--accent); color: #00222b; }
+.sk-pop .sk-set-sep { height: 1px; background: #4a4a4a; margin: 2px 0; width: 100%; }
+/* 表示・練習は上から、設定は下から開く（それぞれのボタンの近く） */
+#sketch-display-pop, #sketch-practice-pop { left: 8px; top: 8px; }
+#sketch-settings-pop { right: 10px; bottom: 10px; }
 .sk-paper { width: 28px; height: 28px; border-radius: 6px; border: 2px solid #5a5a5a; cursor: pointer; padding: 0; flex: 0 0 auto; }
 .sk-paper.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
-#sketch-settings-pop .sk-set-sep { height: 1px; background: #4a4a4a; margin: 2px 0; }
-#sketch-settings-pop .panel-btn.accent { background: var(--accent); color: #fff; }
 #sketch-countdown {
     position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
     font-size: 2.4rem; font-weight: bold; color: var(--hm-color, #ffd75e);
@@ -571,11 +591,10 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     overflow: hidden; text-overflow: ellipsis;
 }
 #sketch-tools {
-    display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; overflow-x: auto;
-    padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid var(--border-color); background: var(--panel-bg); scrollbar-width: none;
+    display: flex; gap: 6px; align-items: center; flex-wrap: wrap; row-gap: 7px;
+    padding: 7px 10px calc(7px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border-color); background: var(--panel-bg);
 }
-#sketch-tools::-webkit-scrollbar { display: none; }
 #sketch-overlay.tools-hidden #sketch-tools { display: none; }
 #sk-tools-fab {
     position: absolute; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
@@ -589,14 +608,14 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 .sk-color.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
 .sk-color.half { background: linear-gradient(135deg, rgba(61,139,255,0.85) 50%, rgba(61,139,255,0.3) 50%) !important; }
 #sketch-size { width: 92px; accent-color: var(--accent); flex: 0 0 auto; }
-#sketch-tools .panel-btn { padding: 8px 12px; font-size: 0.8rem; flex: 0 0 auto; }
 #sketch-imgopacity-wrap { display: none; align-items: center; gap: 6px; font-size: 0.78rem; color: #ddd; }
 #sketch-imgopacity { width: 90px; accent-color: var(--accent); }
 #sk-gesture-hint { font-size: 0.7rem; color: #adadad; white-space: nowrap; flex: 0 0 auto; margin-left: 4px; }
 @media (max-width: 700px) {
-    #sketch-overlay .panel-header { padding: 6px 8px; gap: 6px; }
-    #sketch-overlay .panel-header .panel-btn { padding: 8px 11px; font-size: 0.78rem; }
-    #sketch-tools { padding: 5px 8px calc(5px + env(safe-area-inset-bottom, 0px)); }
+    #sketch-overlay .panel-header { padding: 6px 8px; gap: 5px; }
+    #sketch-overlay .sk-tbtn { padding: 7px 9px; font-size: 0.76rem; gap: 4px; }
+    #sketch-overlay .sk-tbtn .svg-icon { width: 16px; height: 16px; }
+    #sketch-tools { padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); }
     #sk-gesture-hint { display: none; }
 }
 

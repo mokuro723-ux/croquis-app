@@ -72,6 +72,8 @@
         bind('je-olapply-false', 'click', function(event){ olApply(false); });
         bind('je-olapply-true', 'click', function(event){ olApply(true); });
         bind('sketch-layout-btn', 'click', function(event){ skToggleLayout(); });
+        bind('sketch-display-btn', 'click', function(event){ skToggleDisplay(); });
+        bind('sketch-practice-btn', 'click', function(event){ skTogglePractice(); });
         bind('sketch-grid-btn', 'click', function(event){ skToggleGrid(); });
         bind('sketch-fliph-btn', 'click', function(event){ skFlipHoriz(); });
         bind('sketch-flipv-btn', 'click', function(event){ skFlipVert(); });

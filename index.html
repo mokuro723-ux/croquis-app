@@ -330,45 +330,22 @@
     <!-- ── スケッチ v4 ── -->
     <div id="sketch-overlay" class="panel-overlay">
         <div class="panel-header">
-            <button class="panel-btn sk-ic" id="sketch-layout-btn" title="画像と描画スペースを左右に並べる（模写モード）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 4h8v16H3zM13 4h8v16h-8z"/></svg></button>
-            <button class="panel-btn sk-ic" id="sketch-grid-btn" title="比率合わせ用グリッド（押すたび 3×3 → 4×4 → 消す。模写の当たり取りに）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg></button>
+            <button id="je-togglesketch" class="sk-tbtn ghost" title="描画モードを閉じる"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg><span>閉じる</span></button>
             <span class="sk-hsep"></span>
-            <button class="panel-btn sk-ic" id="sketch-fliph-btn" title="参考画像を左右反転（鏡像でバランス確認）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10,6 L4,12 L10,18 Z"/><rect x="11" y="4" width="2" height="16"/><path d="M14,6 L20,12 L14,18 Z"/></svg></button>
-            <button class="panel-btn sk-ic" id="sketch-flipv-btn" title="参考画像を上下反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6,10 L12,4 L18,10 Z"/><rect x="4" y="11" width="16" height="2"/><path d="M6,14 L12,20 L18,14 Z"/></svg></button>
-            <button class="panel-btn sk-ic" id="sketch-mono-btn" title="参考画像をモノクロ表示"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm1-17.93c3.95.49 7 3.85 7 7.93s-3.05 7.44-7 7.93V4.07z"/></svg></button>
-            <button class="panel-btn sk-ic" id="sketch-bw-btn" title="参考画像を二階調（白黒コントラスト）で表示"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="2" y="2" width="5" height="5"/><rect x="12" y="2" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/><rect x="17" y="7" width="5" height="5"/><rect x="2" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/><rect x="7" y="17" width="5" height="5"/><rect x="17" y="17" width="5" height="5"/></svg></button>
-            <span class="sk-hsep"></span>
-            <button class="panel-btn sk-ic" id="sketch-ref-btn" title="参考画像を読み込む（URL / コピー＆ペースト / ドラッグ＆ドロップ）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg></button>
-            <button class="panel-btn sk-ic" id="sketch-formen-btn" title="お題を表示して練習（一筆書き / 基本形 / フラワーサック）"><svg viewBox="0 0 24 24" class="svg-icon"><circle cx="7" cy="7" r="4"/><path d="M16 3l5 8H11z"/><rect x="13" y="13.5" width="8" height="8" rx="1.5"/><rect x="3" y="14.5" width="7" height="7" rx="1.5"/></svg></button>
-            <span class="sk-hsep"></span>
-            <select id="sketch-memsec" class="panel-btn" title="記憶モード・タイマーの秒数">
-                <option value="3">3秒</option>
-                <option value="5">5秒</option>
-                <option value="10">10秒</option>
-                <option value="20">20秒</option>
-                <option value="30" selected>30秒</option>
-                <option value="45">45秒</option>
-                <option value="60">1分</option>
-                <option value="90">90秒</option>
-                <option value="120">2分</option>
-                <option value="300">5分</option>
-            </select>
-            <button class="panel-btn sk-ic" id="sketch-timer-btn" title="指定秒ごとに自動で次の絵へ（描きながらクロッキー）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0 0 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg></button>
-            <button class="panel-btn sk-ic" id="sketch-mem-btn" title="記憶モード：覚える→隠す→描く"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg></button>
-            <button class="panel-btn sk-ic" id="sketch-hide-btn" title="参考画像をすぐ隠して記憶で描く"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg></button>
-            <button class="panel-btn sk-ic" id="sketch-peek-btn" title="一瞬だけ見る" style="display:none;"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
-            <button class="panel-btn sk-ic" id="sketch-reveal-btn" title="答え合わせ" style="display:none;"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></button>
+            <button id="sketch-layout-btn" class="sk-tbtn" title="画像と描画スペースを左右に並べる（模写モード）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 4h8v16H3zM13 4h8v16h-8z"/></svg><span>並べる</span></button>
+            <button id="sketch-display-btn" class="sk-tbtn sk-menu" title="表示の調整（グリッド・反転・モノクロ・二階調）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg><span>表示</span><svg viewBox="0 0 24 24" class="sk-caret"><path d="M7 10l5 5 5-5z"/></svg></button>
+            <button id="sketch-practice-btn" class="sk-tbtn sk-menu" title="練習モード（お題・記憶・すぐ隠す・タイマー）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg><span>練習</span><svg viewBox="0 0 24 24" class="sk-caret"><path d="M7 10l5 5 5-5z"/></svg></button>
+            <button id="sketch-ref-btn" class="sk-tbtn" title="参考画像を読み込む（URL / コピー＆ペースト / ドラッグ＆ドロップ）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg><span>参考</span></button>
+            <button id="sketch-peek-btn" class="sk-tbtn" title="一瞬だけ見る" style="display:none;"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg><span>見る</span></button>
+            <button id="sketch-reveal-btn" class="sk-tbtn" title="答え合わせ" style="display:none;"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg><span>答え</span></button>
             <div id="sketch-imgopacity-wrap">
                 <span>画像</span>
                 <input type="range" id="sketch-imgopacity" min="10" max="100" value="50">
             </div>
-            <span class="spacer"></span>
-            <div class="sk-header-actions">
-                <button id="je-skprevimage" class="panel-btn sk-ic" title="前の絵へ戻る"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
-                <button id="je-sknextimage" class="panel-btn sk-ic" title="次の絵へ"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
-                <button id="je-sksave" class="panel-btn sk-ic" title="描いた絵を保存"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></button>
-                <button id="je-togglesketch" class="panel-btn sk-ic ghost" title="描画モードを閉じる"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
-            </div>
+            <span class="sk-hsep"></span>
+            <button id="je-skprevimage" class="sk-tbtn" title="前の絵へ戻る"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg><span>前</span></button>
+            <button id="je-sknextimage" class="sk-tbtn" title="次の絵へ"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg><span>次</span></button>
+            <button id="je-sksave" class="sk-tbtn" title="描いた絵を保存"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg><span>保存</span></button>
         </div>
         <div id="sketch-stage">
             <img id="sketch-img" draggable="false" alt="">
@@ -391,8 +368,48 @@
                 <input type="range" id="sketch-formen-op" min="20" max="100" value="70">
                 <button id="je-skformenclose" class="sk-fmbtn ghost">終了</button>
             </div>
+            <!-- 表示メニュー（グリッド・反転・モノクロ・二階調）。普段は隠す -->
+            <div id="sketch-display-pop" class="sk-pop" aria-hidden="true">
+                <div class="sk-pop-title">参考画像の見え方</div>
+                <div class="sk-pop-row">
+                    <button id="sketch-grid-btn" class="sk-tbtn" title="比率合わせ用グリッド（押すたび 3×3 → 4×4 → 消す）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg><span>グリッド</span></button>
+                </div>
+                <div class="sk-pop-row">
+                    <button id="sketch-fliph-btn" class="sk-tbtn" title="左右反転（鏡像でバランス確認）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10,6 L4,12 L10,18 Z"/><rect x="11" y="4" width="2" height="16"/><path d="M14,6 L20,12 L14,18 Z"/></svg><span>左右反転</span></button>
+                    <button id="sketch-flipv-btn" class="sk-tbtn" title="上下反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6,10 L12,4 L18,10 Z"/><rect x="4" y="11" width="16" height="2"/><path d="M6,14 L12,20 L18,14 Z"/></svg><span>上下反転</span></button>
+                </div>
+                <div class="sk-pop-row">
+                    <button id="sketch-mono-btn" class="sk-tbtn" title="モノクロ表示"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm1-17.93c3.95.49 7 3.85 7 7.93s-3.05 7.44-7 7.93V4.07z"/></svg><span>モノクロ</span></button>
+                    <button id="sketch-bw-btn" class="sk-tbtn" title="二階調（白黒コントラスト）"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="2" y="2" width="5" height="5"/><rect x="12" y="2" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/><rect x="17" y="7" width="5" height="5"/><rect x="2" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/><rect x="7" y="17" width="5" height="5"/><rect x="17" y="17" width="5" height="5"/></svg><span>二階調</span></button>
+                </div>
+            </div>
+            <!-- 練習メニュー（お題・記憶・すぐ隠す・タイマー）。普段は隠す -->
+            <div id="sketch-practice-pop" class="sk-pop" aria-hidden="true">
+                <div class="sk-pop-title">練習のしかた</div>
+                <div class="sk-pop-row">
+                    <button id="sketch-formen-btn" class="sk-tbtn" title="お題を表示して練習（一筆書き / 基本形 / フラワーサック）"><svg viewBox="0 0 24 24" class="svg-icon"><circle cx="7" cy="7" r="4"/><path d="M16 3l5 8H11z"/><rect x="13" y="13.5" width="8" height="8" rx="1.5"/><rect x="3" y="14.5" width="7" height="7" rx="1.5"/></svg><span>お題</span></button>
+                    <button id="sketch-mem-btn" class="sk-tbtn" title="記憶モード：覚える→隠す→描く"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg><span>記憶</span></button>
+                    <button id="sketch-hide-btn" class="sk-tbtn" title="参考画像をすぐ隠して記憶で描く"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg><span>すぐ隠す</span></button>
+                </div>
+                <div class="sk-pop-row">
+                    <span class="sk-set-label">秒数</span>
+                    <select id="sketch-memsec" class="panel-btn" title="記憶モード・タイマーの秒数">
+                        <option value="3">3秒</option>
+                        <option value="5">5秒</option>
+                        <option value="10">10秒</option>
+                        <option value="20">20秒</option>
+                        <option value="30" selected>30秒</option>
+                        <option value="45">45秒</option>
+                        <option value="60">1分</option>
+                        <option value="90">90秒</option>
+                        <option value="120">2分</option>
+                        <option value="300">5分</option>
+                    </select>
+                    <button id="sketch-timer-btn" class="sk-tbtn" title="指定秒ごとに自動で次の絵へ（描きながらクロッキー）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0 0 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg><span>タイマー</span></button>
+                </div>
+            </div>
             <!-- 描画設定（普段は隠す。描き始めると自動で閉じる＝描画に集中できる） -->
-            <div id="sketch-settings-pop" aria-hidden="true">
+            <div id="sketch-settings-pop" class="sk-pop" aria-hidden="true">
                 <div class="sk-set-row">
                     <span class="sk-set-label">紙</span>
                     <button class="sk-paper" data-bg="#000000" style="background:#000000" title="黒"></button>
@@ -427,15 +444,16 @@
             <button class="sk-color" data-c="#3d8bff" data-a="1" style="background:#3d8bff" title="青"></button>
             <button class="sk-color half" data-c="#3d8bff" data-a="0.3" title="青鉛筆（半透明）— 当たり取りに"></button>
             <input type="range" id="sketch-size" min="2" max="30" value="5" title="ペンの太さ">
-            <button class="panel-btn sk-ic" id="sketch-eraser-btn" title="消しゴム"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17c-.78-.79-.78-2.05 0-2.84l10.6-10.6c.79-.78 2.05-.78 2.83 0zM4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l3.53-3.53-4.95-4.95-4.95 4.95z"/></svg></button>
-            <button class="panel-btn sk-ic" id="sketch-lasso-btn" title="投げ縄塗り：囲んだ範囲をまとめて塗る"><svg viewBox="0 0 24 24" class="svg-icon"><ellipse cx="11" cy="9" rx="8" ry="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5"/><path d="M5.5 13.7C5 16.2 6 19 9 20.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9.4" cy="21.2" r="1.7"/></svg></button>
-            <button class="panel-btn sk-ic" id="sketch-lassolight-btn" title="投げ縄塗り（薄め）：囲んだ範囲を薄く塗る"><svg viewBox="0 0 24 24" class="svg-icon" style="opacity:.5"><ellipse cx="11" cy="9" rx="8" ry="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5"/><path d="M5.5 13.7C5 16.2 6 19 9 20.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9.4" cy="21.2" r="1.7"/></svg></button>
-            <button class="panel-btn sk-ic" id="sketch-settings-btn" title="描画の設定（紙の色・手ブレ補正・練習の挙動）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a6.97 6.97 0 0 0-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54a7.32 7.32 0 0 0-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54a7.32 7.32 0 0 0 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></button>
+            <button class="sk-tbtn" id="sketch-eraser-btn" title="消しゴム"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17c-.78-.79-.78-2.05 0-2.84l10.6-10.6c.79-.78 2.05-.78 2.83 0zM4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l3.53-3.53-4.95-4.95-4.95 4.95z"/></svg><span>消しゴム</span></button>
+            <button class="sk-tbtn" id="sketch-lasso-btn" title="投げ縄塗り：囲んだ範囲をまとめて塗る"><svg viewBox="0 0 24 24" class="svg-icon"><ellipse cx="11" cy="9" rx="8" ry="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5"/><path d="M5.5 13.7C5 16.2 6 19 9 20.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9.4" cy="21.2" r="1.7"/></svg><span>投げ縄</span></button>
+            <button class="sk-tbtn" id="sketch-lassolight-btn" title="投げ縄塗り（薄め）：囲んだ範囲を薄く塗る"><svg viewBox="0 0 24 24" class="svg-icon" style="opacity:.5"><ellipse cx="11" cy="9" rx="8" ry="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5"/><path d="M5.5 13.7C5 16.2 6 19 9 20.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9.4" cy="21.2" r="1.7"/></svg><span>薄塗り</span></button>
             <span class="sk-hsep"></span>
-            <button id="je-skundo" class="panel-btn sk-ic" title="元に戻す（2本指タップ / Ctrl+Z）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg></button>
-            <button id="je-skredo" class="panel-btn sk-ic" title="やり直し（Ctrl+Y）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg></button>
-            <button id="je-skfade" class="panel-btn sk-ic" title="描いた線を薄くする（下描きにして上から清書）"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="3" y="9" width="5" height="6"/><rect x="9.5" y="9" width="5" height="6" opacity=".6"/><rect x="16" y="9" width="5" height="6" opacity=".3"/></svg></button>
-            <button id="je-skclear" class="panel-btn sk-ic ghost" title="全部消す"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
+            <button id="je-skundo" class="sk-tbtn" title="元に戻す（2本指タップ / Ctrl+Z）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg><span>戻す</span></button>
+            <button id="je-skredo" class="sk-tbtn" title="やり直し（Ctrl+Y）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg><span>やり直し</span></button>
+            <button id="je-skfade" class="sk-tbtn" title="描いた線を薄くする（下描きにして上から清書）"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="3" y="9" width="5" height="6"/><rect x="9.5" y="9" width="5" height="6" opacity=".6"/><rect x="16" y="9" width="5" height="6" opacity=".3"/></svg><span>薄く</span></button>
+            <button id="je-skclear" class="sk-tbtn ghost" title="全部消す"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg><span>全消去</span></button>
+            <span class="sk-hsep"></span>
+            <button class="sk-tbtn" id="sketch-settings-btn" title="描画の設定（紙の色・手ブレ補正・練習の挙動）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a6.97 6.97 0 0 0-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54a7.32 7.32 0 0 0-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54a7.32 7.32 0 0 0 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg><span>設定</span></button>
             <span id="sk-gesture-hint">2本指タップ=戻る</span>
         </div>
     </div>

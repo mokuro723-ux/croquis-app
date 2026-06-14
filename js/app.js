@@ -96,6 +96,7 @@
         let historyPos   = -1;
         let historyUrls  = [];
         let lastShownIndex = -1;
+        let plannedNextIndex = -1; // シャッフル時の「次に出す画像」を1つ先に決めておく（プリロードと一致させて高速化）
 
         // ── タイマー状態 ─────────────────────────────────────────
         let timerSeconds    = 30;
@@ -911,15 +912,18 @@
             if (!images.length) return -1;
             if (settings.shuffle) {
                 if (images.length === 1) return 0;
-                let idx, guard = 0;
-                do { idx = Math.floor(Math.random() * images.length); guard++; }
-                while (idx === currentIndex && guard < TIMING.EYE_HIDE_PRELOAD_MAX);
-                return idx;
+                // 「次に出す画像」を1回だけ抽選して覚えておく。nextImage もこれを使うので、
+                // プリロード済み＆デコード済みの画像がそのまま表示され、待ち時間が無くなる。
+                if (plannedNextIndex < 0 || plannedNextIndex >= images.length || plannedNextIndex === currentIndex) {
+                    plannedNextIndex = pickShuffledIndex(currentIndex, lastShownIndex, 12);
+                }
+                return plannedNextIndex;
             }
             return (currentIndex + 1) % images.length;
         }
 
         function clearPreloadUrl() {
+            plannedNextIndex = -1; // プールやURLが変わったら抽選もやり直し
             if (preloadUrl && preloadUrl.startsWith('blob:')) URL.revokeObjectURL(preloadUrl);
             preloadUrl = null; preloadName = ''; preloadedImage = null;
             if (preloadUrl2 && preloadUrl2.startsWith('blob:')) URL.revokeObjectURL(preloadUrl2);
@@ -1193,6 +1197,8 @@
                     const newIdx = images.findIndex(function(f){ return f.name === currentItem.name; });
                     if (newIdx > -1) currentIndex = newIdx;
                 }
+                plannedNextIndex = -1;          // 並び順が変わったので次の抽選はやり直し
+                updatePreloadQueue();           // 新しい並びで次を先読み
             }
             saveUiSettings();
             applyFiltersDeferred(); 
@@ -1716,11 +1722,17 @@
             const prevIndex = currentIndex;
             
             if (!isSkipping) {
-                if (historyPos < historyList.length - 1) { historyPos++; currentIndex = historyList[historyPos]; } 
+                if (historyPos < historyList.length - 1) { historyPos++; currentIndex = historyList[historyPos]; plannedNextIndex = -1; }
                 else {
-                    currentIndex = settings.shuffle
-                        ? pickShuffledIndex(prevIndex, lastShownIndex, 12)
-                        : (currentIndex + 1) % images.length;
+                    if (settings.shuffle) {
+                        // プリロード時に決めた「次の画像」をそのまま使う（無ければ抽選）。これが効くと表示が一瞬。
+                        currentIndex = (plannedNextIndex >= 0 && plannedNextIndex < images.length && plannedNextIndex !== prevIndex)
+                            ? plannedNextIndex
+                            : pickShuffledIndex(prevIndex, lastShownIndex, 12);
+                    } else {
+                        currentIndex = (currentIndex + 1) % images.length;
+                    }
+                    plannedNextIndex = -1; // 消費したので次回また抽選
                     historyList.push(currentIndex);
                     if (historyList.length > 100) { historyList.shift(); historyPos = historyList.length - 1; }
                     else { historyPos++; }
@@ -1729,6 +1741,7 @@
                 currentIndex = settings.shuffle
                     ? pickShuffledIndex(prevIndex, -1, 8)
                     : (currentIndex + 1) % images.length;
+                plannedNextIndex = -1;
             }
             lastShownIndex = prevIndex;
             pendingTimerStart = false; // 前の pending をクリア
@@ -1757,6 +1770,7 @@
             if (historyPos > 0 && !hmActive) {
                 clearTimeout(timerTickId);    timerTickId    = null;
                 cancelAnimationFrame(animationFrameId); animationFrameId = null;
+                plannedNextIndex = -1;
                 historyPos--;
                 currentIndex = historyList[historyPos];
                 loadImage();
