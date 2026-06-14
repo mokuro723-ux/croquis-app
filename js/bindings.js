@@ -73,6 +73,10 @@
         bind('je-olapply-true', 'click', function(event){ olApply(true); });
         bind('sketch-layout-btn', 'click', function(event){ skToggleLayout(); });
         bind('sketch-grid-btn', 'click', function(event){ skToggleGrid(); });
+        bind('sketch-fliph-btn', 'click', function(event){ skFlipHoriz(); });
+        bind('sketch-flipv-btn', 'click', function(event){ skFlipVert(); });
+        bind('sketch-mono-btn', 'click', function(event){ skToggleMonoImg(); });
+        bind('sketch-bw-btn', 'click', function(event){ skToggleBwImg(); });
         bind('sketch-ref-btn', 'click', function(event){ skLoadRef(); });
         bind('sketch-formen-btn', 'click', function(event){ skToggleFormen(); });
         bind('sketch-deck', 'change', function(event){ skSetDeck(this.value); });
@@ -93,10 +97,14 @@
         bind('sketch-stab-btn', 'click', function(event){ skToggleStabilizer(); });
         bind('sketch-settings-btn', 'click', function(event){ skToggleSettings(); });
         bind('sketch-stab-strength', 'input', function(event){ skSetStabStrength(this.value); });
+        bind('sketch-memfade-btn', 'click', function(event){ skToggleMemFade(); });
+        bind('sketch-cmp-btn', 'click', function(event){ skToggleCompare(); });
         document.querySelectorAll('.sk-paper').forEach(function(b){
             b.addEventListener('click', function(){ skSetPaper(b.getAttribute('data-bg')); });
         });
         bind('sketch-eraser-btn', 'click', function(event){ skToggleEraser(); });
+        bind('sketch-lasso-btn', 'click', function(event){ skSetLasso(false); });
+        bind('sketch-lassolight-btn', 'click', function(event){ skSetLasso(true); });
         bind('je-skundo', 'click', function(event){ skUndo(); });
         bind('je-skredo', 'click', function(event){ skRedo(); });
         bind('je-skfade', 'click', function(event){ skFade(); });

@@ -330,11 +330,16 @@
     <!-- ── スケッチ v4 ── -->
     <div id="sketch-overlay" class="panel-overlay">
         <div class="panel-header">
-            <button class="panel-btn" id="sketch-layout-btn" title="画像と描画スペースを左右に並べる（模写モード）">⬓ 並べる</button>
-            <button class="panel-btn" id="sketch-grid-btn" title="比率合わせ用のグリッドを表示（押すたび 3×3 → 4×4 → 消す。模写の当たり取りに）">▦ グリッド</button>
+            <button class="panel-btn" id="sketch-layout-btn" title="画像と描画スペースを左右に並べる（模写モード）">並べる</button>
+            <button class="panel-btn" id="sketch-grid-btn" title="比率合わせ用グリッド（押すたび 3×3 → 4×4 → 消す。模写の当たり取りに）">グリッド</button>
             <span class="sk-hsep"></span>
-            <button class="panel-btn" id="sketch-ref-btn" title="参考画像を読み込む（URL / コピー＆ペースト / ドラッグ＆ドロップ）">🖼 参考</button>
-            <button class="panel-btn" id="sketch-formen-btn" title="お題を表示して練習（一筆書き / 基本形 / フラワーサック）">✏️ お題</button>
+            <button class="panel-btn" id="sketch-fliph-btn" title="参考画像を左右反転（鏡像でバランス確認）">左右反転</button>
+            <button class="panel-btn" id="sketch-flipv-btn" title="参考画像を上下反転">上下反転</button>
+            <button class="panel-btn" id="sketch-mono-btn" title="参考画像をモノクロ表示">モノクロ</button>
+            <button class="panel-btn" id="sketch-bw-btn" title="参考画像を二階調（白黒コントラスト）で表示">二階調</button>
+            <span class="sk-hsep"></span>
+            <button class="panel-btn" id="sketch-ref-btn" title="参考画像を読み込む（URL / コピー＆ペースト / ドラッグ＆ドロップ）">参考画像</button>
+            <button class="panel-btn" id="sketch-formen-btn" title="お題を表示して練習（一筆書き / 基本形 / フラワーサック）">お題</button>
             <span class="sk-hsep"></span>
             <select id="sketch-memsec" class="panel-btn" title="記憶モード・タイマーの秒数">
                 <option value="3">3秒</option>
@@ -348,19 +353,21 @@
                 <option value="120">2分</option>
                 <option value="300">5分</option>
             </select>
-            <button class="panel-btn" id="sketch-timer-btn" title="指定秒ごとに自動で次の絵へ（描きながらクロッキー）">⏱ タイマー</button>
-            <button class="panel-btn" id="sketch-mem-btn" title="覚える→隠す→描く">🧠 記憶</button>
-            <button class="panel-btn" id="sketch-hide-btn" title="参考画像をすぐ隠して記憶で描く">🙈 隠す</button>
-            <button class="panel-btn" id="sketch-peek-btn" style="display:none;">👁 見る</button>
-            <button class="panel-btn" id="sketch-reveal-btn" style="display:none;">✅ 答え</button>
+            <button class="panel-btn" id="sketch-timer-btn" title="指定秒ごとに自動で次の絵へ（描きながらクロッキー）">タイマー</button>
+            <button class="panel-btn" id="sketch-mem-btn" title="覚える→隠す→描く">記憶</button>
+            <button class="panel-btn" id="sketch-hide-btn" title="参考画像をすぐ隠して記憶で描く">隠す</button>
+            <button class="panel-btn" id="sketch-peek-btn" style="display:none;">見る</button>
+            <button class="panel-btn" id="sketch-reveal-btn" style="display:none;">答え合わせ</button>
             <div id="sketch-imgopacity-wrap">
                 <span>画像</span>
                 <input type="range" id="sketch-imgopacity" min="10" max="100" value="50">
             </div>
             <span class="spacer"></span>
-            <button id="je-sknextimage" class="panel-btn">⏭ 次</button>
-            <button id="je-sksave" class="panel-btn">💾 保存</button>
-            <button id="je-togglesketch" class="panel-btn ghost">✕</button>
+            <div class="sk-header-actions">
+                <button id="je-sknextimage" class="panel-btn">次へ</button>
+                <button id="je-sksave" class="panel-btn">保存</button>
+                <button id="je-togglesketch" class="panel-btn ghost">閉じる</button>
+            </div>
         </div>
         <div id="sketch-stage">
             <img id="sketch-img" draggable="false" alt="">
@@ -377,11 +384,11 @@
                     <option value="1">基本形</option>
                     <option value="2">フラワーサック</option>
                 </select>
-                <button id="je-skformennext" class="sk-fmbtn">↻ 次のお題</button>
+                <button id="je-skformennext" class="sk-fmbtn">次のお題</button>
                 <span class="sk-fmgap"></span>
                 <span class="sk-fmlabel">濃さ</span>
                 <input type="range" id="sketch-formen-op" min="20" max="100" value="70">
-                <button id="je-skformenclose" class="sk-fmbtn ghost">✕ 終了</button>
+                <button id="je-skformenclose" class="sk-fmbtn ghost">終了</button>
             </div>
             <!-- 描画設定（普段は隠す。描き始めると自動で閉じる＝描画に集中できる） -->
             <div id="sketch-settings-pop" aria-hidden="true">
@@ -392,14 +399,21 @@
                     <button class="sk-paper" data-bg="#f4f1ea" style="background:#f4f1ea" title="クリーム（白紙）"></button>
                 </div>
                 <div class="sk-set-row">
-                    <button class="panel-btn" id="sketch-stab-btn" title="指で描くときに線を滑らかにする">✋ 手ブレ補正</button>
+                    <button class="panel-btn" id="sketch-stab-btn" title="指で描くときに線を滑らかにする">手ブレ補正</button>
                 </div>
                 <div class="sk-set-row">
                     <span class="sk-set-label">補正の強さ</span>
                     <input type="range" id="sketch-stab-strength" min="1" max="9" value="5">
                 </div>
+                <div class="sk-set-sep"></div>
+                <div class="sk-set-row">
+                    <button class="panel-btn" id="sketch-memfade-btn" title="記憶モードで、覚える時間に描いた当たり線を、隠す瞬間に薄い下描きにする（グリッドも消す）">記憶：隠す瞬間に下描き化</button>
+                </div>
+                <div class="sk-set-row">
+                    <button class="panel-btn" id="sketch-cmp-btn" title="制限時間タイマーで、時間が来たら即・次へ行かず『お手本と見比べる』時間を入れる">タイマー：見比べ時間</button>
+                </div>
             </div>
-            <button id="sk-tools-fab" title="ツールを表示">🖌</button>
+            <button id="sk-tools-fab" title="ツールを表示">ツール</button>
         </div>
         <div id="sketch-tools">
             <button id="je-sktoggletools" class="panel-btn ghost" title="ツールをしまって描画領域を広げる">▾</button>
@@ -409,12 +423,15 @@
             <button class="sk-color" data-c="#3d8bff" data-a="1" style="background:#3d8bff" title="青"></button>
             <button class="sk-color half" data-c="#3d8bff" data-a="0.3" title="青鉛筆（半透明）— 当たり取りに"></button>
             <input type="range" id="sketch-size" min="2" max="30" value="5" title="ペンの太さ">
-            <button class="panel-btn" id="sketch-settings-btn" title="描画の設定（紙の色・手ブレ補正）">⚙</button>
-            <button class="panel-btn" id="sketch-eraser-btn">🧽</button>
-            <button id="je-skundo" class="panel-btn" title="元に戻す（2本指タップ / Ctrl+Z）">↩</button>
-            <button id="je-skredo" class="panel-btn" title="やり直し（Ctrl+Y）">↪</button>
-            <button id="je-skfade" class="panel-btn" title="描いた線を薄くする（下描きを薄くして上から清書）">🌫 薄く</button>
-            <button id="je-skclear" class="panel-btn ghost">🗑 全消去</button>
+            <button class="panel-btn" id="sketch-eraser-btn" title="消しゴム">消しゴム</button>
+            <button class="panel-btn" id="sketch-lasso-btn" title="投げ縄塗り：囲んだ範囲をまとめて塗る">投げ縄</button>
+            <button class="panel-btn" id="sketch-lassolight-btn" title="投げ縄塗り（薄め）：囲んだ範囲を薄く塗る">投げ縄 薄</button>
+            <button class="panel-btn" id="sketch-settings-btn" title="描画の設定（紙の色・手ブレ補正・練習の挙動）">設定</button>
+            <span class="sk-hsep"></span>
+            <button id="je-skundo" class="panel-btn" title="元に戻す（2本指タップ / Ctrl+Z）">戻す</button>
+            <button id="je-skredo" class="panel-btn" title="やり直し（Ctrl+Y）">やり直し</button>
+            <button id="je-skfade" class="panel-btn" title="描いた線を薄くする（下描きにして上から清書）">薄く</button>
+            <button id="je-skclear" class="panel-btn ghost" title="全部消す">全消去</button>
             <span id="sk-gesture-hint">2本指タップ=戻る</span>
         </div>
     </div>

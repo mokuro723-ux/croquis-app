@@ -21,6 +21,21 @@
                 saveStats(s);
             } catch(e){ console.warn("croquis: 統計の記録に失敗", e); }
         };
+        // 描画モードの練習を統計へ加算（枚数＝描いた絵の数 / 秒＝描画モードの滞在時間）。
+        // 「今日の枚数・練習時間」「累計」に通常モードと合算して反映される。
+        window.recordDrawStat = function(count, sec){
+            try {
+                count = count || 0; sec = Math.max(0, Math.round(sec || 0));
+                if (count <= 0 && sec <= 0) return;
+                const s = loadStats(); const k = todayKey();
+                if (!s.days[k]) s.days[k] = { count:0, sec:0 };
+                s.days[k].count += count; s.days[k].sec += sec;
+                s.total.count += count;   s.total.sec   += sec;
+                const keys = Object.keys(s.days);
+                if (keys.length > 90) { keys.sort(); while (keys.length > 90) delete s.days[keys.shift()]; }
+                saveStats(s);
+            } catch(e){ console.warn("croquis: 描画統計の記録に失敗", e); }
+        };
         function fmtMin(sec){
             if (sec < 60) return sec + '秒';
             const h = Math.floor(sec/3600), m = Math.round((sec%3600)/60);
@@ -406,6 +421,8 @@
         let skStabStr = Math.min(9, Math.max(1, parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_STAB_STR), 10) || 5)); // 補正の強さ(1=弱〜9=強)
         let skStabK = 0.8 - (skStabStr - 1) * 0.06875; // 入力点の寄せ率（小さいほど強く補正）
         let skPaper = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_PAPER) || '#000000'; // 紙（ステージ背景）の色
+        let skMemFade = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_MEMFADE) !== '0'; // 記憶モードで隠す瞬間に下描き化（既定ON）
+        let skCmpOn = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_CMP) !== '0';       // 制限時間タイマーで見比べ時間を入れる（既定ON）
         let skUndoStack = [], skRedoStack = [], skRedoBackup = [];
         let skIdleSnap = null, skIdleSnapTimer = null;               // 取り消し用スナップを“暇な時”に先取り（描き出しを軽く）
         let skMemTimer = null, skState = 'free';
@@ -417,6 +434,9 @@
         let skTimerOn = false, skSessionTimer = null; // 描画モード内の時間制限タイマー
         let skRefOverride = false, skRefObjUrl = null; // 参考画像の手動指定（URL/貼り付け/D&D）
         let skGrid = parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_GRID), 10) || 0; // 比率グリッドの分割数（0=オフ）
+        let skFlipH = false, skFlipV = false, skMono = false, skBw = false; // 参考画像の加工（描画モード内だけで独立管理）
+        let skTool = 'pen', skLassoPts = null; // 道具: pen / eraser / lasso / lassoLight。投げ縄の頂点配列
+        let skOpenTime = 0, skSketchCount = 0, skDrew = false; // 統計用：滞在時間と「描いた枚数」
         const skFormenSvg = document.getElementById('sketch-formen');
         const skGridSvg = document.getElementById('sketch-grid');
 
@@ -430,27 +450,33 @@
                 const hasImg = images.length > 0;
                 skWasRunning = isRunning;
                 if (isRunning) stopTimer();
+                skOpenTime = Date.now(); skSketchCount = 0; skDrew = false; // 統計の計測開始
+                skFlipH = skFlipV = skMono = skBw = false; skSetTool('pen'); // 加工・道具は毎回まっさらで開始
                 const gb = document.getElementById('sketch-grid-btn'); // 前回のグリッド設定をボタンに反映
-                if (gb) { gb.classList.toggle('accent', skGrid > 0); gb.textContent = skGrid > 0 ? ('▦ ' + skGrid + '×' + skGrid) : '▦ グリッド'; }
-                const sb = document.getElementById('sketch-stab-btn');  // 手ブレ補正の状態を反映
-                if (sb) sb.classList.toggle('accent', skStab);
+                if (gb) { gb.classList.toggle('accent', skGrid > 0); gb.textContent = skGrid > 0 ? ('グリッド ' + skGrid + '×' + skGrid) : 'グリッド'; }
+                skSyncSettingsBtns();                                   // 補正・記憶下描き化・見比べの状態を反映
                 skApplyPaper();                                         // 前回の紙の色を反映
                 skApplyLayout(false);
                 skSyncImage();
                 skResize(true);
                 skSetState('free');
                 skShowMsg(!hasImg
-                    ? '画像が無くても描けます。「🌀 ウォームアップ」や「🖼 参考画像」をどうぞ'
-                    : (skSide ? '左の画像を見ながら右に描けます（模写）' : 'そのまま上から描けます。「記憶モード」で見る→隠す→描く'));
+                    ? '画像が無くても描けます。「お題」や「参考画像」をどうぞ'
+                    : (skSide ? '左の画像を見ながら右に描けます（模写）' : 'そのまま上から描けます。「記憶」で 見る→隠す→描く'));
                 setTimeout(function(){ skShowMsg(''); }, 4200);
             } else {
                 skStopTimer();
                 skCancelMemory();
                 if (skFormenOn) skSetFormen(false);
                 skClearRef();
+                // 統計へ反映：このセッションで描いた枚数と、描画モードに居た時間
+                skCommitSketchCount();
+                if (typeof window.recordDrawStat === 'function') window.recordDrawStat(skSketchCount, (Date.now() - skOpenTime) / 1000);
+                skSketchCount = 0;
                 if (skWasRunning) startTimer();
             }
         };
+        function skCommitSketchCount(){ if (skDrew) { skSketchCount++; skDrew = false; } } // 何か描いてあれば1枚と数える
 
         window.skToggleLayout = function(){
             skSide = !skSide;
@@ -460,7 +486,7 @@
         function skApplyLayout(preserve){
             skOverlay.classList.toggle('side', skSide);
             const b = document.getElementById('sketch-layout-btn');
-            if (b) b.textContent = skSide ? '⬒ 重ねる' : '⬓ 並べる';
+            if (b) b.textContent = skSide ? '重ねる' : '並べる';
             skResize(!preserve);
             skUpdateFrameGuide();
         }
@@ -528,26 +554,48 @@
             skGrid = (skGrid === 0) ? 3 : (skGrid === 3 ? 4 : 0); // オフ→3×3→4×4→オフ
             window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_GRID, String(skGrid), 'スケッチのグリッド');
             const b = document.getElementById('sketch-grid-btn');
-            if (b) { b.classList.toggle('accent', skGrid > 0); b.textContent = skGrid > 0 ? ('▦ ' + skGrid + '×' + skGrid) : '▦ グリッド'; }
+            if (b) { b.classList.toggle('accent', skGrid > 0); b.textContent = skGrid > 0 ? ('グリッド ' + skGrid + '×' + skGrid) : 'グリッド'; }
             skRenderGrid();
             skFlash(skGrid > 0 ? ('グリッド ' + skGrid + '×' + skGrid + '（比率合わせ用）') : 'グリッドを消しました', 1600);
         };
+        function skGridOff(){ // グリッドを消してボタン表示も戻す（記憶モードで隠す瞬間などに使用）
+            if (skGrid === 0) return;
+            skGrid = 0;
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_GRID, '0', 'スケッチのグリッド');
+            const b = document.getElementById('sketch-grid-btn'); if (b) { b.classList.remove('accent'); b.textContent = 'グリッド'; }
+            skRenderGrid();
+        }
         window.skToggleTools = function(){
             skOverlay.classList.toggle('tools-hidden');
             skResize(false);
         };
 
         function skSyncImage(){
-            if (skRefOverride) return; // 参考画像を手動指定中はプール画像で上書きしない
+            if (skRefOverride) { skApplyImgFilters(); return; } // 参考画像を手動指定中はプール画像で上書きしない
             const co = ui.img.getAttribute('crossorigin');
             if (co) skImg.setAttribute('crossorigin', co); else skImg.removeAttribute('crossorigin');
             const src = ui.img.getAttribute('src') || '';
             if (src) skImg.src = src; else skImg.removeAttribute('src'); // 画像が無いときは壊れアイコンを出さない
-            let t = '';
-            if (settings.flipH) t += 'scaleX(-1) ';
-            if (settings.flipV) t += 'scaleY(-1) ';
-            skImg.style.transform = t;
+            skApplyImgFilters();
         }
+        // 参考画像の加工（左右/上下反転・モノクロ・二階調）を反映。描画モード内だけの状態。
+        function skApplyImgFilters(){
+            let t = '';
+            if (skFlipH) t += 'scaleX(-1) ';
+            if (skFlipV) t += 'scaleY(-1) ';
+            skImg.style.transform = t;
+            let f = 'none';
+            if (skBw) f = 'grayscale(1) contrast(' + bwContrast + ')';
+            else if (skMono) f = 'grayscale(100%)';
+            skImg.style.filter = f;
+            const set = function(id, on){ const b = document.getElementById(id); if (b) b.classList.toggle('accent', on); };
+            set('sketch-fliph-btn', skFlipH); set('sketch-flipv-btn', skFlipV);
+            set('sketch-mono-btn', skMono);   set('sketch-bw-btn', skBw);
+        }
+        window.skFlipHoriz = function(){ skFlipH = !skFlipH; skApplyImgFilters(); };
+        window.skFlipVert  = function(){ skFlipV = !skFlipV; skApplyImgFilters(); };
+        window.skToggleMonoImg = function(){ skMono = !skMono; if (skMono) skBw = false; skApplyImgFilters(); };
+        window.skToggleBwImg   = function(){ skBw = !skBw; if (skBw) skMono = false; skApplyImgFilters(); };
         ui.img.addEventListener('load', function(){ if (skOpen) skSyncImage(); });
         skImg.addEventListener('load', function(){ if (skOpen) skUpdateFrameGuide(); }); // 画像が決まったら枠を更新
 
@@ -556,12 +604,18 @@
             const dpr = Math.min(window.devicePixelRatio || 1, 2);
             // 直前のレイアウト（並べる⇔重ねる切替時に、描いた線を元の大きさ・位置のまま引き継ぐため控える）
             const prevCW = skCW, prevCH = skCH, prevLeft = skLeft;
-            const newCW = skSide ? Math.floor(r.width / 2) : Math.floor(r.width);
-            const newCH = Math.floor(r.height);
-            const newLeft = skSide ? (Math.floor(r.width) - newCW) : 0;
-            let saved = null;
-            if (!clear && skCanvas.width > 0) {
-                try { saved = skCanvas.toDataURL(); } catch(e){ console.warn("croquis: 描画の読み取りに失敗", e); }
+            // 並べるは「ちょうど半分」で割る（floorしない）。こうすると画像(左50%)・グリッド・枠（すべてW/2基準）と
+            // 描画キャンバスの座標がピタリ一致し、下UIの開閉などでズレない。
+            const newCW = skSide ? (r.width / 2) : r.width;
+            const newCH = r.height;
+            const newLeft = skSide ? (r.width / 2) : 0;
+            // 既存の描画を“同期で”オフスクリーンに複製（toDataURL+onloadの非同期だと、
+            // 連続でリサイズした時に古い画像が遅れて貼られ縦横比が崩れることがある＝その対策）。
+            let tmp = null;
+            if (!clear && skCanvas.width > 1 && skCanvas.height > 1) {
+                tmp = document.createElement('canvas');
+                tmp.width = skCanvas.width; tmp.height = skCanvas.height;
+                try { tmp.getContext('2d').drawImage(skCanvas, 0, 0); } catch(e){ tmp = null; }
             }
             skCW = newCW; skCH = newCH; skLeft = newLeft;
             [skCanvas, skLive].forEach(function(cv){
@@ -575,23 +629,22 @@
             skCtx.setTransform(dpr, 0, 0, dpr, 0, 0);     skCtx.lineCap = 'round';     skCtx.lineJoin = 'round';
             skLiveCtx.setTransform(dpr, 0, 0, dpr, 0, 0); skLiveCtx.lineCap = 'round'; skLiveCtx.lineJoin = 'round';
             if (clear) { skUndoStack = []; skRedoStack = []; }
-            else if (saved) {
-                const im = new Image();
+            else if (tmp) {
                 if (!skFormenOn && skHasRefImage()) {
-                    // 参考画像がある場合：描いた線を画像の表示枠に合わせて重ねる（並べる⇔重ねるでズレ比較ができる）
+                    // 参考画像がある場合：描いた線を画像の表示枠に合わせて重ねる（並べる⇔重ねるでズレ比較ができる）。
+                    // 元枠・新枠とも同じ縦横比(a)で計算するので、ここでの拡縮では絶対に縦横比は崩れない。
                     const a = skImg.naturalWidth / skImg.naturalHeight;
                     const oldF = fitRect(a, prevCW, prevCH);
                     const newF = fitRect(a, newCW, newCH);
-                    im.onload = function(){ skCtx.drawImage(im, oldF.x * dpr, oldF.y * dpr, oldF.w * dpr, oldF.h * dpr, newF.x, newF.y, newF.w, newF.h); };
+                    skCtx.drawImage(tmp, oldF.x * dpr, oldF.y * dpr, oldF.w * dpr, oldF.h * dpr, newF.x, newF.y, newF.w, newF.h);
                 } else {
                     // 画像が無い場合（ウォームアップ/自由描き）：拡大縮小せず画面上の同じ位置に戻す
                     const dx = prevLeft - newLeft;
-                    im.onload = function(){ skCtx.drawImage(im, dx, 0, prevCW, prevCH); };
+                    skCtx.drawImage(tmp, dx, 0, prevCW, prevCH);
                 }
-                im.src = saved;
             }
             skIdleSnap = null; skScheduleIdleSnap(); // 大きさが変わると古い先取りスナップは無効。取り直す
-            skRenderGrid(); // ステージの大きさが変わったらグリッドも追従
+            skUpdateFrameGuide(); // 枠とグリッドを同時に更新（下UIの開閉でズレないように。中でskRenderGridも呼ぶ）
         }
         window.addEventListener('resize', function(){ if (skOpen) { skResize(false); skUpdateFrameGuide(); if (skFormenOn) fmRender(); } });
 
@@ -610,10 +663,10 @@
                 memBtn.style.display = 'none'; peekBtn.style.display = 'none'; revealBtn.style.display = 'none'; opWrap.style.display = 'none';
             } else if (st === 'hidden') {
                 skImg.style.visibility = 'visible'; skImg.style.opacity = '0';
-                memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = ''; revealBtn.textContent = '✅ 答え合わせ'; opWrap.style.display = 'none';
+                memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = ''; revealBtn.textContent = '答え合わせ'; opWrap.style.display = 'none';
             } else if (st === 'reveal') {
                 skImg.style.visibility = 'visible'; skImg.style.opacity = String(skImgOpacity);
-                memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = ''; revealBtn.textContent = '🙈 また隠す'; opWrap.style.display = 'flex';
+                memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = ''; revealBtn.textContent = 'また隠す'; opWrap.style.display = 'flex';
             }
         }
 
@@ -629,8 +682,10 @@
                 sec--;
                 if (sec <= 0) {
                     skCancelMemory();
+                    // 覚える間に描いた当たり線は、隠す瞬間に薄い下描き化＋グリッドも消す（設定でON/OFF）
+                    if (skMemFade) { skFadeOnce(0.2); skGridOff(); } // 0.2≒「薄く」2〜3回分
                     skSetState('hidden');
-                    skShowMsg('記憶を頼りに描いてみよう！描けたら「答え合わせ」');
+                    skShowMsg(skMemFade ? '記憶を頼りに描こう（下描きは薄くしました）' : '記憶を頼りに描いてみよう！描けたら「答え合わせ」');
                     setTimeout(function(){ skShowMsg(''); }, 3500);
                 } else { skCountdown.textContent = sec; }
             }, 1000);
@@ -646,7 +701,8 @@
             else if (skState === 'reveal') skSetState('hidden');
         };
         window.skSetImgOpacity = function(v){ skImgOpacity = Math.max(0.1, Math.min(1, v / 100)); if (skState === 'reveal') skImg.style.opacity = String(skImgOpacity); };
-        window.skNextImage = function(){
+        window.skNextImage = function(fromTimer){
+            skCommitSketchCount(); // 今の絵を描き終えた＝1枚としてカウント
             skCancelMemory();
             if (skFormenOn) skSetFormen(false);
             skClearRef();        // 参考画像の上書きを解除してプールに戻す
@@ -654,6 +710,7 @@
             skSyncImage();
             skClearSilent();
             skSetState('free');
+            if (skTimerOn && !fromTimer) skRunTimer(); // 手動で「次」→ 制限時間を仕切り直し
         };
 
         /* ── 取り消し / やり直し ── */
@@ -692,17 +749,28 @@
             const d = skSnap(); if (d !== null) skUndoStack.push(d);
             skRestore(skRedoStack.pop());
         };
-        function skClearSilent(){ skCtx.clearRect(0, 0, skCW, skCH); skLiveCtx.clearRect(0, 0, skCW, skCH); skUndoStack = []; skRedoStack = []; skIdleSnap = null; if (skIdleSnapTimer) { clearTimeout(skIdleSnapTimer); skIdleSnapTimer = null; } }
+        function skClearSilent(){ skCtx.clearRect(0, 0, skCW, skCH); skLiveCtx.clearRect(0, 0, skCW, skCH); skUndoStack = []; skRedoStack = []; skIdleSnap = null; skDrew = false; if (skIdleSnapTimer) { clearTimeout(skIdleSnapTimer); skIdleSnapTimer = null; } }
         window.skClear = function(){ skPushUndo(); skRedoStack = []; skCtx.clearRect(0, 0, skCW, skCH); skIdleSnap = null; skScheduleIdleSnap(); };
-        window.skToggleEraser = function(){
-            skEraser = !skEraser;
-            document.getElementById('sketch-eraser-btn').classList.toggle('accent', skEraser);
+        // 道具の切り替え（ペン / 消しゴム / 投げ縄塗り / 投げ縄塗り・薄）
+        function skSetTool(t){
+            skTool = t;
+            skEraser = (t === 'eraser'); // 既存コードは skEraser を見るので連動
+            const active = { eraser: 'sketch-eraser-btn', lasso: 'sketch-lasso-btn', lassoLight: 'sketch-lassolight-btn' }[t];
+            ['sketch-eraser-btn', 'sketch-lasso-btn', 'sketch-lassolight-btn'].forEach(function(id){
+                const b = document.getElementById(id); if (b) b.classList.toggle('accent', id === active);
+            });
+        }
+        window.skToggleEraser = function(){ skSetTool(skTool === 'eraser' ? 'pen' : 'eraser'); };
+        window.skSetLasso = function(light){
+            const want = light ? 'lassoLight' : 'lasso';
+            skSetTool(skTool === want ? 'pen' : want);
+            if (skTool === want) skFlash(light ? '投げ縄塗り（薄め）：囲んだ中を薄く塗ります' : '投げ縄塗り：囲んだ中をまとめて塗ります', 2200);
         };
         window.skToggleStabilizer = function(){
             skStab = !skStab;
             window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_STAB, skStab ? '1' : '0', 'スケッチの手ブレ補正');
             const b = document.getElementById('sketch-stab-btn'); if (b) b.classList.toggle('accent', skStab);
-            skFlash(skStab ? '✋ 手ブレ補正 ON（指描きが滑らかに）' : '手ブレ補正 OFF', 1600);
+            skFlash(skStab ? '手ブレ補正 ON（指描きが滑らかに）' : '手ブレ補正 OFF', 1600);
         };
         window.skSetStabStrength = function(v){
             skStabStr = Math.min(9, Math.max(1, parseInt(v, 10) || 5));
@@ -720,18 +788,31 @@
             window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_PAPER, skPaper, 'スケッチの紙の色');
             skApplyPaper();
         };
-        // 設定ポップ（紙・補正）。普段は隠し、描き始めると自動で閉じる＝画面をすっきり保つ。
+        window.skToggleMemFade = function(){ // 記憶モードで隠す瞬間に下描き化＋グリッド消去
+            skMemFade = !skMemFade;
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_MEMFADE, skMemFade ? '1' : '0', '記憶時の下描き化');
+            const b = document.getElementById('sketch-memfade-btn'); if (b) b.classList.toggle('accent', skMemFade);
+            skFlash(skMemFade ? '記憶：隠す瞬間に当たり線を下描き化＋グリッド消去 ON' : 'OFF（描いた線はそのまま）', 1800);
+        };
+        window.skToggleCompare = function(){ // 制限時間タイマーで見比べ時間を入れる
+            skCmpOn = !skCmpOn;
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_CMP, skCmpOn ? '1' : '0', 'タイマーの見比べ時間');
+            const b = document.getElementById('sketch-cmp-btn'); if (b) b.classList.toggle('accent', skCmpOn);
+            skFlash(skCmpOn ? 'タイマー：時間切れで見比べタイムを入れる ON' : '即・次の絵へ（見比べ無し）', 1800);
+        };
+        function skSyncSettingsBtns(){ // ポップ内トグルの見た目を今の状態に合わせる
+            const map = [['sketch-stab-btn', skStab], ['sketch-memfade-btn', skMemFade], ['sketch-cmp-btn', skCmpOn]];
+            map.forEach(function(p){ const b = document.getElementById(p[0]); if (b) b.classList.toggle('accent', p[1]); });
+            const sr = document.getElementById('sketch-stab-strength'); if (sr) sr.value = String(skStabStr);
+        }
+        // 設定ポップ（紙・補正・練習の挙動）。普段は隠し、描き始めると自動で閉じる＝画面をすっきり保つ。
         function skCloseSettings(){ const p = document.getElementById('sketch-settings-pop'); if (p) p.classList.remove('open'); const b = document.getElementById('sketch-settings-btn'); if (b) b.classList.remove('accent'); }
         window.skToggleSettings = function(){
             const p = document.getElementById('sketch-settings-pop'); if (!p) return;
             const open = !p.classList.contains('open');
             p.classList.toggle('open', open);
             const b = document.getElementById('sketch-settings-btn'); if (b) b.classList.toggle('accent', open);
-            if (open) { // 開くたびに今の状態を反映
-                const sb = document.getElementById('sketch-stab-btn'); if (sb) sb.classList.toggle('accent', skStab);
-                const sr = document.getElementById('sketch-stab-strength'); if (sr) sr.value = String(skStabStr);
-                skApplyPaper();
-            }
+            if (open) { skSyncSettingsBtns(); skApplyPaper(); } // 開くたびに今の状態を反映
         };
         document.querySelectorAll('.sk-color').forEach(function(b){
             b.addEventListener('click', function(){
@@ -739,7 +820,7 @@
                 b.classList.add('on');
                 skColor = b.getAttribute('data-c');
                 skAlpha = parseFloat(b.getAttribute('data-a') || '1');
-                if (skEraser) skToggleEraser();
+                if (skTool !== 'pen') skSetTool('pen'); // 色を選んだらペンに戻す（消し/投げ縄から復帰）
             });
         });
 
@@ -753,6 +834,12 @@
             skCloseSettings(); // 描き始めたら設定ポップは閉じる（描画に集中）
             skPushUndoSnap(); skRedoBackup = skRedoStack; skRedoStack = [];
             skDrawing = true;
+            if (skTool === 'lasso' || skTool === 'lassoLight') { // 投げ縄塗り：頂点を集める（描画はライブ層にプレビュー）
+                skLiveActive = false;
+                const lp = skPos(e); skLassoPts = [{ x: lp.x, y: lp.y }];
+                skLive.style.opacity = '1';
+                return;
+            }
             skLiveActive = (!skEraser && skAlpha < 1);
             if (skLiveActive) { skLiveCtx.clearRect(0, 0, skCW, skCH); skLive.style.opacity = String(skAlpha); }
             const c = skTargetCtx();
@@ -769,6 +856,7 @@
             c.stroke();
         }
         function skStrokeMove(e){
+            if (skLassoPts) { skLassoMove(e); return; } // 投げ縄塗り中
             const c = skTargetCtx();
             const events = (typeof e.getCoalescedEvents === 'function') ? e.getCoalescedEvents() : [e];
             c.globalCompositeOperation = skEraser ? 'destination-out' : 'source-over';
@@ -796,6 +884,8 @@
         function skEndStroke(){
             if (!skDrawing) return;
             skDrawing = false;
+            if (skLassoPts) { skLassoCommit(); return; } // 投げ縄塗りを確定
+            skDrew = true; // 線を1本でも引いた（統計の「描いた枚数」判定用）
             // 最後の中点から指/ペンを離した点まで線を伸ばす（中点法で残る僅かな隙間を埋める）
             const c = skTargetCtx();
             c.beginPath(); c.moveTo(skPrevMidX, skPrevMidY); c.lineTo(skLastX, skLastY); c.stroke();
@@ -814,6 +904,10 @@
             if (!skDrawing) return;
             skDrawing = false;
             skRedoStack = skRedoBackup; // 描き始めで消したやり直し履歴を復元（2/3本指ジェスチャー時）
+            if (skLassoPts) { // 投げ縄を中断（本体未変更なのでスナップを捨てるだけ）
+                skLassoPts = null; skLiveCtx.clearRect(0, 0, skCW, skCH); skLive.style.opacity = '1';
+                skUndoStack.pop(); return;
+            }
             if (skLiveActive) {
                 skLiveCtx.clearRect(0, 0, skCW, skCH);
                 skLive.style.opacity = '1';
@@ -822,6 +916,39 @@
             } else {
                 skRestore(skUndoStack.pop()); // 描きかけを破棄して開始前の状態へ
             }
+        }
+        // 投げ縄塗り：移動中はライブ層に半透明プレビュー（点線の輪郭＋薄い塗り）
+        function skLassoMove(e){
+            const events = (typeof e.getCoalescedEvents === 'function') ? e.getCoalescedEvents() : [e];
+            for (let i = 0; i < events.length; i++) { const p = skPos(events[i]); skLassoPts.push({ x: p.x, y: p.y }); }
+            skLiveCtx.clearRect(0, 0, skCW, skCH);
+            if (skLassoPts.length < 2) return;
+            skLiveCtx.beginPath();
+            skLiveCtx.moveTo(skLassoPts[0].x, skLassoPts[0].y);
+            for (let i = 1; i < skLassoPts.length; i++) skLiveCtx.lineTo(skLassoPts[i].x, skLassoPts[i].y);
+            skLiveCtx.closePath();
+            skLiveCtx.globalAlpha = (skTool === 'lassoLight') ? 0.15 : 0.32;
+            skLiveCtx.fillStyle = skColor; skLiveCtx.fill();
+            skLiveCtx.globalAlpha = 1;
+            skLiveCtx.setLineDash([6, 4]); skLiveCtx.lineWidth = 1.5; skLiveCtx.strokeStyle = skColor; skLiveCtx.stroke(); skLiveCtx.setLineDash([]);
+        }
+        // 投げ縄塗り：指/ペンを離したら、囲んだ多角形を一括で塗る（薄バージョンは透明度低め）
+        function skLassoCommit(){
+            const pts = skLassoPts; skLassoPts = null;
+            skLiveCtx.clearRect(0, 0, skCW, skCH);
+            if (!pts || pts.length < 3) { skUndoStack.pop(); return; } // 塗りにならない→開始時スナップを取り消す
+            skCtx.save();
+            skCtx.globalCompositeOperation = 'source-over';
+            skCtx.beginPath();
+            skCtx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length; i++) skCtx.lineTo(pts[i].x, pts[i].y);
+            skCtx.closePath();
+            skCtx.fillStyle = skColor;
+            skCtx.globalAlpha = (skTool === 'lassoLight') ? 0.3 : 1;
+            skCtx.fill();
+            skCtx.restore();
+            skDrew = true;
+            skScheduleIdleSnap();
         }
 
         /* ── 描画（ペン/マウス/1本指）はポインタイベントで処理 ── */
@@ -884,7 +1011,7 @@
             const n = gFingerMax, dur = Date.now() - gStart;
             gFingerMax = 0;
             if (n === 2 && !gMoved && dur < 900) {
-                skUndo(); skShowMsg('↩ 元に戻す');
+                skUndo(); skShowMsg('元に戻す');
                 setTimeout(function(){ skShowMsg(''); }, 800);
             }
         }
@@ -916,8 +1043,10 @@
                     c.globalAlpha = parseFloat(skImg.style.opacity || '1') || 1;
                     c.save();
                     c.translate(imgAreaW / 2, out.height / 2);
-                    if (settings.flipH) c.scale(-1, 1);
-                    if (settings.flipV) c.scale(1, -1);
+                    if (skFlipH) c.scale(-1, 1);
+                    if (skFlipV) c.scale(1, -1);
+                    if (skBw) c.filter = 'grayscale(1) contrast(' + bwContrast + ')';
+                    else if (skMono) c.filter = 'grayscale(100%)';
                     c.drawImage(skImg, -w / 2, -h / 2, w, h);
                     c.restore();
                     c.globalAlpha = 1;
@@ -1154,7 +1283,7 @@
                 if (btn) btn.classList.add('accent');
                 skUpdateFrameGuide(); // お題中は枠を隠す
                 fmRender();
-                skShowMsg('お題を見て（一筆書きはなぞって）描こう。種類は左下で切替、「↻次のお題」で別の形');
+                skShowMsg('お題を見て（一筆書きはなぞって）描こう。種類は左下で切替、「次のお題」で別の形');
                 setTimeout(function(){ skShowMsg(''); }, 4600);
             } else {
                 if (skFormenSvg) skFormenSvg.style.display = 'none';
@@ -1192,24 +1321,35 @@
             if (!skHasRefImage()) { skFlash('隠す画像がありません', 1800); return; }
             if (skState === 'hidden' || skState === 'reveal') { skSetState('free'); return; }
             skCancelMemory();
-            skSetState('hidden'); // 「👁見る」でチラ見、「✅答え合わせ」で確認できる
-            skShowMsg('画像を隠しました。記憶で描こう（👁見る / ✅答え合わせ）');
+            skSetState('hidden'); // 「見る」でチラ見、「答え合わせ」で確認できる
+            skShowMsg('画像を隠しました。記憶で描こう（見る / 答え合わせ）');
             setTimeout(function(){ skShowMsg(''); }, 3200);
         };
         // 時間制限タイマー：指定秒ごとに自動で次の絵へ（描きながらのクロッキー）
         function skClearSessionTimer(){ if (skSessionTimer) { clearInterval(skSessionTimer); skSessionTimer = null; } }
         function skCurSec(){ return parseInt(document.getElementById('sketch-memsec').value, 10) || 30; }
+        // 見比べ時間の長さ（描画時間の約3割。短すぎ/長すぎないよう5〜20秒に収める）
+        function skCmpSec(){ return Math.min(20, Math.max(5, Math.round(skCurSec() * 0.3))); }
         function skRunTimer(){
-            let sec = skCurSec();
             skClearSessionTimer();
+            let phase = 'draw', sec = skCurSec();
             skCountdown.style.display = 'block'; skCountdown.textContent = skFmtSec(sec);
             skSessionTimer = setInterval(function(){
                 sec--;
-                if (sec <= 0) {
-                    skNextImage();              // 次の絵へ（キャンバスも自動クリア）
-                    skShowMsg('⏱ 次のポーズ！'); setTimeout(function(){ skShowMsg(''); }, 1200);
-                    sec = skCurSec(); skCountdown.style.display = 'block'; skCountdown.textContent = skFmtSec(sec);
-                } else { skCountdown.textContent = skFmtSec(sec); }
+                if (sec > 0) { skCountdown.textContent = (phase === 'compare' ? '見比べ ' : '') + skFmtSec(sec); return; }
+                if (phase === 'draw' && skCmpOn) {
+                    // 描画時間が終わったら“即次”ではなく、お手本をはっきり見せて描いた線と見比べる時間を作る
+                    phase = 'compare'; sec = skCmpSec();
+                    skImg.style.visibility = 'visible'; skImg.style.opacity = '1';
+                    skShowMsg('お手本と見比べよう（重ねるレイアウトだと重なって比較できます／「次へ」で進む）');
+                    skCountdown.textContent = '見比べ ' + skFmtSec(sec);
+                    return;
+                }
+                // 次のポーズへ（タイマー内からの呼び出しなので仕切り直しはこの関数が担当）
+                skNextImage(true);
+                skShowMsg('次のポーズ！'); setTimeout(function(){ if (skTimerOn) skShowMsg(''); }, 1200);
+                phase = 'draw'; sec = skCurSec();
+                skCountdown.style.display = 'block'; skCountdown.textContent = skFmtSec(sec);
             }, 1000);
         }
         function skStopTimer(){
@@ -1225,23 +1365,27 @@
             skTimerOn = true;
             const b = document.getElementById('sketch-timer-btn'); if (b) b.classList.add('accent');
             skSetState('free');
-            skShowMsg('⏱ タイマー開始：' + skFmtSec(skCurSec()) + 'ごとに次の絵へ'); setTimeout(function(){ skShowMsg(''); }, 2600);
+            skShowMsg('タイマー開始：' + skFmtSec(skCurSec()) + 'ごとに次の絵へ'); setTimeout(function(){ skShowMsg(''); }, 2600);
             skRunTimer();
         };
-        // 描いた線を一括で薄くする（下描きを「ノックバック」して上から清書するのに便利）
+        // 描いた線の濃さを alpha 倍にする（下描き化）。オフスクリーンに同期コピーしてから戻すので
+        // 非同期の読み込み待ちが無く、連続実行でもズレない。
+        function skFadeOnce(alpha){
+            if (skCanvas.width <= 1 || skCanvas.height <= 1) return;
+            const tmp = document.createElement('canvas');
+            tmp.width = skCanvas.width; tmp.height = skCanvas.height;
+            try { tmp.getContext('2d').drawImage(skCanvas, 0, 0); } catch(_){ return; }
+            skPushUndo(); skRedoStack = []; skIdleSnap = null;
+            skCtx.clearRect(0, 0, skCW, skCH);
+            skCtx.globalAlpha = alpha;
+            skCtx.drawImage(tmp, 0, 0, skCW, skCH); // tmpはデバイスpx。setTransformのdpr拡縮でCSSサイズに合う
+            skCtx.globalAlpha = 1;
+            skScheduleIdleSnap();
+        }
+        // 「🌫 薄く」ボタン：押すたび半分の濃さに（清書の下描き用）
         window.skFade = function(){
             if (skFormenOn) { skFlash('お題モード中は使えません', 1800); return; }
-            const snap = skSnap(); if (!snap) { skFlash('まだ何も描かれていません', 1600); return; }
-            skPushUndo(); skRedoStack = []; skIdleSnap = null;
-            const im = new Image();
-            im.onload = function(){
-                skCtx.clearRect(0, 0, skCW, skCH);
-                skCtx.globalAlpha = 0.5;            // 1回押すごとに半分の濃さに
-                skCtx.drawImage(im, 0, 0, skCW, skCH);
-                skCtx.globalAlpha = 1;
-                skScheduleIdleSnap();
-            };
-            im.src = snap;
+            skFadeOnce(0.5);
         };
 
         /* ════════════════════════════════════════════════════════
