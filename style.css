@@ -432,6 +432,9 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     transition: background-color .15s ease, transform .06s ease;
 }
 .panel-btn:active { transform: scale(0.95); }
+/* アイコンだけのボタン（描画モード）。通常モードのアイコンに合わせて正方形・中央寄せ */
+.panel-btn.sk-ic { padding: 7px 9px; display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+.panel-btn.sk-ic .svg-icon { width: 21px; height: 21px; display: block; }
 .panel-btn.accent { background: var(--accent); color: #00222b; font-weight: bold; }
 .panel-btn.ghost { background: transparent; border: 1px solid #444; border-color: #4d4d4d; }
 .panel-btn:disabled { opacity: 0.4; cursor: default; }
@@ -576,10 +579,12 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 #sketch-overlay.tools-hidden #sketch-tools { display: none; }
 #sk-tools-fab {
     position: absolute; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-    z-index: 8; padding: 9px 16px; border-radius: 999px; border: 1px solid #4a4a4a;
-    background: rgba(30,30,30,0.92); color: #eee; font-size: 0.82rem; cursor: pointer; display: none;
+    z-index: 8; width: 44px; height: 44px; border-radius: 50%; border: 1px solid #4a4a4a;
+    background: rgba(30,30,30,0.92); color: #eee; cursor: pointer; display: none;
+    align-items: center; justify-content: center; padding: 0;
 }
-#sketch-overlay.tools-hidden #sk-tools-fab { display: block; }
+#sk-tools-fab .svg-icon { width: 22px; height: 22px; }
+#sketch-overlay.tools-hidden #sk-tools-fab { display: flex; }
 .sk-color { width: 31px; height: 31px; border-radius: 50%; border: 2px solid #5a5a5a; cursor: pointer; padding: 0; flex: 0 0 auto; }
 .sk-color.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
 .sk-color.half { background: linear-gradient(135deg, rgba(61,139,255,0.85) 50%, rgba(61,139,255,0.3) 50%) !important; }

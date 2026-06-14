@@ -89,6 +89,7 @@
         bind('sketch-peek-btn', 'click', function(event){ skPeek(); });
         bind('sketch-reveal-btn', 'click', function(event){ skToggleReveal(); });
         bind('sketch-imgopacity', 'input', function(event){ skSetImgOpacity(this.value); });
+        bind('je-skprevimage', 'click', function(event){ skPrevImage(); });
         bind('je-sknextimage', 'click', function(event){ skNextImage(); });
         bind('je-sksave', 'click', function(event){ skSave(); });
         bind('je-togglesketch', 'click', function(event){ toggleSketch(); });
@@ -99,6 +100,7 @@
         bind('sketch-stab-strength', 'input', function(event){ skSetStabStrength(this.value); });
         bind('sketch-memfade-btn', 'click', function(event){ skToggleMemFade(); });
         bind('sketch-cmp-btn', 'click', function(event){ skToggleCompare(); });
+        bind('sketch-lassoprev-btn', 'click', function(event){ skToggleLassoPreview(); });
         document.querySelectorAll('.sk-paper').forEach(function(b){
             b.addEventListener('click', function(){ skSetPaper(b.getAttribute('data-bg')); });
         });

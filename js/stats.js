@@ -436,6 +436,7 @@
         let skGrid = parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_GRID), 10) || 0; // 比率グリッドの分割数（0=オフ）
         let skFlipH = false, skFlipV = false, skMono = false, skBw = false; // 参考画像の加工（描画モード内だけで独立管理）
         let skTool = 'pen', skLassoPts = null; // 道具: pen / eraser / lasso / lassoLight。投げ縄の頂点配列
+        let skLassoPreview = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_LASSOPREV) !== '0'; // 投げ縄のなぞり線表示（既定ON）
         let skOpenTime = 0, skSketchCount = 0, skDrew = false; // 統計用：滞在時間と「描いた枚数」
         const skFormenSvg = document.getElementById('sketch-formen');
         const skGridSvg = document.getElementById('sketch-grid');
@@ -453,7 +454,7 @@
                 skOpenTime = Date.now(); skSketchCount = 0; skDrew = false; // 統計の計測開始
                 skFlipH = skFlipV = skMono = skBw = false; skSetTool('pen'); // 加工・道具は毎回まっさらで開始
                 const gb = document.getElementById('sketch-grid-btn'); // 前回のグリッド設定をボタンに反映
-                if (gb) { gb.classList.toggle('accent', skGrid > 0); gb.textContent = skGrid > 0 ? ('グリッド ' + skGrid + '×' + skGrid) : 'グリッド'; }
+                if (gb) { gb.classList.toggle('accent', skGrid > 0); gb.title = skGrid > 0 ? ('グリッド ' + skGrid + '×' + skGrid) : 'グリッド（比率合わせ）'; }
                 skSyncSettingsBtns();                                   // 補正・記憶下描き化・見比べの状態を反映
                 skApplyPaper();                                         // 前回の紙の色を反映
                 skApplyLayout(false);
@@ -486,7 +487,13 @@
         function skApplyLayout(preserve){
             skOverlay.classList.toggle('side', skSide);
             const b = document.getElementById('sketch-layout-btn');
-            if (b) b.textContent = skSide ? '重ねる' : '並べる';
+            if (b) {
+                // トグルボタン：今が「並べる」なら次は「重ねる」アイコンを出す
+                b.innerHTML = skSide
+                    ? '<svg viewBox="0 0 24 24" class="svg-icon"><path d="M5 3h12v12H5z" opacity=".45"/><path d="M8 8h12v12H8z"/></svg>'
+                    : '<svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 4h8v16H3zM13 4h8v16h-8z"/></svg>';
+                b.title = skSide ? '重ねる（画像の上に直接描く）' : '並べる（左に画像・右に描画）';
+            }
             skResize(!preserve);
             skUpdateFrameGuide();
         }
@@ -554,7 +561,7 @@
             skGrid = (skGrid === 0) ? 3 : (skGrid === 3 ? 4 : 0); // オフ→3×3→4×4→オフ
             window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_GRID, String(skGrid), 'スケッチのグリッド');
             const b = document.getElementById('sketch-grid-btn');
-            if (b) { b.classList.toggle('accent', skGrid > 0); b.textContent = skGrid > 0 ? ('グリッド ' + skGrid + '×' + skGrid) : 'グリッド'; }
+            if (b) { b.classList.toggle('accent', skGrid > 0); b.title = skGrid > 0 ? ('グリッド ' + skGrid + '×' + skGrid) : 'グリッド（比率合わせ）'; }
             skRenderGrid();
             skFlash(skGrid > 0 ? ('グリッド ' + skGrid + '×' + skGrid + '（比率合わせ用）') : 'グリッドを消しました', 1600);
         };
@@ -562,7 +569,7 @@
             if (skGrid === 0) return;
             skGrid = 0;
             window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_GRID, '0', 'スケッチのグリッド');
-            const b = document.getElementById('sketch-grid-btn'); if (b) { b.classList.remove('accent'); b.textContent = 'グリッド'; }
+            const b = document.getElementById('sketch-grid-btn'); if (b) { b.classList.remove('accent'); b.title = 'グリッド（比率合わせ）'; }
             skRenderGrid();
         }
         window.skToggleTools = function(){
@@ -663,10 +670,12 @@
                 memBtn.style.display = 'none'; peekBtn.style.display = 'none'; revealBtn.style.display = 'none'; opWrap.style.display = 'none';
             } else if (st === 'hidden') {
                 skImg.style.visibility = 'visible'; skImg.style.opacity = '0';
-                memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = ''; revealBtn.textContent = '答え合わせ'; opWrap.style.display = 'none';
+                memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = '';
+                revealBtn.innerHTML = '<svg viewBox="0 0 24 24" class="svg-icon"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>'; revealBtn.title = '答え合わせ（画像を出して見比べる）'; opWrap.style.display = 'none';
             } else if (st === 'reveal') {
                 skImg.style.visibility = 'visible'; skImg.style.opacity = String(skImgOpacity);
-                memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = ''; revealBtn.textContent = 'また隠す'; opWrap.style.display = 'flex';
+                memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = '';
+                revealBtn.innerHTML = '<svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>'; revealBtn.title = 'また隠す'; opWrap.style.display = 'flex';
             }
         }
 
@@ -711,6 +720,20 @@
             skClearSilent();
             skSetState('free');
             if (skTimerOn && !fromTimer) skRunTimer(); // 手動で「次」→ 制限時間を仕切り直し
+        };
+        window.skPrevImage = function(){
+            if (typeof prevImage !== 'function') return;
+            // 履歴の先頭なら戻れない。ここでキャンバスを消さないよう先に弾く
+            if (typeof historyPos !== 'undefined' && historyPos <= 0) { skFlash('これより前の絵はありません', 1600); return; }
+            skCommitSketchCount();
+            skCancelMemory();
+            if (skFormenOn) skSetFormen(false);
+            skClearRef();
+            prevImage();         // 履歴を1つ戻る（通常モードと共通）
+            skSyncImage();
+            skClearSilent();
+            skSetState('free');
+            if (skTimerOn) skRunTimer(); // 手動操作なので制限時間を仕切り直し
         };
 
         /* ── 取り消し / やり直し ── */
@@ -800,8 +823,14 @@
             const b = document.getElementById('sketch-cmp-btn'); if (b) b.classList.toggle('accent', skCmpOn);
             skFlash(skCmpOn ? 'タイマー：時間切れで見比べタイムを入れる ON' : '即・次の絵へ（見比べ無し）', 1800);
         };
+        window.skToggleLassoPreview = function(){
+            skLassoPreview = !skLassoPreview;
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_LASSOPREV, skLassoPreview ? '1' : '0', '投げ縄のなぞり線');
+            const b = document.getElementById('sketch-lassoprev-btn'); if (b) b.classList.toggle('accent', skLassoPreview);
+            skFlash(skLassoPreview ? '投げ縄：なぞり線を表示 ON' : '投げ縄：なぞり線オフ（塗りだけ）', 1800);
+        };
         function skSyncSettingsBtns(){ // ポップ内トグルの見た目を今の状態に合わせる
-            const map = [['sketch-stab-btn', skStab], ['sketch-memfade-btn', skMemFade], ['sketch-cmp-btn', skCmpOn]];
+            const map = [['sketch-stab-btn', skStab], ['sketch-memfade-btn', skMemFade], ['sketch-cmp-btn', skCmpOn], ['sketch-lassoprev-btn', skLassoPreview]];
             map.forEach(function(p){ const b = document.getElementById(p[0]); if (b) b.classList.toggle('accent', p[1]); });
             const sr = document.getElementById('sketch-stab-strength'); if (sr) sr.value = String(skStabStr);
         }
@@ -917,20 +946,19 @@
                 skRestore(skUndoStack.pop()); // 描きかけを破棄して開始前の状態へ
             }
         }
-        // 投げ縄塗り：移動中はライブ層に半透明プレビュー（点線の輪郭＋薄い塗り）
+        // 投げ縄塗り：移動中は「なぞっている線」だけをシンプルに表示（クリスタ風。
+        // 塗り予測のシルエットや閉じる線は出さない）。プレビュー自体も設定でオフにできる。
         function skLassoMove(e){
             const events = (typeof e.getCoalescedEvents === 'function') ? e.getCoalescedEvents() : [e];
             for (let i = 0; i < events.length; i++) { const p = skPos(events[i]); skLassoPts.push({ x: p.x, y: p.y }); }
             skLiveCtx.clearRect(0, 0, skCW, skCH);
-            if (skLassoPts.length < 2) return;
+            if (!skLassoPreview || skLassoPts.length < 2) return;
+            skLiveCtx.globalAlpha = 1;
+            skLiveCtx.lineWidth = 1.5; skLiveCtx.strokeStyle = skColor;
             skLiveCtx.beginPath();
             skLiveCtx.moveTo(skLassoPts[0].x, skLassoPts[0].y);
             for (let i = 1; i < skLassoPts.length; i++) skLiveCtx.lineTo(skLassoPts[i].x, skLassoPts[i].y);
-            skLiveCtx.closePath();
-            skLiveCtx.globalAlpha = (skTool === 'lassoLight') ? 0.15 : 0.32;
-            skLiveCtx.fillStyle = skColor; skLiveCtx.fill();
-            skLiveCtx.globalAlpha = 1;
-            skLiveCtx.setLineDash([6, 4]); skLiveCtx.lineWidth = 1.5; skLiveCtx.strokeStyle = skColor; skLiveCtx.stroke(); skLiveCtx.setLineDash([]);
+            skLiveCtx.stroke(); // 閉じない・塗らない＝なぞった線だけ
         }
         // 投げ縄塗り：指/ペンを離したら、囲んだ多角形を一括で塗る（薄バージョンは透明度低め）
         function skLassoCommit(){
