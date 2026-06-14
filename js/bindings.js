@@ -72,6 +72,7 @@
         bind('je-olapply-false', 'click', function(event){ olApply(false); });
         bind('je-olapply-true', 'click', function(event){ olApply(true); });
         bind('sketch-layout-btn', 'click', function(event){ skToggleLayout(); });
+        bind('sketch-grid-btn', 'click', function(event){ skToggleGrid(); });
         bind('sketch-ref-btn', 'click', function(event){ skLoadRef(); });
         bind('sketch-formen-btn', 'click', function(event){ skToggleFormen(); });
         bind('sketch-deck', 'change', function(event){ skSetDeck(this.value); });
@@ -89,6 +90,12 @@
         bind('je-togglesketch', 'click', function(event){ toggleSketch(); });
         bind('sk-tools-fab', 'click', function(event){ skToggleTools(); });
         bind('je-sktoggletools', 'click', function(event){ skToggleTools(); });
+        bind('sketch-stab-btn', 'click', function(event){ skToggleStabilizer(); });
+        bind('sketch-settings-btn', 'click', function(event){ skToggleSettings(); });
+        bind('sketch-stab-strength', 'input', function(event){ skSetStabStrength(this.value); });
+        document.querySelectorAll('.sk-paper').forEach(function(b){
+            b.addEventListener('click', function(){ skSetPaper(b.getAttribute('data-bg')); });
+        });
         bind('sketch-eraser-btn', 'click', function(event){ skToggleEraser(); });
         bind('je-skundo', 'click', function(event){ skUndo(); });
         bind('je-skredo', 'click', function(event){ skRedo(); });

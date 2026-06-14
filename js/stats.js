@@ -401,8 +401,13 @@
         const skMsgEl     = document.getElementById('sketch-msg');
         let skOpen = false, skDrawing = false, skEraser = false;
         let skColor = '#ff4d5e', skAlpha = 1, skLiveActive = false;
-        let skLastX = 0, skLastY = 0;
+        let skLastX = 0, skLastY = 0, skPrevMidX = 0, skPrevMidY = 0; // 直前点と直前中点（なめらか化用）
+        let skStab = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_STAB) === '1', skStabX = 0, skStabY = 0; // 手ブレ補正（指描き向け）
+        let skStabStr = Math.min(9, Math.max(1, parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_STAB_STR), 10) || 5)); // 補正の強さ(1=弱〜9=強)
+        let skStabK = 0.8 - (skStabStr - 1) * 0.06875; // 入力点の寄せ率（小さいほど強く補正）
+        let skPaper = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_PAPER) || '#000000'; // 紙（ステージ背景）の色
         let skUndoStack = [], skRedoStack = [], skRedoBackup = [];
+        let skIdleSnap = null, skIdleSnapTimer = null;               // 取り消し用スナップを“暇な時”に先取り（描き出しを軽く）
         let skMemTimer = null, skState = 'free';
         let skImgOpacity = 0.5, skWasRunning = false;
         let skSide = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_SIDE) === '1';
@@ -411,7 +416,9 @@
         let skFormenBackup = null, skFormenBackupW = 0, skFormenBackupH = 0, skFormenBackupLeft = 0;
         let skTimerOn = false, skSessionTimer = null; // 描画モード内の時間制限タイマー
         let skRefOverride = false, skRefObjUrl = null; // 参考画像の手動指定（URL/貼り付け/D&D）
+        let skGrid = parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_GRID), 10) || 0; // 比率グリッドの分割数（0=オフ）
         const skFormenSvg = document.getElementById('sketch-formen');
+        const skGridSvg = document.getElementById('sketch-grid');
 
         function skShowMsg(t){ if (!t) { skMsgEl.style.display = 'none'; return; } skMsgEl.textContent = t; skMsgEl.style.display = 'block'; }
 
@@ -423,6 +430,11 @@
                 const hasImg = images.length > 0;
                 skWasRunning = isRunning;
                 if (isRunning) stopTimer();
+                const gb = document.getElementById('sketch-grid-btn'); // 前回のグリッド設定をボタンに反映
+                if (gb) { gb.classList.toggle('accent', skGrid > 0); gb.textContent = skGrid > 0 ? ('▦ ' + skGrid + '×' + skGrid) : '▦ グリッド'; }
+                const sb = document.getElementById('sketch-stab-btn');  // 手ブレ補正の状態を反映
+                if (sb) sb.classList.toggle('accent', skStab);
+                skApplyPaper();                                         // 前回の紙の色を反映
                 skApplyLayout(false);
                 skSyncImage();
                 skResize(true);
@@ -463,6 +475,7 @@
         }
         // 「並べる」のとき、描く側（右半分）に画像と同じ縦横比の枠を表示（ズレ確認用）
         function skUpdateFrameGuide(){
+            skRenderGrid(); // レイアウトが変わるたびグリッドも追従させる
             const g = document.getElementById('sketch-frame-guide');
             if (!g) return;
             if (!skSide || skFormenOn || !skHasRefImage()) { g.style.display = 'none'; return; }
@@ -475,6 +488,50 @@
             g.style.height = f.h + 'px';
             g.style.display = 'block';
         }
+        // 比率合わせグリッド：与えた矩形 r を n×n に分割する線を返す（外枠も少し濃く）
+        function skGridLines(r, n){
+            const x0 = r.x, y0 = r.y, w = r.w, h = r.h, out = [];
+            const line = function(x1, y1, x2, y2, strong){
+                return '<line x1="' + fmN(x1) + '" y1="' + fmN(y1) + '" x2="' + fmN(x2) + '" y2="' + fmN(y2) +
+                    '" stroke="' + (strong ? 'rgba(0,212,255,0.55)' : 'rgba(0,212,255,0.32)') +
+                    '" stroke-width="' + (strong ? 1.4 : 1) + '"/>';
+            };
+            for (let i = 1; i < n; i++){ const x = x0 + w * i / n; out.push(line(x, y0, x, y0 + h, false)); }
+            for (let j = 1; j < n; j++){ const y = y0 + h * j / n; out.push(line(x0, y, x0 + w, y, false)); }
+            out.push(line(x0, y0, x0 + w, y0, true), line(x0, y0 + h, x0 + w, y0 + h, true),
+                     line(x0, y0, x0, y0 + h, true), line(x0 + w, y0, x0 + w, y0 + h, true));
+            return out.join('');
+        }
+        // グリッドを描く。並べるモードで参考画像がある時は、左の画像枠と右の描画枠に
+        // 「同じ升目」を出すので、升目どうしを見比べて当たりが取れる（グリッド模写法）。
+        function skRenderGrid(){
+            if (!skGridSvg) return;
+            if (skGrid <= 0) { skGridSvg.style.display = 'none'; skGridSvg.innerHTML = ''; return; }
+            const r = skStage.getBoundingClientRect();
+            const W = Math.max(1, r.width), H = Math.max(1, r.height), n = skGrid;
+            skGridSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+            let svg = '';
+            if (skSide && skHasRefImage() && !skFormenOn) {
+                const a = skImg.naturalWidth / skImg.naturalHeight;
+                const lf = fitRect(a, W / 2, H);                       // 左：画像の表示枠
+                const rf = fitRect(a, W / 2, H);                       // 右：同じ比率の描画枠
+                svg = skGridLines(lf, n) + skGridLines({ x: W / 2 + rf.x, y: rf.y, w: rf.w, h: rf.h }, n);
+            } else if (skSide) {
+                svg = skGridLines({ x: 0, y: 0, w: W / 2, h: H }, n) + skGridLines({ x: W / 2, y: 0, w: W / 2, h: H }, n);
+            } else {
+                svg = skGridLines({ x: 0, y: 0, w: W, h: H }, n);
+            }
+            skGridSvg.innerHTML = svg;
+            skGridSvg.style.display = 'block';
+        }
+        window.skToggleGrid = function(){
+            skGrid = (skGrid === 0) ? 3 : (skGrid === 3 ? 4 : 0); // オフ→3×3→4×4→オフ
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_GRID, String(skGrid), 'スケッチのグリッド');
+            const b = document.getElementById('sketch-grid-btn');
+            if (b) { b.classList.toggle('accent', skGrid > 0); b.textContent = skGrid > 0 ? ('▦ ' + skGrid + '×' + skGrid) : '▦ グリッド'; }
+            skRenderGrid();
+            skFlash(skGrid > 0 ? ('グリッド ' + skGrid + '×' + skGrid + '（比率合わせ用）') : 'グリッドを消しました', 1600);
+        };
         window.skToggleTools = function(){
             skOverlay.classList.toggle('tools-hidden');
             skResize(false);
@@ -533,6 +590,8 @@
                 }
                 im.src = saved;
             }
+            skIdleSnap = null; skScheduleIdleSnap(); // 大きさが変わると古い先取りスナップは無効。取り直す
+            skRenderGrid(); // ステージの大きさが変わったらグリッドも追従
         }
         window.addEventListener('resize', function(){ if (skOpen) { skResize(false); skUpdateFrameGuide(); if (skFormenOn) fmRender(); } });
 
@@ -600,8 +659,23 @@
         /* ── 取り消し / やり直し ── */
         function skSnap(){ try { return skCanvas.toDataURL(); } catch(_) { return null; } }
         function skRestore(data){
+            skIdleSnap = null; // 画面が変わるので先取りスナップは無効化
             skCtx.clearRect(0, 0, skCW, skCH);
-            if (data) { const im = new Image(); im.onload = function(){ skCtx.drawImage(im, 0, 0, skCW, skCH); }; im.src = data; }
+            if (data) { const im = new Image(); im.onload = function(){ skCtx.drawImage(im, 0, 0, skCW, skCH); skScheduleIdleSnap(); }; im.src = data; }
+            else skScheduleIdleSnap();
+        }
+        // 取り消し用スナップを“描いていない時”に先取りしておく（描き出し時の toDataURL 待ちを無くす）
+        function skScheduleIdleSnap(){
+            if (skIdleSnapTimer) clearTimeout(skIdleSnapTimer);
+            skIdleSnapTimer = setTimeout(function(){ skIdleSnapTimer = null; if (!skDrawing) skIdleSnap = skSnap(); }, 80);
+        }
+        function skPushUndoSnap(){
+            // 先取りしたスナップがあればそれを使う。無ければその場で取得（フォールバック）。
+            const d = (skIdleSnap !== null) ? skIdleSnap : skSnap();
+            skIdleSnap = null;
+            if (d === null) return;
+            skUndoStack.push(d);
+            if (skUndoStack.length > 20) skUndoStack.shift();
         }
         function skPushUndo(){
             const d = skSnap(); if (d === null) return;
@@ -618,11 +692,46 @@
             const d = skSnap(); if (d !== null) skUndoStack.push(d);
             skRestore(skRedoStack.pop());
         };
-        function skClearSilent(){ skCtx.clearRect(0, 0, skCW, skCH); skLiveCtx.clearRect(0, 0, skCW, skCH); skUndoStack = []; skRedoStack = []; }
-        window.skClear = function(){ skPushUndo(); skRedoStack = []; skCtx.clearRect(0, 0, skCW, skCH); };
+        function skClearSilent(){ skCtx.clearRect(0, 0, skCW, skCH); skLiveCtx.clearRect(0, 0, skCW, skCH); skUndoStack = []; skRedoStack = []; skIdleSnap = null; if (skIdleSnapTimer) { clearTimeout(skIdleSnapTimer); skIdleSnapTimer = null; } }
+        window.skClear = function(){ skPushUndo(); skRedoStack = []; skCtx.clearRect(0, 0, skCW, skCH); skIdleSnap = null; skScheduleIdleSnap(); };
         window.skToggleEraser = function(){
             skEraser = !skEraser;
             document.getElementById('sketch-eraser-btn').classList.toggle('accent', skEraser);
+        };
+        window.skToggleStabilizer = function(){
+            skStab = !skStab;
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_STAB, skStab ? '1' : '0', 'スケッチの手ブレ補正');
+            const b = document.getElementById('sketch-stab-btn'); if (b) b.classList.toggle('accent', skStab);
+            skFlash(skStab ? '✋ 手ブレ補正 ON（指描きが滑らかに）' : '手ブレ補正 OFF', 1600);
+        };
+        window.skSetStabStrength = function(v){
+            skStabStr = Math.min(9, Math.max(1, parseInt(v, 10) || 5));
+            skStabK = 0.8 - (skStabStr - 1) * 0.06875; // 強いほどKは小さく（寄せが強い）
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_STAB_STR, String(skStabStr), 'スケッチの補正強さ');
+            if (!skStab) skToggleStabilizer(); // 強さを動かしたら補正は自動でON（迷わないように）
+        };
+        // 紙（描画ステージの背景）の色を変える。明暗練習の中間色や、クリーム紙にも。
+        function skApplyPaper(){
+            skStage.style.background = skPaper;
+            document.querySelectorAll('.sk-paper').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-bg') === skPaper); });
+        }
+        window.skSetPaper = function(bg){
+            skPaper = bg || '#000000';
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_PAPER, skPaper, 'スケッチの紙の色');
+            skApplyPaper();
+        };
+        // 設定ポップ（紙・補正）。普段は隠し、描き始めると自動で閉じる＝画面をすっきり保つ。
+        function skCloseSettings(){ const p = document.getElementById('sketch-settings-pop'); if (p) p.classList.remove('open'); const b = document.getElementById('sketch-settings-btn'); if (b) b.classList.remove('accent'); }
+        window.skToggleSettings = function(){
+            const p = document.getElementById('sketch-settings-pop'); if (!p) return;
+            const open = !p.classList.contains('open');
+            p.classList.toggle('open', open);
+            const b = document.getElementById('sketch-settings-btn'); if (b) b.classList.toggle('accent', open);
+            if (open) { // 開くたびに今の状態を反映
+                const sb = document.getElementById('sketch-stab-btn'); if (sb) sb.classList.toggle('accent', skStab);
+                const sr = document.getElementById('sketch-stab-strength'); if (sr) sr.value = String(skStabStr);
+                skApplyPaper();
+            }
         };
         document.querySelectorAll('.sk-color').forEach(function(b){
             b.addEventListener('click', function(){
@@ -641,19 +750,22 @@
         }
         function skTargetCtx(){ return (skLiveActive ? skLiveCtx : skCtx); }
         function skBeginStroke(e){
-            skPushUndo(); skRedoBackup = skRedoStack; skRedoStack = [];
+            skCloseSettings(); // 描き始めたら設定ポップは閉じる（描画に集中）
+            skPushUndoSnap(); skRedoBackup = skRedoStack; skRedoStack = [];
             skDrawing = true;
             skLiveActive = (!skEraser && skAlpha < 1);
             if (skLiveActive) { skLiveCtx.clearRect(0, 0, skCW, skCH); skLive.style.opacity = String(skAlpha); }
             const c = skTargetCtx();
-            const p = skPos(e); skLastX = p.x; skLastY = p.y;
+            const p = skPos(e);
+            skLastX = p.x; skLastY = p.y; skPrevMidX = p.x; skPrevMidY = p.y; // 中点法の起点
+            skStabX = p.x; skStabY = p.y;                                     // 補正の起点
             c.globalCompositeOperation = skEraser ? 'destination-out' : 'source-over';
             c.strokeStyle = skColor;
             const size = parseInt(document.getElementById('sketch-size').value, 10) || 5;
             c.lineWidth = skEraser ? size * 3 : size;
             c.beginPath();
             c.moveTo(p.x, p.y);
-            c.lineTo(p.x + 0.01, p.y + 0.01);
+            c.lineTo(p.x + 0.01, p.y + 0.01); // 点（タップ）でも描点が残るように
             c.stroke();
         }
         function skStrokeMove(e){
@@ -663,21 +775,30 @@
             c.strokeStyle = skColor;
             const size = parseInt(document.getElementById('sketch-size').value, 10) || 5;
             for (let i = 0; i < events.length; i++) {
-                const p = skPos(events[i]);
+                const raw = skPos(events[i]);
+                let px = raw.x, py = raw.y;
+                if (skStab) { // 入力点を直前位置へ寄せて揺れを均す（指描きの線が滑らかに）
+                    skStabX += (raw.x - skStabX) * skStabK; skStabY += (raw.y - skStabY) * skStabK;
+                    px = skStabX; py = skStabY;
+                }
                 const pw = (events[i].pointerType === 'pen' && events[i].pressure > 0) ? (0.4 + events[i].pressure * 1.2) : 1;
                 c.lineWidth = (skEraser ? size * 3 : size) * pw;
-                const midX = (skLastX + p.x) / 2, midY = (skLastY + p.y) / 2;
+                // 中点法：直前中点→今回中点を、実サンプル点を制御点にした2次曲線でつなぐ（なめらか）
+                const midX = (skLastX + px) / 2, midY = (skLastY + py) / 2;
                 c.beginPath();
-                c.moveTo(skLastX, skLastY);
+                c.moveTo(skPrevMidX, skPrevMidY);
                 c.quadraticCurveTo(skLastX, skLastY, midX, midY);
-                c.lineTo(p.x, p.y);
                 c.stroke();
-                skLastX = p.x; skLastY = p.y;
+                skPrevMidX = midX; skPrevMidY = midY;
+                skLastX = px; skLastY = py;
             }
         }
         function skEndStroke(){
             if (!skDrawing) return;
             skDrawing = false;
+            // 最後の中点から指/ペンを離した点まで線を伸ばす（中点法で残る僅かな隙間を埋める）
+            const c = skTargetCtx();
+            c.beginPath(); c.moveTo(skPrevMidX, skPrevMidY); c.lineTo(skLastX, skLastY); c.stroke();
             if (skLiveActive) {
                 skCtx.globalCompositeOperation = 'source-over';
                 skCtx.globalAlpha = skAlpha;
@@ -687,6 +808,7 @@
                 skLive.style.opacity = '1';
                 skLiveActive = false;
             }
+            skScheduleIdleSnap(); // 次の描き出しに備えて取り消しスナップを先取り
         }
         function skCancelStroke(){
             if (!skDrawing) return;
@@ -737,22 +859,25 @@
            ※ setPointerCapture方式だと一部スマホで本数を取りこぼすため touches.length を正とする */
         let gFingerMax = 0, gStart = 0, gMoved = false, gStartX = 0, gStartY = 0;
         skCanvas.addEventListener('touchstart', function(e){
+            // 1本指でも preventDefault する。iOS Safari はこれを止めないと、長押しで
+            // 文字選択・コールアウト・虫眼鏡（青い選択マーカー）が出て描画が乱れる。
+            // 実際の描画は pointer イベント側で行うので、ここで止めても線は引ける。
+            e.preventDefault();
             const n = e.touches.length;
             if (n > gFingerMax) gFingerMax = n;
             if (n === 1) {
                 gStart = Date.now(); gMoved = false;
                 gStartX = e.touches[0].clientX; gStartY = e.touches[0].clientY;
             } else {
-                e.preventDefault();   // 2本指以上はジェスチャ。既定動作を抑止
-                skCancelStroke();
+                skCancelStroke();     // 2本指以上はジェスチャ → 描きかけ取消
             }
         }, { passive: false });
         skCanvas.addEventListener('touchmove', function(e){
+            e.preventDefault();   // 指の移動中もスクロール/選択を抑止（描画はpointer側）
             if (e.touches.length >= 1) {
                 const dx = e.touches[0].clientX - gStartX, dy = e.touches[0].clientY - gStartY;
                 if (Math.hypot(dx, dy) > 16) gMoved = true;
             }
-            if (e.touches.length >= 2) e.preventDefault();
         }, { passive: false });
         function skGestureEnd(e){
             if (e.touches.length > 0) return;   // まだ指が残っている
@@ -768,7 +893,12 @@
         // iOSの長押し選択メニュー・コンテキストメニューを抑制
         skCanvas.addEventListener('contextmenu', function(e){ e.preventDefault(); }, { passive: false });
         skCanvas.addEventListener('selectstart', function(e){ e.preventDefault(); }, { passive: false });
-        document.getElementById('sketch-stage').addEventListener('contextmenu', function(e){ e.preventDefault(); }, { passive: false });
+        skStage.addEventListener('contextmenu', function(e){ e.preventDefault(); }, { passive: false });
+        skStage.addEventListener('selectstart', function(e){ e.preventDefault(); }, { passive: false });
+        // iOS Safari のピンチ（gesture系イベント）による“ページ全体のズーム”を描画中は止める
+        ['gesturestart', 'gesturechange', 'gestureend'].forEach(function(ev){
+            skStage.addEventListener(ev, function(e){ e.preventDefault(); }, { passive: false });
+        });
 
         /* ── 保存（レイアウトに応じて合成） ── */
         window.skSave = function(){
@@ -925,27 +1055,52 @@
             return fmCastShadow(cx + w * 0.4, cy + h * 1.08, w * 1.5, w * 0.5, sw)
                 + '<path d="' + d + '" fill="rgba(232,238,242,0.06)" stroke="#e8eef2" stroke-width="' + fmN(sw) + '"/>';
         }
-        /* ── フラワーサック（小麦粉袋）：量感・重さの練習。基本形を回転/つぶしでポーズ違いに ── */
-        function sackPathD(){
-            const c = 1.0, e = 1.5;
-            return 'M ' + (-c) + ' ' + (-c)
-                + ' C ' + (-c * 0.4) + ' ' + (-e) + ' ' + (c * 0.4) + ' ' + (-e) + ' ' + c + ' ' + (-c)
-                + ' C ' + (e) + ' ' + (-c * 0.4) + ' ' + (e) + ' ' + (c * 0.4) + ' ' + c + ' ' + c
-                + ' C ' + (c * 0.4) + ' ' + (e) + ' ' + (-c * 0.4) + ' ' + (e) + ' ' + (-c) + ' ' + c
-                + ' C ' + (-e) + ' ' + (c * 0.4) + ' ' + (-e) + ' ' + (-c * 0.4) + ' ' + (-c) + ' ' + (-c) + ' Z';
+        function formPyramid(W, H){
+            const cx = W / 2, cy = H / 2, hw = Math.min(W, H) * 0.26, hd = hw * 0.42, h = Math.min(W, H) * 0.5, sw = Math.max(2, Math.min(W, H) * 0.006);
+            const ax = cx, ay = cy - h * 0.6;                              // 頂点
+            const Fl = { x: cx - hw, y: cy + h * 0.4 }, Fr = { x: cx + hw, y: cy + h * 0.4 }; // 底の手前2点
+            const Bb = { x: cx, y: cy + h * 0.4 - hd };                    // 底の奥（見えている）
+            const poly = function(p){ return p.map(function(q){ return fmN(q.x) + ',' + fmN(q.y); }).join(' '); };
+            return fmCastShadow(cx + hw * 0.3, Fl.y + hd * 0.9, hw * 1.25, hd * 1.05, sw)
+                + '<polygon points="' + poly([ax, Fl, Fr]) + '" fill="rgba(232,238,242,0.11)" stroke="#e8eef2" stroke-width="' + fmN(sw) + '" stroke-linejoin="round"/>'
+                + '<polygon points="' + poly([ax, Fr, Bb]) + '" fill="rgba(232,238,242,0.04)" stroke="#cfd8de" stroke-width="' + fmN(sw) + '" stroke-linejoin="round"/>'
+                + '<line x1="' + fmN(ax) + '" y1="' + fmN(ay) + '" x2="' + fmN(Bb.x) + '" y2="' + fmN(Bb.y) + '" stroke="#9fb0bb" stroke-width="' + fmN(sw * 0.8) + '" stroke-dasharray="' + fmN(sw * 2) + ' ' + fmN(sw * 2) + '"/>';
         }
+        function formTorus(W, H){
+            const cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.27, ry = R * 0.42, t = R * 0.42, sw = Math.max(2, Math.min(W, H) * 0.006);
+            const irx = R - t, iry = Math.max(2, ry - t * 0.55);
+            return fmCastShadow(cx + R * 0.2, cy + ry * 1.7, R * 1.1, ry * 0.7, sw)
+                + '<ellipse cx="' + fmN(cx) + '" cy="' + fmN(cy) + '" rx="' + fmN(R) + '" ry="' + fmN(ry) + '" fill="rgba(232,238,242,0.06)" stroke="#e8eef2" stroke-width="' + fmN(sw) + '"/>'
+                + '<ellipse cx="' + fmN(cx) + '" cy="' + fmN(cy + ry * 0.16) + '" rx="' + fmN(irx) + '" ry="' + fmN(iry) + '" fill="#000" fill-opacity="0.18" stroke="#cfd8de" stroke-width="' + fmN(sw * 0.9) + '"/>';
+        }
+        /* ── フラワーサック（小麦粉袋）：量感・重さの練習。
+              縦長の“クッション”状の胴体＋四隅のつまんだ耳。回転/つぶしでポーズ違いに。
+              （丸くならないよう、胴体の膨らみは控えめ・縦長にしている） ── */
+        function sackBodyD(){
+            const w = 1.0, h = 1.28, b = 0.18; // 半幅 / 半高 / 辺の膨らみ（縦長＝重さが出る）
+            return 'M ' + (-w) + ' ' + (-h)
+                + ' C ' + (-w * 0.42) + ' ' + (-h - b) + ' ' + (w * 0.42) + ' ' + (-h - b) + ' ' + w + ' ' + (-h)   // 上辺
+                + ' C ' + (w + b) + ' ' + (-h * 0.45) + ' ' + (w + b) + ' ' + (h * 0.45) + ' ' + w + ' ' + h         // 右辺
+                + ' C ' + (w * 0.42) + ' ' + (h + b) + ' ' + (-w * 0.42) + ' ' + (h + b) + ' ' + (-w) + ' ' + h       // 下辺
+                + ' C ' + (-w - b) + ' ' + (h * 0.45) + ' ' + (-w - b) + ' ' + (-h * 0.45) + ' ' + (-w) + ' ' + (-h)   // 左辺
+                + ' Z';
+        }
+        // 四隅のつまんだ耳（小さな三角フラップ）
         function sackEars(){
-            const c = 1.0, t = 0.24, tk = function(x, y, dx, dy){
-                return '<line x1="' + x + '" y1="' + y + '" x2="' + (x + dx) + '" y2="' + (y + dy) + '" stroke="#cfd8de" stroke-width="2" vector-effect="non-scaling-stroke"/>';
+            const w = 1.0, h = 1.28, g = 0.34, o = 0.34;
+            const ear = function(x, y, ox, oy){
+                const b1x = x - ox * g, b1y = y, b2x = x, b2y = y - oy * g, ax = x + ox * o, ay = y + oy * o;
+                return '<path d="M ' + fmN(b1x) + ' ' + fmN(b1y) + ' L ' + fmN(ax) + ' ' + fmN(ay) + ' L ' + fmN(b2x) + ' ' + fmN(b2y) +
+                    '" fill="rgba(232,238,242,0.04)" stroke="#cfd8de" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
             };
-            return tk(-c, -c, -t, -t) + tk(c, -c, t, -t) + tk(c, c, t, t) + tk(-c, c, -t, t);
+            return ear(-w, -h, -1, -1) + ear(w, -h, 1, -1) + ear(w, h, 1, 1) + ear(-w, h, -1, 1);
         }
         function makeSack(rot, sx, sy){
             return function(W, H){
-                const cx = W / 2, cy = H / 2, S = Math.min(W, H) * 0.23, sw = Math.max(2, Math.min(W, H) * 0.006);
-                return fmCastShadow(cx, cy + S * 1.35, S * 1.35, S * 0.3, sw)
+                const cx = W / 2, cy = H / 2, S = Math.min(W, H) * 0.21, sw = Math.max(2, Math.min(W, H) * 0.006);
+                return fmCastShadow(cx, cy + S * 1.55, S * 1.4, S * 0.32, sw)
                     + '<g transform="translate(' + fmN(cx) + ' ' + fmN(cy) + ') rotate(' + rot + ') scale(' + (S * sx).toFixed(2) + ' ' + (S * sy).toFixed(2) + ')">'
-                    + '<path d="' + sackPathD() + '" fill="rgba(232,238,242,0.06)" stroke="#e8eef2" stroke-width="' + fmN(sw) + '" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>'
+                    + '<path d="' + sackBodyD() + '" fill="rgba(232,238,242,0.06)" stroke="#e8eef2" stroke-width="' + fmN(sw) + '" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>'
                     + sackEars() + '</g>';
             };
         }
@@ -962,8 +1117,8 @@
         const FM_STROKES = [fmLoops, fmGarland, fmEight, fmSpiral, fmTrefoil, fmRose, fmWave];
         const FM_DECKS = [
             { name: '一筆書き', trace: true, items: FM_STROKES.map(function(g){ return function(W, H){ return fmStrokeSVG(g, W, H); }; }) },
-            { name: '基本形', trace: false, items: [formSphere, formBox, formCylinder, formCone, formEgg] },
-            { name: 'フラワーサック', trace: false, items: [makeSack(0, 1, 1), makeSack(18, 1, 1), makeSack(0, 1.3, 0.72), makeSack(-22, 0.95, 1.05), makeSack(8, 0.82, 1.25)] }
+            { name: '基本形', trace: false, items: [formSphere, formBox, formCylinder, formCone, formEgg, formPyramid, formTorus] },
+            { name: 'フラワーサック', trace: false, items: [makeSack(0, 1, 1), makeSack(0, 1.35, 0.72), makeSack(0, 0.8, 1.3), makeSack(20, 1.05, 0.95), makeSack(-26, 1.15, 0.85)] }
         ];
         function fmRender(){
             if (!skFormenOn || !skFormenSvg) return;
@@ -1010,11 +1165,11 @@
                 skImg.style.visibility = '';
                 if (skFormenPrevSide && !skSide) { skSide = true; skApplyLayout(true); }
                 // なぞり描きを消して、退避していた描画を元の大きさ・位置で戻す
-                skCtx.clearRect(0, 0, skCW, skCH); skUndoStack = []; skRedoStack = [];
+                skCtx.clearRect(0, 0, skCW, skCH); skUndoStack = []; skRedoStack = []; skIdleSnap = null;
                 if (skFormenBackup) {
                     const data = skFormenBackup, bw = skFormenBackupW, bh = skFormenBackupH, bleft = skFormenBackupLeft;
                     const im = new Image();
-                    im.onload = function(){ skCtx.drawImage(im, bleft - skLeft, 0, bw, bh); };
+                    im.onload = function(){ skCtx.drawImage(im, bleft - skLeft, 0, bw, bh); skScheduleIdleSnap(); };
                     im.src = data;
                     skFormenBackup = null;
                 }
@@ -1077,13 +1232,14 @@
         window.skFade = function(){
             if (skFormenOn) { skFlash('お題モード中は使えません', 1800); return; }
             const snap = skSnap(); if (!snap) { skFlash('まだ何も描かれていません', 1600); return; }
-            skPushUndo(); skRedoStack = [];
+            skPushUndo(); skRedoStack = []; skIdleSnap = null;
             const im = new Image();
             im.onload = function(){
                 skCtx.clearRect(0, 0, skCW, skCH);
                 skCtx.globalAlpha = 0.5;            // 1回押すごとに半分の濃さに
                 skCtx.drawImage(im, 0, 0, skCW, skCH);
                 skCtx.globalAlpha = 1;
+                skScheduleIdleSnap();
             };
             im.src = snap;
         };

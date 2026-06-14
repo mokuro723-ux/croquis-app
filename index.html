@@ -331,6 +331,7 @@
     <div id="sketch-overlay" class="panel-overlay">
         <div class="panel-header">
             <button class="panel-btn" id="sketch-layout-btn" title="画像と描画スペースを左右に並べる（模写モード）">⬓ 並べる</button>
+            <button class="panel-btn" id="sketch-grid-btn" title="比率合わせ用のグリッドを表示（押すたび 3×3 → 4×4 → 消す。模写の当たり取りに）">▦ グリッド</button>
             <span class="sk-hsep"></span>
             <button class="panel-btn" id="sketch-ref-btn" title="参考画像を読み込む（URL / コピー＆ペースト / ドラッグ＆ドロップ）">🖼 参考</button>
             <button class="panel-btn" id="sketch-formen-btn" title="お題を表示して練習（一筆書き / 基本形 / フラワーサック）">✏️ お題</button>
@@ -367,6 +368,7 @@
             <svg id="sketch-formen" preserveAspectRatio="none" aria-hidden="true"></svg>
             <canvas id="sketch-canvas"></canvas>
             <canvas id="sketch-live"></canvas>
+            <svg id="sketch-grid" preserveAspectRatio="none" aria-hidden="true"></svg>
             <div id="sketch-countdown"></div>
             <div id="sketch-msg" style="display:none;"></div>
             <div id="sketch-formen-bar">
@@ -381,6 +383,22 @@
                 <input type="range" id="sketch-formen-op" min="20" max="100" value="70">
                 <button id="je-skformenclose" class="sk-fmbtn ghost">✕ 終了</button>
             </div>
+            <!-- 描画設定（普段は隠す。描き始めると自動で閉じる＝描画に集中できる） -->
+            <div id="sketch-settings-pop" aria-hidden="true">
+                <div class="sk-set-row">
+                    <span class="sk-set-label">紙</span>
+                    <button class="sk-paper" data-bg="#000000" style="background:#000000" title="黒"></button>
+                    <button class="sk-paper" data-bg="#7d7d7d" style="background:#7d7d7d" title="灰（中間色・明暗練習に）"></button>
+                    <button class="sk-paper" data-bg="#f4f1ea" style="background:#f4f1ea" title="クリーム（白紙）"></button>
+                </div>
+                <div class="sk-set-row">
+                    <button class="panel-btn" id="sketch-stab-btn" title="指で描くときに線を滑らかにする">✋ 手ブレ補正</button>
+                </div>
+                <div class="sk-set-row">
+                    <span class="sk-set-label">補正の強さ</span>
+                    <input type="range" id="sketch-stab-strength" min="1" max="9" value="5">
+                </div>
+            </div>
             <button id="sk-tools-fab" title="ツールを表示">🖌</button>
         </div>
         <div id="sketch-tools">
@@ -391,6 +409,7 @@
             <button class="sk-color" data-c="#3d8bff" data-a="1" style="background:#3d8bff" title="青"></button>
             <button class="sk-color half" data-c="#3d8bff" data-a="0.3" title="青鉛筆（半透明）— 当たり取りに"></button>
             <input type="range" id="sketch-size" min="2" max="30" value="5" title="ペンの太さ">
+            <button class="panel-btn" id="sketch-settings-btn" title="描画の設定（紙の色・手ブレ補正）">⚙</button>
             <button class="panel-btn" id="sketch-eraser-btn">🧽</button>
             <button id="je-skundo" class="panel-btn" title="元に戻す（2本指タップ / Ctrl+Z）">↩</button>
             <button id="je-skredo" class="panel-btn" title="やり直し（Ctrl+Y）">↪</button>

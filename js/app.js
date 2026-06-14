@@ -8,6 +8,10 @@
             CLASS:       'croquis_class_v1',
             SKIPS:       'croquis_skips_v1',
             SKETCH_SIDE: 'croquis_sketch_side_v1',
+            SKETCH_GRID: 'croquis_sketch_grid_v1',
+            SKETCH_STAB: 'croquis_sketch_stab_v1',
+            SKETCH_STAB_STR: 'croquis_sketch_stab_str_v1',
+            SKETCH_PAPER: 'croquis_sketch_paper_v1',
         };
 
         // ── 保存係（読み書きと失敗時の記録を一手に引き受ける） ──────
