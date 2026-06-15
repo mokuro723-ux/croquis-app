@@ -324,23 +324,27 @@
                 request.onerror = function() { resolve(); };
             });
         }
-        function saveFavToDB(name, dataUrl) {
+        // data には Blob を保存する（v3〜）。旧データの dataURL文字列もそのまま保存できる（後方互換）。
+        function saveFavToDB(name, data) {
             if (!db) return;
             const tx = db.transaction(storeName, "readwrite");
             tx.onerror = function() {};
-            tx.objectStore(storeName).put({ name: name, data: dataUrl, timestamp: Date.now() });
+            tx.objectStore(storeName).put({ name: name, data: data, timestamp: Date.now() });
         }
-        /** File/Blob を DataURL に変換してから IndexedDB に保存する（バックグラウンド用）*/
+        /** File/Blob を“そのまま”IndexedDB に保存し、表示用の blob: URL を返す（DataURL化しない＝軽量・高速）*/
         function saveFavFileToDB(item) {
             return new Promise(function(resolve) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    saveFavToDB(item.name, e.target.result);
-                    resolve(e.target.result);
-                };
-                reader.onerror = function() { resolve(null); };
-                reader.readAsDataURL(item);
+                try { saveFavToDB(item.name, item); resolve(URL.createObjectURL(item)); }
+                catch(_) { resolve(null); }
             });
+        }
+        /** お気に入りに1枚追加（Blobを保存し、メモリには blob: URL を持たせる）。表示用URLを返す */
+        function addFavorite(name, blob) {
+            saveFavToDB(name, blob);
+            const u = URL.createObjectURL(blob);
+            dbFavImages.push({ name: name, data: u });
+            rebuildFavNameSet();
+            return u;
         }
         function deleteFavFromDB(name) {
             if (!db) return;
@@ -352,7 +356,12 @@
             return new Promise((resolve) => {
                 if (!db) { resolve([]); return; }
                 let request = db.transaction(storeName, "readonly").objectStore(storeName).getAll();
-                request.onsuccess = function() { resolve(request.result || []); };
+                request.onsuccess = function() {
+                    const rows = request.result || [];
+                    // 保存形式が Blob なら表示用の blob: URL に変換（dataURL文字列の旧データはそのまま使う）
+                    rows.forEach(function(r){ if (r && r.data instanceof Blob) r.data = URL.createObjectURL(r.data); });
+                    resolve(rows);
+                };
                 request.onerror = function() { resolve([]); };
             });
         }
@@ -363,7 +372,17 @@
             CroquisStore.setJSON(CROQUIS_KEYS.SKIPS, skipList, 'skip一覧');
         }
 
-        function rebuildFavNameSet() { favNameSet = new Set(dbFavImages.map(function(f){ return f.name; })); }
+        // お気に入りの「永続 blob: URL」集合。プリロード等の自動revokeから守るために使う。
+        let favUrlSet = new Set();
+        function rebuildFavNameSet() {
+            favNameSet = new Set(dbFavImages.map(function(f){ return f.name; }));
+            favUrlSet  = new Set(dbFavImages.map(function(f){ return f.data; })
+                .filter(function(d){ return typeof d === 'string' && d.indexOf('blob:') === 0; }));
+        }
+        // blob: URL を安全にrevoke（お気に入りの永続URLは消さない）
+        function revokeIfOwned(u) {
+            if (u && typeof u === 'string' && u.indexOf('blob:') === 0 && !favUrlSet.has(u)) URL.revokeObjectURL(u);
+        }
         function rebuildSkipNameSet() { skipNameSet = new Set(skipList); }
         function hasUnskippedInCurrentPool() {
             if (isFavMode) return true;
@@ -925,9 +944,9 @@
 
         function clearPreloadUrl() {
             plannedNextIndex = -1; // プールやURLが変わったら抽選もやり直し
-            if (preloadUrl && preloadUrl.startsWith('blob:')) URL.revokeObjectURL(preloadUrl);
+            revokeIfOwned(preloadUrl);
             preloadUrl = null; preloadName = ''; preloadedImage = null;
-            if (preloadUrl2 && preloadUrl2.startsWith('blob:')) URL.revokeObjectURL(preloadUrl2);
+            revokeIfOwned(preloadUrl2);
             preloadUrl2 = null; preloadName2 = ''; preloadedImage2 = null;
         }
 
@@ -942,7 +961,7 @@
             const curName = isSlot1 ? preloadName : preloadName2;
             const newName = item.name || '';
             if (curName === newName && curUrl) return; // 既にロード済み
-            if (curUrl && curUrl.startsWith('blob:')) URL.revokeObjectURL(curUrl);
+            revokeIfOwned(curUrl); // 直前のスロットURLを解放（お気に入りの永続URLは消さない）
             const url = item.data ? item.data : URL.createObjectURL(item);
             // URL をスロットに即記録してから src をセット（二重生成防止）
             if (isSlot1) { preloadUrl  = url; preloadName  = newName; preloadedImage  = null; }
@@ -997,7 +1016,7 @@
                 _loadPreloadSlot(images[secondIdx], 'preload2');
             } else {
                 // 2枚目不要：解放
-                if (preloadUrl2 && preloadUrl2.startsWith('blob:')) URL.revokeObjectURL(preloadUrl2);
+                revokeIfOwned(preloadUrl2);
                 preloadUrl2 = null; preloadName2 = ''; preloadedImage2 = null;
             }
         }
@@ -1074,10 +1093,8 @@
             } else {
                 newUrl = URL.createObjectURL(item);
             }
-            // 前のURLを解放（ただしプリロードURLと同じなら解放しない）
-            if (currentImageUrl && currentImageUrl.startsWith('blob:') && currentImageUrl !== newUrl) {
-                URL.revokeObjectURL(currentImageUrl);
-            }
+            // 前のURLを解放（プリロードURLやお気に入りの永続URLは解放しない）
+            if (currentImageUrl !== newUrl) revokeIfOwned(currentImageUrl);
             currentImageUrl = newUrl;
             // v2: オンライン素材（CORS対応URL）は crossorigin を付与（PiP/保存のため）
             if (newUrl.indexOf('http') === 0 && item.cors) { ui.img.setAttribute('crossorigin', 'anonymous'); }
@@ -1279,22 +1296,26 @@
             } else {
                 const foundIdx = dbFavImages.findIndex(function(f){ return f.name === fname; });
                 if(foundIdx > -1) {
+                    const removed = dbFavImages[foundIdx];
                     dbFavImages.splice(foundIdx, 1); rebuildFavNameSet(); deleteFavFromDB(fname);
+                    if (removed && typeof removed.data === 'string' && removed.data.indexOf('blob:') === 0) URL.revokeObjectURL(removed.data);
                     setVisible(ui.favIcon, false);
                     if (isHistoryPanelOpen && showFavsOnly) renderHistoryThumbs();
                 }
                 else {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const dataUrl = e.target.result; dbFavImages.push({ name: fname, data: dataUrl }); rebuildFavNameSet(); saveFavToDB(fname, dataUrl);
+                    const onSaved = function() {
                         setVisible(ui.favIcon, true);
                         if (isHistoryPanelOpen && showFavsOnly) renderHistoryThumbs();
                     };
                     if (item.data) {
-                        // v2: オンライン素材はURLから取得してデータURL化
-                        if (String(item.data).indexOf('data:') === 0) { reader.onload({ target: { result: item.data } }); }
-                        else { fetch(item.data).then(function(r){ return r.blob(); }).then(function(b){ reader.readAsDataURL(b); }).catch(function(){ alert('この画像はお気に入りに保存できませんでした（提供元の制限）'); }); }
-                    } else { reader.readAsDataURL(item); }
+                        // オンライン素材：URL（または dataURL）から Blob を取得して保存
+                        fetch(item.data).then(function(r){ return r.blob(); })
+                            .then(function(b){ addFavorite(fname, b); onSaved(); })
+                            .catch(function(){ alert('この画像はお気に入りに保存できませんでした（提供元の制限）'); });
+                    } else {
+                        // ローカル画像：File(Blob)をそのまま保存（DataURL化しない＝軽量・高速）
+                        addFavorite(fname, item); onSaved();
+                    }
                 }
                 ui.managePopup.classList.toggle('show', false);
             }
@@ -1642,11 +1663,11 @@
             // ── バックグラウンドでDB保存（順次処理して負荷を分散）──
             for (let i = 0; i < targets.length; i++) {
                 const item = targets[i];
-                const dataUrl = await saveFavFileToDB(item);
-                // dbFavImages の data を更新
+                const url = await saveFavFileToDB(item); // Blobを保存し表示用 blob: URL を取得
                 const entry = dbFavImages.find(function(f) { return f.name === item.name; });
-                if (entry && dataUrl) entry.data = dataUrl;
+                if (entry && url) entry.data = url;
             }
+            rebuildFavNameSet(); // 新しい blob: URL を favUrlSet にも反映（自動revokeから守る）
         }
 
         async function multiSelectUnfav() {
@@ -1656,6 +1677,8 @@
                 .filter(function(item) { return item && favNameSet.has(item.name); });
             if (targets.length === 0) { showMultiSelectMsg('選択中にお気に入り登録済みの画像がありません'); return; }
             targets.forEach(function(item) {
+                const entry = dbFavImages.find(function(f){ return f.name === item.name; });
+                if (entry && typeof entry.data === 'string' && entry.data.indexOf('blob:') === 0) URL.revokeObjectURL(entry.data);
                 dbFavImages = dbFavImages.filter(function(f) { return f.name !== item.name; });
                 deleteFavFromDB(item.name);
             });
