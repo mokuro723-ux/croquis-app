@@ -15,6 +15,12 @@
             SKETCH_MEMFADE: 'croquis_sketch_memfade_v1',
             SKETCH_CMP: 'croquis_sketch_cmp_v1',
             SKETCH_LASSOPREV: 'croquis_sketch_lassoprev_v1',
+            SKETCH_MEMSEC: 'croquis_sketch_memsec_v1',       // 記憶/タイマーの秒数
+            SKETCH_SIZE: 'croquis_sketch_size_v1',           // ペンの太さ
+            SKETCH_COLOR: 'croquis_sketch_color_v1',         // ペンの色（"色|不透明度"）
+            SKETCH_GRID_COLOR: 'croquis_sketch_grid_color_v1', // グリッド線の色
+            SKETCH_GRID_OP: 'croquis_sketch_grid_op_v1',     // グリッド線の濃さ(1〜10)
+            SKETCH_BW_CONTRAST: 'croquis_sketch_bw_contrast_v1', // 二階調コントラスト(1〜20)
         };
 
         // ── 保存係（読み書きと失敗時の記録を一手に引き受ける） ──────

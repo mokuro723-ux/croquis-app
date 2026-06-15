@@ -500,7 +500,7 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     .sk-tbtn:hover { background: #3a3a3a; }
     .sk-tbtn.ghost:hover { background: rgba(255,255,255,0.07); }
     .sk-tbtn.accent:hover { filter: brightness(1.08); }
-    .sk-color:hover, .sk-paper:hover { transform: scale(1.1); }
+    .sk-color:hover, .sk-paper:hover, .sk-gridcolor:hover { transform: scale(1.1); }
 }
 /* 指で押す端末（スマホ/タブレット）はタップしやすいよう大きめに */
 @media (pointer: coarse) {
@@ -508,6 +508,7 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     .sk-tbtn { padding: 8px 12px; }
     .sk-color { width: 34px; height: 34px; }
     .sk-paper { width: 32px; height: 32px; }
+    .sk-gridcolor { width: 30px; height: 30px; }
 }
 #sketch-stage { flex: 1; position: relative; overflow: hidden; touch-action: none; background: #000; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 /* 描画モード全体でタップ時の青いハイライトを消す（ボタンも含め誤選択を防ぐ） */
@@ -636,6 +637,14 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 .sk-color { width: 31px; height: 31px; border-radius: 50%; border: 2px solid #5a5a5a; cursor: pointer; padding: 0; flex: 0 0 auto; }
 .sk-color.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
 .sk-color.half { background: linear-gradient(135deg, rgba(61,139,255,0.85) 50%, rgba(61,139,255,0.3) 50%) !important; }
+/* グリッドの色スウォッチ（表示タブ）＋濃さ/コントラストのスライダー */
+.sk-gridcolor { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #5a5a5a; cursor: pointer; padding: 0; flex: 0 0 auto; }
+.sk-gridcolor.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
+.sk-panel #sketch-grid-op { width: 84px; accent-color: var(--accent); flex: 0 0 auto; }
+.sk-panel #sketch-bwcontrast { width: 96px; accent-color: var(--accent); flex: 0 0 auto; }
+/* トレーニング（描画モードの目玉機能）は枠線で少し目立たせる */
+.sk-tbtn.sk-train { border: 1px solid var(--accent); }
+.sk-tbtn.sk-train .svg-icon { color: var(--accent); }
 #sketch-imgopacity-wrap { display: none; align-items: center; gap: 6px; font-size: 0.78rem; color: #ddd; }
 #sketch-imgopacity { width: 80px; accent-color: var(--accent); }
 #sk-gesture-hint { display: none; } /* 2本指タップの案内は省略（戻すボタンが常時見えるため） */

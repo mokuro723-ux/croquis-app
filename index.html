@@ -333,8 +333,9 @@
         <div class="panel-header" id="sk-topbar">
             <button id="je-togglesketch" class="sk-tbtn ghost" title="描画モードを閉じる"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
             <span class="sk-hsep"></span>
-            <button id="sketch-layout-btn" class="sk-tbtn" title="画像と描画スペースを左右に並べる（模写モード）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 4h8v16H3zM13 4h8v16h-8z"/></svg><span>並べる</span></button>
-            <button id="sketch-images-btn" class="sk-tbtn" title="画像を読み込む（フォルダ / ファイル / お気に入り / 参考画像）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg><span>画像</span><svg viewBox="0 0 24 24" class="sk-caret"><path d="M7 10l5 5 5-5z"/></svg></button>
+            <button id="sketch-layout-btn" class="sk-tbtn" title="画像と描画スペースを左右に並べる（模写モード）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 4h8v16H3zM13 4h8v16h-8z"/></svg></button>
+            <button id="sketch-images-btn" class="sk-tbtn" title="画像を読み込む（フォルダ / ファイル / お気に入り / 参考画像）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg><svg viewBox="0 0 24 24" class="sk-caret"><path d="M7 10l5 5 5-5z"/></svg></button>
+            <button id="sketch-training-btn" class="sk-tbtn sk-train" title="トレーニング：並べる→グリッド→記憶で描く を自動で進行（覚える間にアタリ→自動で薄く→記憶で描く）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/></svg><span>トレ</span></button>
             <span class="spacer"></span>
             <button id="sketch-peek-btn" class="sk-tbtn" title="一瞬だけ見る" style="display:none;"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg><span>見る</span></button>
             <button id="sketch-reveal-btn" class="sk-tbtn" title="答え合わせ" style="display:none;"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg><span>答え</span></button>
@@ -417,10 +418,19 @@
                 <!-- 表示 -->
                 <div class="sk-panel" data-tab="view">
                     <button id="sketch-grid-btn" class="sk-tbtn" title="比率合わせ用グリッド（押すたび 3×3 → 4×4 → 消す）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg><span>グリッド</span></button>
+                    <button class="sk-gridcolor" data-gc="cyan"  style="background:#00d4ff" title="グリッドの色：シアン"></button>
+                    <button class="sk-gridcolor" data-gc="white" style="background:#ffffff" title="グリッドの色：白"></button>
+                    <button class="sk-gridcolor" data-gc="black" style="background:#1a1a1a" title="グリッドの色：黒（白紙向け）"></button>
+                    <button class="sk-gridcolor" data-gc="red"   style="background:#ff4d5e" title="グリッドの色：赤"></button>
+                    <span class="sk-set-label">濃さ</span>
+                    <input type="range" id="sketch-grid-op" min="1" max="10" value="6" title="グリッド線の濃さ">
+                    <span class="sk-vsep"></span>
                     <button id="sketch-fliph-btn" class="sk-tbtn" title="左右反転（鏡像でバランス確認）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10,6 L4,12 L10,18 Z"/><rect x="11" y="4" width="2" height="16"/><path d="M14,6 L20,12 L14,18 Z"/></svg><span>左右反転</span></button>
                     <button id="sketch-flipv-btn" class="sk-tbtn" title="上下反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6,10 L12,4 L18,10 Z"/><rect x="4" y="11" width="16" height="2"/><path d="M6,14 L12,20 L18,14 Z"/></svg><span>上下反転</span></button>
                     <button id="sketch-mono-btn" class="sk-tbtn" title="モノクロ表示"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm1-17.93c3.95.49 7 3.85 7 7.93s-3.05 7.44-7 7.93V4.07z"/></svg><span>モノクロ</span></button>
                     <button id="sketch-bw-btn" class="sk-tbtn" title="二階調（白黒コントラスト）"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="2" y="2" width="5" height="5"/><rect x="12" y="2" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/><rect x="17" y="7" width="5" height="5"/><rect x="2" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/><rect x="7" y="17" width="5" height="5"/><rect x="17" y="17" width="5" height="5"/></svg><span>二階調</span></button>
+                    <span class="sk-set-label">コントラスト</span>
+                    <input type="range" id="sketch-bwcontrast" min="1" max="20" value="10" title="二階調のコントラスト強さ">
                 </div>
                 <!-- 練習 -->
                 <div class="sk-panel" data-tab="practice">

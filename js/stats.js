@@ -417,9 +417,11 @@
         let skOpen = false, skDrawing = false, skEraser = false;
         let skColor = '#ff4d5e', skAlpha = 1, skLiveActive = false;
         let skLastX = 0, skLastY = 0, skPrevMidX = 0, skPrevMidY = 0; // 直前点と直前中点（なめらか化用）
+        let skRawLastX = 0, skRawLastY = 0; // 補正前の“本当の”最終位置（離した瞬間に終点を合わせ、線が短く切れないように）
         let skStab = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_STAB) === '1', skStabX = 0, skStabY = 0; // 手ブレ補正（指描き向け）
         let skStabStr = Math.min(9, Math.max(1, parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_STAB_STR), 10) || 5)); // 補正の強さ(1=弱〜9=強)
-        let skStabK = 0.8 - (skStabStr - 1) * 0.06875; // 入力点の寄せ率（小さいほど強く補正）
+        // 入力点の寄せ率K（小さいほど強く補正）。弱(1)=0.9〜強(9)=0.14 と範囲を広げ、強さの差がはっきり出るように。
+        let skStabK = 0.9 - (skStabStr - 1) * 0.095;
         let skPaper = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_PAPER) || '#000000'; // 紙（ステージ背景）の色
         let skMemFade = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_MEMFADE) !== '0'; // 記憶モードで隠す瞬間に下描き化（既定ON）
         let skCmpOn = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_CMP) !== '0';       // 制限時間タイマーで見比べ時間を入れる（既定ON）
@@ -434,6 +436,10 @@
         let skTimerOn = false, skSessionTimer = null; // 描画モード内の時間制限タイマー
         let skRefOverride = false, skRefObjUrl = null; // 参考画像の手動指定（URL/貼り付け/D&D）
         let skGrid = parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_GRID), 10) || 0; // 比率グリッドの分割数（0=オフ）
+        let skGridColor = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_GRID_COLOR) || 'cyan'; // グリッド線の色
+        let skGridOp = Math.min(10, Math.max(1, parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_GRID_OP), 10) || 6)); // グリッド線の濃さ(1〜10)
+        let skBwContrast = Math.min(20, Math.max(1, parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_BW_CONTRAST), 10) || 10)); // 二階調コントラスト(1〜20)
+        const SK_GRID_RGB = { cyan: '0,212,255', white: '255,255,255', black: '0,0,0', red: '255,77,94' }; // グリッド色の名前→RGB
         let skFlipH = false, skFlipV = false, skMono = false, skBw = false; // 参考画像の加工（描画モード内だけで独立管理）
         let skTool = 'pen', skLassoPts = null; // 道具: pen / eraser / lasso / lassoLight。投げ縄の頂点配列
         let skLassoFillPreview = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_LASSOPREV) === '1'; // 投げ縄の塗り予測（シルエット）表示。既定OFF（なぞり線は常時）
@@ -458,6 +464,7 @@
                 const gb = document.getElementById('sketch-grid-btn'); // 前回のグリッド設定をボタンに反映
                 if (gb) { gb.classList.toggle('accent', skGrid > 0); gb.title = skGrid > 0 ? ('グリッド ' + skGrid + '×' + skGrid) : 'グリッド（比率合わせ）'; }
                 skSyncSettingsBtns();                                   // 補正・記憶下描き化・見比べの状態を反映
+                skApplySavedInputs();                                   // 記憶秒数・ペン太さ・ペン色・グリッド色などを復元
                 skApplyPaper();                                         // 前回の紙の色を反映
                 skApplyLayout(false);
                 skSyncImage();
@@ -490,10 +497,10 @@
             skOverlay.classList.toggle('side', skSide);
             const b = document.getElementById('sketch-layout-btn');
             if (b) {
-                // トグルボタン：今が「並べる」なら押すと「重ねる」へ（アイコン＋ラベルを切替）
+                // トグルボタン（アイコンのみ・横幅圧縮）：今が「並べる」なら押すと「重ねる」へ
                 b.innerHTML = skSide
-                    ? '<svg viewBox="0 0 24 24" class="svg-icon"><path d="M5 3h12v12H5z" opacity=".45"/><path d="M8 8h12v12H8z"/></svg><span>重ねる</span>'
-                    : '<svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 4h8v16H3zM13 4h8v16h-8z"/></svg><span>並べる</span>';
+                    ? '<svg viewBox="0 0 24 24" class="svg-icon"><path d="M5 3h12v12H5z" opacity=".45"/><path d="M8 8h12v12H8z"/></svg>'
+                    : '<svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 4h8v16H3zM13 4h8v16h-8z"/></svg>';
                 b.title = skSide ? '重ねる（画像の上に直接描く）' : '並べる（左に画像・右に描画）';
             }
             skResize(!preserve);
@@ -526,9 +533,13 @@
         // 比率合わせグリッド：与えた矩形 r を n×n に分割する線を返す（外枠も少し濃く）
         function skGridLines(r, n){
             const x0 = r.x, y0 = r.y, w = r.w, h = r.h, out = [];
+            const rgb = SK_GRID_RGB[skGridColor] || SK_GRID_RGB.cyan;   // 設定された色
+            const aBase = skGridOp / 10;                                // 濃さ 1〜10 → 0.1〜1.0
+            const aIn = Math.min(1, aBase * 0.55).toFixed(2);          // 内側の細線（やや薄め）
+            const aOut = Math.min(1, aBase * 0.9).toFixed(2);          // 外枠（少し濃く）
             const line = function(x1, y1, x2, y2, strong){
                 return '<line x1="' + fmN(x1) + '" y1="' + fmN(y1) + '" x2="' + fmN(x2) + '" y2="' + fmN(y2) +
-                    '" stroke="' + (strong ? 'rgba(0,212,255,0.55)' : 'rgba(0,212,255,0.32)') +
+                    '" stroke="rgba(' + rgb + ',' + (strong ? aOut : aIn) + ')' +
                     '" stroke-width="' + (strong ? 1.4 : 1) + '"/>';
             };
             for (let i = 1; i < n; i++){ const x = x0 + w * i / n; out.push(line(x, y0, x, y0 + h, false)); }
@@ -574,6 +585,52 @@
             const b = document.getElementById('sketch-grid-btn'); if (b) { b.classList.remove('accent'); b.title = 'グリッド（比率合わせ）'; }
             skRenderGrid();
         }
+        // グリッドの色・濃さ・二階調コントラスト（描画モード専用・サイト内に保持）
+        window.skSetGridColor = function(c){
+            if (!SK_GRID_RGB[c]) c = 'cyan';
+            skGridColor = c;
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_GRID_COLOR, c, 'グリッドの色');
+            skSyncViewBtns();
+            skRenderGrid();
+        };
+        window.skSetGridOp = function(v){
+            skGridOp = Math.min(10, Math.max(1, parseInt(v, 10) || 6));
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_GRID_OP, String(skGridOp), 'グリッドの濃さ');
+            skRenderGrid();
+        };
+        window.skSetBwContrast = function(v){
+            skBwContrast = Math.min(20, Math.max(1, parseInt(v, 10) || 10));
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_BW_CONTRAST, String(skBwContrast), '二階調コントラスト');
+            skApplyImgFilters(); // 二階調表示中なら即反映
+        };
+        function skSyncViewBtns(){ // 「表示」タブのグリッド色・濃さ・コントラストを現在値に合わせる
+            document.querySelectorAll('.sk-gridcolor').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-gc') === skGridColor); });
+            const go = document.getElementById('sketch-grid-op'); if (go) go.value = String(skGridOp);
+            const bc = document.getElementById('sketch-bwcontrast'); if (bc) bc.value = String(skBwContrast);
+        }
+        // 記憶秒数・ペン太さ・ペン色を保存値から復元（描画モードを開くたびに呼ぶ）
+        function skApplySavedInputs(){
+            const ms = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_MEMSEC);
+            const msEl = document.getElementById('sketch-memsec');
+            if (msEl && ms) { msEl.value = ms; if (msEl.value !== ms) msEl.value = '30'; } // 選択肢に無ければ既定
+            const sz = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_SIZE);
+            const szEl = document.getElementById('sketch-size');
+            if (szEl && sz) szEl.value = sz;
+            const col = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_COLOR);
+            if (col) {
+                const parts = col.split('|'), c = parts[0], a = parts[1] || '1';
+                let matched = null;
+                document.querySelectorAll('.sk-color').forEach(function(b){
+                    if (b.getAttribute('data-c') === c && (b.getAttribute('data-a') || '1') === a) matched = b;
+                });
+                if (matched) {
+                    document.querySelectorAll('.sk-color').forEach(function(b){ b.classList.remove('on'); });
+                    matched.classList.add('on');
+                    skColor = c; skAlpha = parseFloat(a) || 1;
+                }
+            }
+            skSyncViewBtns();
+        }
         window.skToggleTools = function(){
             skOverlay.classList.toggle('tools-hidden');
             skResize(false);
@@ -589,7 +646,7 @@
         }
         // 参考画像の加工フィルタのCSS文字列（CSS filter と canvas ctx.filter で共用）
         function skImgFilterCSS(){
-            if (skBw) return 'grayscale(1) contrast(' + bwContrast + ')';
+            if (skBw) return 'grayscale(1) contrast(' + skBwContrast + ')'; // 描画モード専用のコントラスト
             if (skMono) return 'grayscale(100%)';
             return 'none';
         }
@@ -693,26 +750,55 @@
             }
         }
 
-        window.skStartMemory = function(){
+        window.skStartMemory = function(isTraining){
             skCloseMenus();
             skStopTimer();
             skCancelMemory();
             skClearSilent();
             let sec = parseInt(document.getElementById('sketch-memsec').value, 10) || 5;
             skSetState('memorize');
-            skShowMsg('よく見て覚えてください…');
+            skShowMsg(isTraining ? 'トレーニング：左の画像を見ながら、右にアタリを取ろう…' : 'よく見て覚えてください…');
             skCountdown.style.display = 'block'; skCountdown.textContent = sec;
             skMemTimer = setInterval(function(){
                 sec--;
                 if (sec <= 0) {
                     skCancelMemory();
-                    // 覚える間に描いた当たり線は、隠す瞬間に薄い下描き化＋グリッドも消す（設定でON/OFF）
-                    if (skMemFade) { skFadeOnce(0.2); skGridOff(); } // 0.2≒「薄く」2〜3回分
+                    // 覚える間に描いた当たり線は、隠す瞬間に薄い下描き化＋グリッドも消す
+                    // （通常は設定でON/OFF。トレーニング中は必ず実行）
+                    if (skMemFade || isTraining) { skFadeOnce(0.2); skGridOff(); } // 0.2≒「薄く」2〜3回分
                     skSetState('hidden');
-                    skShowMsg(skMemFade ? '記憶を頼りに描こう（下描きは薄くしました）' : '記憶を頼りに描いてみよう！描けたら「答え合わせ」');
+                    skShowMsg(isTraining
+                        ? '記憶を頼りに描こう！描けたら「重ねる」や「答え合わせ」で確認'
+                        : (skMemFade ? '記憶を頼りに描こう（下描きは薄くしました）' : '記憶を頼りに描いてみよう！描けたら「答え合わせ」'));
                     setTimeout(function(){ skShowMsg(''); }, 3500);
                 } else { skCountdown.textContent = sec; }
             }, 1000);
+        };
+        // ── トレーニングモード（上バーのアイコン）──────────────────────
+        // ①現在の画像を「並べる」表示 → ②グリッド表示 → ③記憶発動（覚える間にアタリ）
+        // → ④時間後に自動でアタリを薄く＆グリッドを消し、記憶を頼りに描く。
+        // ⑤あとはユーザーが「重ねる」や「答え合わせ」で見比べる、までを一気に用意する。
+        window.skStartTraining = function(){
+            skCloseMenus();
+            if (skFormenOn) skSetFormen(false);
+            skStopTimer();
+            if (!skHasRefImage()) { skFlash('先に画像を読み込んでください（「画像」から）', 2800); return; }
+            // ① 並べる表示に切り替え（既に並べるなら何もしない）
+            if (!skSide) {
+                skSide = true;
+                window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_SIDE, '1', 'スケッチ表示位置');
+                skApplyLayout(true);
+            }
+            // ② グリッド表示（オフなら 3×3 から）
+            if (skGrid <= 0) {
+                skGrid = 3;
+                window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_GRID, '3', 'スケッチのグリッド');
+                const gb = document.getElementById('sketch-grid-btn');
+                if (gb) { gb.classList.add('accent'); gb.title = 'グリッド 3×3'; }
+                skRenderGrid();
+            }
+            // ③④ 記憶発動（トレーニング扱い：終了時に必ず薄く＋グリッド消し）
+            window.skStartMemory(true);
         };
         function skCancelMemory(){ if (skMemTimer) { clearInterval(skMemTimer); skMemTimer = null; } skCountdown.style.display = 'none'; }
         window.skPeek = function(){
@@ -817,7 +903,7 @@
         };
         window.skSetStabStrength = function(v){
             skStabStr = Math.min(9, Math.max(1, parseInt(v, 10) || 5));
-            skStabK = 0.8 - (skStabStr - 1) * 0.06875; // 強いほどKは小さく（寄せが強い）
+            skStabK = 0.9 - (skStabStr - 1) * 0.095; // 強いほどKは小さく（寄せが強い）
             window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_STAB_STR, String(skStabStr), 'スケッチの補正強さ');
             if (!skStab) skToggleStabilizer(); // 強さを動かしたら補正は自動でON（迷わないように）
         };
@@ -894,6 +980,7 @@
             document.querySelectorAll('#sk-tabbar .sk-tab').forEach(function(t){ t.classList.toggle('active', t.getAttribute('data-tab') === name); });
             document.querySelectorAll('#sk-tabbody .sk-panel').forEach(function(p){ p.classList.toggle('active', p.getAttribute('data-tab') === name); });
             if (name === 'settings') { skSyncSettingsBtns(); skApplyPaper(); } // 設定タブは現在値を反映
+            if (name === 'view') skSyncViewBtns();                            // 表示タブはグリッド色・濃さ・コントラストを反映
         };
         document.querySelectorAll('.sk-color').forEach(function(b){
             b.addEventListener('click', function(){
@@ -901,6 +988,7 @@
                 b.classList.add('on');
                 skColor = b.getAttribute('data-c');
                 skAlpha = parseFloat(b.getAttribute('data-a') || '1');
+                window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_COLOR, skColor + '|' + skAlpha, 'ペンの色'); // 色をサイト内に保持
                 if (skTool !== 'pen') skSetTool('pen'); // 色を選んだらペンに戻す（消し/投げ縄から復帰）
             });
         });
@@ -927,6 +1015,7 @@
             const p = skPos(e);
             skLastX = p.x; skLastY = p.y; skPrevMidX = p.x; skPrevMidY = p.y; // 中点法の起点
             skStabX = p.x; skStabY = p.y;                                     // 補正の起点
+            skRawLastX = p.x; skRawLastY = p.y;                               // 補正前の実位置
             c.globalCompositeOperation = skEraser ? 'destination-out' : 'source-over';
             c.strokeStyle = skColor;
             const size = parseInt(document.getElementById('sketch-size').value, 10) || 5;
@@ -946,6 +1035,7 @@
             for (let i = 0; i < events.length; i++) {
                 const raw = skPos(events[i]);
                 let px = raw.x, py = raw.y;
+                skRawLastX = raw.x; skRawLastY = raw.y; // 補正前の実位置を控える（離した時に終点を合わせる）
                 if (skStab) { // 入力点を直前位置へ寄せて揺れを均す（指描きの線が滑らかに）
                     skStabX += (raw.x - skStabX) * skStabK; skStabY += (raw.y - skStabY) * skStabK;
                     px = skStabX; py = skStabY;
@@ -967,9 +1057,12 @@
             skDrawing = false;
             if (skLassoPts) { skLassoCommit(); return; } // 投げ縄塗りを確定
             skDrew = true; // 線を1本でも引いた（統計の「描いた枚数」判定用）
-            // 最後の中点から指/ペンを離した点まで線を伸ばす（中点法で残る僅かな隙間を埋める）
+            // 最後の中点から指/ペンを離した点まで線を伸ばす（中点法で残る僅かな隙間を埋める）。
+            // 補正ONのときは補正後の点が実位置より遅れているので、終点は“本当に離した位置”へ合わせる
+            // （こうしないと素早い線が途中で切れて短く見える＝補正が効いていないように感じる原因）。
             const c = skTargetCtx();
-            c.beginPath(); c.moveTo(skPrevMidX, skPrevMidY); c.lineTo(skLastX, skLastY); c.stroke();
+            const endX = skStab ? skRawLastX : skLastX, endY = skStab ? skRawLastY : skLastY;
+            c.beginPath(); c.moveTo(skPrevMidX, skPrevMidY); c.lineTo(endX, endY); c.stroke();
             if (skLiveActive) {
                 skCtx.globalCompositeOperation = 'source-over';
                 skCtx.globalAlpha = skAlpha;

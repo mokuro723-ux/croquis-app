@@ -73,6 +73,7 @@
         bind('je-olapply-true', 'click', function(event){ olApply(true); });
         bind('sketch-layout-btn', 'click', function(event){ skToggleLayout(); });
         bind('sketch-images-btn', 'click', function(event){ skToggleImages(); });
+        bind('sketch-training-btn', 'click', function(event){ skStartTraining(); });
         bind('je-skloadfolder', 'click', function(event){ skLoadFolder(); });
         bind('je-skloadfiles', 'click', function(event){ skLoadFiles(); });
         bind('je-skloadfavs', 'click', function(event){ skLoadFavorites(); });
@@ -81,6 +82,11 @@
             t.addEventListener('click', function(){ skSetTab(t.getAttribute('data-tab')); });
         });
         bind('sketch-grid-btn', 'click', function(event){ skToggleGrid(); });
+        bind('sketch-grid-op', 'input', function(event){ skSetGridOp(this.value); });
+        bind('sketch-bwcontrast', 'input', function(event){ skSetBwContrast(this.value); });
+        document.querySelectorAll('.sk-gridcolor').forEach(function(b){
+            b.addEventListener('click', function(){ skSetGridColor(b.getAttribute('data-gc')); });
+        });
         bind('sketch-fliph-btn', 'click', function(event){ skFlipHoriz(); });
         bind('sketch-flipv-btn', 'click', function(event){ skFlipVert(); });
         bind('sketch-mono-btn', 'click', function(event){ skToggleMonoImg(); });
@@ -92,6 +98,8 @@
         bind('je-skformenclose', 'click', function(event){ skToggleFormen(); });
         bind('sketch-formen-op', 'input', function(event){ skSetFormenOpacity(this.value); });
         bind('sketch-timer-btn', 'click', function(event){ skToggleTimer(); });
+        bind('sketch-memsec', 'change', function(event){ window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_MEMSEC, this.value, '記憶の秒数'); });
+        bind('sketch-size', 'change', function(event){ window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_SIZE, this.value, 'ペンの太さ'); });
         bind('sketch-hide-btn', 'click', function(event){ skToggleHide(); });
         bind('sketch-mem-btn', 'click', function(event){ skStartMemory(); });
         bind('sketch-peek-btn', 'click', function(event){ skPeek(); });
