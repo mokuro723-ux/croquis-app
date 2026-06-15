@@ -436,7 +436,7 @@
         let skGrid = parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_GRID), 10) || 0; // 比率グリッドの分割数（0=オフ）
         let skFlipH = false, skFlipV = false, skMono = false, skBw = false; // 参考画像の加工（描画モード内だけで独立管理）
         let skTool = 'pen', skLassoPts = null; // 道具: pen / eraser / lasso / lassoLight。投げ縄の頂点配列
-        let skLassoPreview = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_LASSOPREV) !== '0'; // 投げ縄のなぞり線表示（既定ON）
+        let skLassoFillPreview = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_LASSOPREV) === '1'; // 投げ縄の塗り予測（シルエット）表示。既定OFF（なぞり線は常時）
         let skOpenTime = 0, skSketchCount = 0, skDrew = false; // 統計用：滞在時間と「描いた枚数」
         const skFormenSvg = document.getElementById('sketch-formen');
         const skGridSvg = document.getElementById('sketch-grid');
@@ -454,6 +454,7 @@
                 skOpenTime = Date.now(); skSketchCount = 0; skDrew = false; // 統計の計測開始
                 skFlipH = skFlipV = skMono = skBw = false; skSetTool('pen'); // 加工・道具は毎回まっさらで開始
                 skCloseMenus(); // 前回開いたままのメニューが残らないように
+                if (typeof window.skSetTab === 'function') skSetTab('draw'); // 下のタブは「描く」から
                 const gb = document.getElementById('sketch-grid-btn'); // 前回のグリッド設定をボタンに反映
                 if (gb) { gb.classList.toggle('accent', skGrid > 0); gb.title = skGrid > 0 ? ('グリッド ' + skGrid + '×' + skGrid) : 'グリッド（比率合わせ）'; }
                 skSyncSettingsBtns();                                   // 補正・記憶下描き化・見比べの状態を反映
@@ -842,44 +843,58 @@
             const b = document.getElementById('sketch-cmp-btn'); if (b) b.classList.toggle('accent', skCmpOn);
             skFlash(skCmpOn ? 'タイマー：時間切れで見比べタイムを入れる ON' : '即・次の絵へ（見比べ無し）', 1800);
         };
-        window.skToggleLassoPreview = function(){
-            skLassoPreview = !skLassoPreview;
-            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_LASSOPREV, skLassoPreview ? '1' : '0', '投げ縄のなぞり線');
-            const b = document.getElementById('sketch-lassoprev-btn'); if (b) b.classList.toggle('accent', skLassoPreview);
-            skFlash(skLassoPreview ? '投げ縄：なぞり線を表示 ON' : '投げ縄：なぞり線オフ（塗りだけ）', 1800);
+        window.skToggleLassoFillPreview = function(){
+            skLassoFillPreview = !skLassoFillPreview;
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_LASSOPREV, skLassoFillPreview ? '1' : '0', '投げ縄の塗り予測');
+            const b = document.getElementById('sketch-lassoprev-btn'); if (b) b.classList.toggle('accent', skLassoFillPreview);
+            skFlash(skLassoFillPreview ? '投げ縄：塗られる範囲を予測表示 ON' : '投げ縄：予測なし（なぞり線だけ）', 1900);
         };
-        function skSyncSettingsBtns(){ // ポップ内トグルの見た目を今の状態に合わせる
-            const map = [['sketch-stab-btn', skStab], ['sketch-memfade-btn', skMemFade], ['sketch-cmp-btn', skCmpOn], ['sketch-lassoprev-btn', skLassoPreview]];
+        function skSyncSettingsBtns(){ // 設定タブのトグルの見た目を今の状態に合わせる
+            const map = [['sketch-stab-btn', skStab], ['sketch-memfade-btn', skMemFade], ['sketch-cmp-btn', skCmpOn], ['sketch-lassoprev-btn', skLassoFillPreview]];
             map.forEach(function(p){ const b = document.getElementById(p[0]); if (b) b.classList.toggle('accent', p[1]); });
             const sr = document.getElementById('sketch-stab-strength'); if (sr) sr.value = String(skStabStr);
         }
-        // 表示／練習／設定メニュー（ドロップダウン）。普段は隠し、描き始めると自動で閉じる＝画面すっきり。
-        const SK_MENUS = [
-            { pop: 'sketch-display-pop',  btn: 'sketch-display-btn' },
-            { pop: 'sketch-practice-pop', btn: 'sketch-practice-btn' },
-            { pop: 'sketch-settings-pop', btn: 'sketch-settings-btn' }
-        ];
+        /* ── 画像読み込みメニュー（フォルダ/ファイル/お気に入り/参考）── */
         function skCloseMenus(){
-            SK_MENUS.forEach(function(m){
-                const p = document.getElementById(m.pop); if (p) p.classList.remove('open');
-                const b = document.getElementById(m.btn); if (b) b.classList.remove('accent');
-            });
+            const p = document.getElementById('sketch-images-pop'); if (p) p.classList.remove('open');
+            const b = document.getElementById('sketch-images-btn'); if (b) b.classList.remove('accent');
         }
-        function skCloseSettings(){ skCloseMenus(); } // 互換用エイリアス
-        function skAnyMenuOpen(){ return SK_MENUS.some(function(m){ const p = document.getElementById(m.pop); return p && p.classList.contains('open'); }); }
-        function skToggleMenu(popId, btnId, onOpen){
-            const p = document.getElementById(popId); if (!p) return;
+        function skCloseSettings(){ skCloseMenus(); } // 互換用エイリアス（描き始め時などに閉じる）
+        function skAnyMenuOpen(){ const p = document.getElementById('sketch-images-pop'); return !!(p && p.classList.contains('open')); }
+        window.skToggleImages = function(){
+            const p = document.getElementById('sketch-images-pop'); if (!p) return;
             const willOpen = !p.classList.contains('open');
-            skCloseMenus(); // 一度に開くのは1つだけ
-            if (willOpen) {
-                p.classList.add('open');
-                const b = document.getElementById(btnId); if (b) b.classList.add('accent');
-                if (onOpen) onOpen();
-            }
-        }
-        window.skToggleDisplay  = function(){ skToggleMenu('sketch-display-pop', 'sketch-display-btn'); };
-        window.skTogglePractice = function(){ skToggleMenu('sketch-practice-pop', 'sketch-practice-btn'); };
-        window.skToggleSettings = function(){ skToggleMenu('sketch-settings-pop', 'sketch-settings-btn', function(){ skSyncSettingsBtns(); skApplyPaper(); }); };
+            skCloseMenus();
+            if (willOpen) { p.classList.add('open'); const b = document.getElementById('sketch-images-btn'); if (b) b.classList.add('accent'); }
+        };
+        // フォルダ/画像ファイルの読み込みは、通常画面の隠しinputを流用（描画モードからも使える）
+        window.skLoadFolder = function(){ skCloseMenus(); const el = document.getElementById('folder-input'); if (el) el.click(); };
+        window.skLoadFiles  = function(){ skCloseMenus(); const el = document.getElementById('file-input');   if (el) el.click(); };
+        // フォルダ/ファイルを読み込んだ直後に呼ばれる（app.js から）。描画モードなら新しい画像で仕切り直し。
+        window.skOnPoolLoaded = function(){
+            if (!skOpen) return;
+            skClearRef(); skSyncImage(); skClearSilent(); skSetState('free');
+            skFlash('画像を読み込みました（' + (images.length || 0) + '枚）', 2200);
+        };
+        window.skLoadFavorites = function(){
+            skCloseMenus();
+            if (typeof dbFavImages === 'undefined' || !dbFavImages || dbFavImages.length === 0) { skFlash('お気に入りがありません（★で登録できます）', 2800); return; }
+            skClearRef();
+            isFavMode = true; showFavsOnly = false; showHiddenOnly = false;
+            if (settings.shuffle) shuffleArray(dbFavImages);
+            else dbFavImages.sort(function(a, b){ return a.name < b.name ? -1 : 1; });
+            images = dbFavImages;
+            currentIndex = 0; historyList = [0]; historyPos = 0;
+            loadImage(); if (typeof updateImageCounter === 'function') updateImageCounter();
+            skSyncImage(); skClearSilent(); skSetState('free');
+            skFlash('お気に入りで練習します（' + images.length + '枚）', 2400);
+        };
+        /* ── 下のタブ切り替え（全パネル同じ高さ＝キャンバスは伸縮しないので描画は保持される） ── */
+        window.skSetTab = function(name){
+            document.querySelectorAll('#sk-tabbar .sk-tab').forEach(function(t){ t.classList.toggle('active', t.getAttribute('data-tab') === name); });
+            document.querySelectorAll('#sk-tabbody .sk-panel').forEach(function(p){ p.classList.toggle('active', p.getAttribute('data-tab') === name); });
+            if (name === 'settings') { skSyncSettingsBtns(); skApplyPaper(); } // 設定タブは現在値を反映
+        };
         document.querySelectorAll('.sk-color').forEach(function(b){
             b.addEventListener('click', function(){
                 document.querySelectorAll('.sk-color').forEach(function(x){ x.classList.remove('on'); });
@@ -987,19 +1002,31 @@
                 skRestore(skCurSnap);         // 描きかけを捨てて開始前の確定状態へ戻す
             }
         }
-        // 投げ縄塗り：移動中は「なぞっている線」だけをシンプルに表示（クリスタ風。
-        // 塗り予測のシルエットや閉じる線は出さない）。プレビュー自体も設定でオフにできる。
+        // 投げ縄塗り：なぞっている線（軌跡）は常に表示。設定ONなら「塗られる範囲」を
+        // 半透明シルエット＋閉じる線で予測表示（最初の実装の挙動）。OFFなら軌跡だけ。
         function skLassoMove(e){
             const events = (typeof e.getCoalescedEvents === 'function') ? e.getCoalescedEvents() : [e];
             for (let i = 0; i < events.length; i++) { const p = skPos(events[i]); skLassoPts.push({ x: p.x, y: p.y }); }
             skLiveCtx.clearRect(0, 0, skCW, skCH);
-            if (!skLassoPreview || skLassoPts.length < 2) return;
-            skLiveCtx.globalAlpha = 1;
-            skLiveCtx.lineWidth = 1.5; skLiveCtx.strokeStyle = skColor;
+            if (skLassoPts.length < 2) return;
             skLiveCtx.beginPath();
             skLiveCtx.moveTo(skLassoPts[0].x, skLassoPts[0].y);
             for (let i = 1; i < skLassoPts.length; i++) skLiveCtx.lineTo(skLassoPts[i].x, skLassoPts[i].y);
-            skLiveCtx.stroke(); // 閉じない・塗らない＝なぞった線だけ
+            if (skLassoFillPreview && skLassoPts.length >= 3) {
+                // 塗り予測：閉じて半透明で塗る＋始点へ戻る点線
+                skLiveCtx.save();
+                skLiveCtx.closePath();
+                skLiveCtx.globalAlpha = (skTool === 'lassoLight') ? 0.16 : 0.34;
+                skLiveCtx.fillStyle = skColor; skLiveCtx.fill();
+                skLiveCtx.globalAlpha = 1;
+                skLiveCtx.setLineDash([6, 4]); skLiveCtx.lineWidth = 1.5; skLiveCtx.strokeStyle = skColor; skLiveCtx.stroke();
+                skLiveCtx.restore();
+            } else {
+                // 通常：なぞった軌跡だけを細い実線で
+                skLiveCtx.globalAlpha = 1; skLiveCtx.setLineDash([]);
+                skLiveCtx.lineWidth = 1.5; skLiveCtx.strokeStyle = skColor;
+                skLiveCtx.stroke();
+            }
         }
         // 投げ縄塗り：指/ペンを離したら、囲んだ多角形を一括で塗る（薄バージョンは透明度低め）
         function skLassoCommit(){

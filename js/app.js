@@ -793,6 +793,7 @@
                 currentIndex = 0; historyList = [0]; historyPos = 0;
                 loadImage(); resetTimer();
                 updateImageCounter();
+                if (typeof window.skOnPoolLoaded === 'function') window.skOnPoolLoaded(); // 描画モード中なら新しい画像に合わせて更新
             }
         }
 

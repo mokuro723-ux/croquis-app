@@ -72,8 +72,14 @@
         bind('je-olapply-false', 'click', function(event){ olApply(false); });
         bind('je-olapply-true', 'click', function(event){ olApply(true); });
         bind('sketch-layout-btn', 'click', function(event){ skToggleLayout(); });
-        bind('sketch-display-btn', 'click', function(event){ skToggleDisplay(); });
-        bind('sketch-practice-btn', 'click', function(event){ skTogglePractice(); });
+        bind('sketch-images-btn', 'click', function(event){ skToggleImages(); });
+        bind('je-skloadfolder', 'click', function(event){ skLoadFolder(); });
+        bind('je-skloadfiles', 'click', function(event){ skLoadFiles(); });
+        bind('je-skloadfavs', 'click', function(event){ skLoadFavorites(); });
+        // 下のタブ切り替え（描く / 投げ縄 / 表示 / 練習 / 設定）
+        document.querySelectorAll('#sk-tabbar .sk-tab').forEach(function(t){
+            t.addEventListener('click', function(){ skSetTab(t.getAttribute('data-tab')); });
+        });
         bind('sketch-grid-btn', 'click', function(event){ skToggleGrid(); });
         bind('sketch-fliph-btn', 'click', function(event){ skFlipHoriz(); });
         bind('sketch-flipv-btn', 'click', function(event){ skFlipVert(); });
@@ -98,11 +104,10 @@
         bind('sk-tools-fab', 'click', function(event){ skToggleTools(); });
         bind('je-sktoggletools', 'click', function(event){ skToggleTools(); });
         bind('sketch-stab-btn', 'click', function(event){ skToggleStabilizer(); });
-        bind('sketch-settings-btn', 'click', function(event){ skToggleSettings(); });
         bind('sketch-stab-strength', 'input', function(event){ skSetStabStrength(this.value); });
         bind('sketch-memfade-btn', 'click', function(event){ skToggleMemFade(); });
         bind('sketch-cmp-btn', 'click', function(event){ skToggleCompare(); });
-        bind('sketch-lassoprev-btn', 'click', function(event){ skToggleLassoPreview(); });
+        bind('sketch-lassoprev-btn', 'click', function(event){ skToggleLassoFillPreview(); });
         document.querySelectorAll('.sk-paper').forEach(function(b){
             b.addEventListener('click', function(){ skSetPaper(b.getAttribute('data-bg')); });
         });

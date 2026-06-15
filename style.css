@@ -474,10 +474,14 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 }
 #online-sel-count { font-size: 0.9rem; color: #fff; margin-right: auto; }
 
-/* ── スケッチ v4（左右分割 / 半透明ペン / ジェスチャ対応） ── */
-#sketch-overlay .panel-header { padding: 7px 10px; gap: 6px; flex-wrap: wrap; }
+/* ── スケッチ v5（上：1行アイコンバー / 下：アイコンタブ＋中身） ── */
+/* 上バーは常に1行。横に溢れたら最小限スクロール（普段は溢れない設計） */
+#sk-topbar { padding: 7px 10px; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+#sk-topbar::-webkit-scrollbar { display: none; }
+#sk-topbar .spacer { flex: 1 1 auto; min-width: 6px; }
 /* ヘッダーのグループ区切り（視認性向上のための縦線） */
 .sk-hsep { width: 1px; align-self: stretch; background: #3d3d3d; margin: 2px 1px; flex: 0 0 auto; }
+.sk-vsep { width: 1px; align-self: stretch; min-height: 22px; background: #444; margin: 0 3px; flex: 0 0 auto; }
 /* アイコン＋文字ラベルのツールボタン（パッと見て分かるように） */
 .sk-tbtn {
     display: inline-flex; align-items: center; gap: 5px;
@@ -574,9 +578,8 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 .sk-pop .panel-btn { padding: 7px 12px; font-size: 0.8rem; }
 .sk-pop .panel-btn.accent, .sk-pop .sk-tbtn.accent { background: var(--accent); color: #00222b; }
 .sk-pop .sk-set-sep { height: 1px; background: #4a4a4a; margin: 2px 0; width: 100%; }
-/* 表示・練習は上から、設定は下から開く（それぞれのボタンの近く） */
-#sketch-display-pop, #sketch-practice-pop { left: 8px; top: 8px; }
-#sketch-settings-pop { right: 10px; bottom: 10px; }
+/* 画像メニューは上バーの「画像」ボタン付近（左上）から開く */
+#sketch-images-pop { left: 8px; top: 8px; }
 .sk-paper { width: 28px; height: 28px; border-radius: 6px; border: 2px solid #5a5a5a; cursor: pointer; padding: 0; flex: 0 0 auto; }
 .sk-paper.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
 #sketch-countdown {
@@ -590,11 +593,37 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     padding: 7px 16px; pointer-events: none; white-space: nowrap; z-index: 5; max-width: 92vw;
     overflow: hidden; text-overflow: ellipsis;
 }
+/* 下のツール：タブバー（1段）＋中身パネル（1段）の2段構成 */
 #sketch-tools {
-    display: flex; gap: 6px; align-items: center; flex-wrap: wrap; row-gap: 7px;
-    padding: 7px 10px calc(7px + env(safe-area-inset-bottom, 0px));
+    display: flex; flex-direction: column; gap: 0;
+    padding: 0 8px calc(6px + env(safe-area-inset-bottom, 0px));
     border-top: 1px solid var(--border-color); background: var(--panel-bg);
 }
+#sketch-overlay.tools-hidden #sketch-tools { display: none; }
+/* タブバー：タブ（等幅で詰める）＋右に 戻す/やり直し/全消去/畳む */
+#sk-tabbar { display: flex; align-items: stretch; gap: 4px; padding: 5px 0 6px; }
+#sk-tabbar .sk-tab-spacer { flex: 1 1 auto; min-width: 4px; }
+.sk-tab {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    flex: 1 1 0; min-width: 0; max-width: 86px;
+    background: transparent; border: none; border-radius: 9px; color: #b8b8b8;
+    padding: 5px 4px; font-size: 0.66rem; cursor: pointer; line-height: 1.1;
+}
+.sk-tab .svg-icon { width: 20px; height: 20px; }
+.sk-tab span { white-space: nowrap; }
+.sk-tab.active { background: var(--accent); color: #00222b; font-weight: bold; }
+#sk-tabbar .sk-tbtn { padding: 7px 9px; }  /* 戻す/やり直し等はアイコンのみ・小さめ */
+/* 中身パネル：1つだけ表示。常に1段（高さ固定）＝タブ切替でキャンバスが伸縮しない＝描画が消えない。
+   稀に幅が溢れる時だけ、そのパネル内だけ横スクロール（メインのツールバー全体は動かない）。 */
+#sk-tabbody { position: relative; }
+.sk-panel { display: none; align-items: center; gap: 7px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 2px 0 6px; }
+.sk-panel::-webkit-scrollbar { display: none; }
+.sk-panel.active { display: flex; }
+.sk-panel .sk-set-label { color: #cfcfcf; font-size: 0.78rem; flex: 0 0 auto; }
+.sk-panel .panel-btn { padding: 8px 12px; font-size: 0.8rem; border-radius: 9px; background: var(--btn-bg); color: #f2f2f2; border: none; cursor: pointer; }
+.sk-panel .panel-btn.accent { background: var(--accent); color: #00222b; }
+.sk-panel #sketch-stab-strength { width: 110px; accent-color: var(--accent); }
+.sk-panel #sketch-size { width: 110px; accent-color: var(--accent); flex: 0 0 auto; }
 #sketch-overlay.tools-hidden #sketch-tools { display: none; }
 #sk-tools-fab {
     position: absolute; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
@@ -607,16 +636,18 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 .sk-color { width: 31px; height: 31px; border-radius: 50%; border: 2px solid #5a5a5a; cursor: pointer; padding: 0; flex: 0 0 auto; }
 .sk-color.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
 .sk-color.half { background: linear-gradient(135deg, rgba(61,139,255,0.85) 50%, rgba(61,139,255,0.3) 50%) !important; }
-#sketch-size { width: 92px; accent-color: var(--accent); flex: 0 0 auto; }
 #sketch-imgopacity-wrap { display: none; align-items: center; gap: 6px; font-size: 0.78rem; color: #ddd; }
-#sketch-imgopacity { width: 90px; accent-color: var(--accent); }
-#sk-gesture-hint { font-size: 0.7rem; color: #adadad; white-space: nowrap; flex: 0 0 auto; margin-left: 4px; }
+#sketch-imgopacity { width: 80px; accent-color: var(--accent); }
+#sk-gesture-hint { display: none; } /* 2本指タップの案内は省略（戻すボタンが常時見えるため） */
 @media (max-width: 700px) {
-    #sketch-overlay .panel-header { padding: 6px 8px; gap: 5px; }
-    #sketch-overlay .sk-tbtn { padding: 7px 9px; font-size: 0.76rem; gap: 4px; }
-    #sketch-overlay .sk-tbtn .svg-icon { width: 16px; height: 16px; }
-    #sketch-tools { padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); }
-    #sk-gesture-hint { display: none; }
+    #sk-topbar { padding: 6px 8px; gap: 5px; }
+    #sketch-overlay .sk-tbtn { padding: 7px 9px; gap: 4px; }
+    #sketch-overlay .sk-tbtn .svg-icon { width: 18px; height: 18px; }
+    .sk-tab { font-size: 0.62rem; padding: 4px 2px; }
+    .sk-tab .svg-icon { width: 19px; height: 19px; }
+}
+@media (max-width: 380px) {
+    .sk-tab span { display: none; } /* 極小画面ではタブはアイコンのみ */
 }
 
 /* ── タグ ─────────────────────────────────────────── */
