@@ -984,19 +984,25 @@
             map.forEach(function(p){ const b = document.getElementById(p[0]); if (b) b.classList.toggle('accent', p[1]); });
             const sr = document.getElementById('sketch-stab-strength'); if (sr) sr.value = String(skStabStr);
         }
-        /* ── 画像読み込みメニュー（フォルダ/ファイル/お気に入り/参考）── */
+        /* ── 上バーから開くメニュー（画像読み込み / 練習）。普段は隠す ── */
+        const SK_POPS = [['sketch-images-pop', 'sketch-images-btn'], ['sketch-practice-pop', 'sketch-practice-tab']];
         function skCloseMenus(){
-            const p = document.getElementById('sketch-images-pop'); if (p) p.classList.remove('open');
-            const b = document.getElementById('sketch-images-btn'); if (b) b.classList.remove('accent');
+            SK_POPS.forEach(function(pr){
+                const p = document.getElementById(pr[0]); if (p) p.classList.remove('open');
+                const b = document.getElementById(pr[1]); if (b) b.classList.remove('accent');
+            });
         }
         function skCloseSettings(){ skCloseMenus(); } // 互換用エイリアス（描き始め時などに閉じる）
-        function skAnyMenuOpen(){ const p = document.getElementById('sketch-images-pop'); return !!(p && p.classList.contains('open')); }
-        window.skToggleImages = function(){
-            const p = document.getElementById('sketch-images-pop'); if (!p) return;
+        function skAnyMenuOpen(){ return SK_POPS.some(function(pr){ const p = document.getElementById(pr[0]); return !!(p && p.classList.contains('open')); }); }
+        // popId のメニューを開閉（他のメニューは閉じる）。btnId のボタンをアクセント表示にする。
+        function skToggleMenu(popId, btnId){
+            const p = document.getElementById(popId); if (!p) return;
             const willOpen = !p.classList.contains('open');
             skCloseMenus();
-            if (willOpen) { p.classList.add('open'); const b = document.getElementById('sketch-images-btn'); if (b) b.classList.add('accent'); }
-        };
+            if (willOpen) { p.classList.add('open'); const b = document.getElementById(btnId); if (b) b.classList.add('accent'); }
+        }
+        window.skToggleImages   = function(){ skToggleMenu('sketch-images-pop', 'sketch-images-btn'); };
+        window.skTogglePractice = function(){ skToggleMenu('sketch-practice-pop', 'sketch-practice-tab'); };
         // フォルダ/画像ファイルの読み込みは、通常画面の隠しinputを流用（描画モードからも使える）
         window.skLoadFolder = function(){ skCloseMenus(); const el = document.getElementById('folder-input'); if (el) el.click(); };
         window.skLoadFiles  = function(){ skCloseMenus(); const el = document.getElementById('file-input');   if (el) el.click(); };
@@ -1022,8 +1028,6 @@
         /* ── 下のタブ切り替え（全パネル同じ高さ＝キャンバスは伸縮しないので描画は保持される） ── */
         window.skSetTab = function(name){
             document.querySelectorAll('#sk-tabbar .sk-tab').forEach(function(t){ t.classList.toggle('active', t.getAttribute('data-tab') === name); });
-            // 「練習」は上バーへ移動した（.sk-tbtn）。選択中はアクセント表示にする
-            const pt = document.getElementById('sketch-practice-tab'); if (pt) pt.classList.toggle('accent', name === 'practice');
             document.querySelectorAll('#sk-tabbody .sk-panel').forEach(function(p){ p.classList.toggle('active', p.getAttribute('data-tab') === name); });
             if (name === 'settings') { skSyncSettingsBtns(); skApplyPaper(); } // 設定タブは現在値を反映
             if (name === 'view') skSyncViewBtns();                            // 表示タブはグリッド色・濃さ・コントラストを反映

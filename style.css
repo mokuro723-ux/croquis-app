@@ -581,6 +581,8 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 .sk-pop .sk-set-sep { height: 1px; background: #4a4a4a; margin: 2px 0; width: 100%; }
 /* 画像メニューは上バーの「画像」ボタン付近（左上）から開く */
 #sketch-images-pop { left: 8px; top: 8px; }
+/* 練習メニューは上バー中央あたりから開く（描画領域の上に重ねて表示） */
+#sketch-practice-pop { left: 50%; top: 8px; transform: translateX(-50%); }
 .sk-paper { width: 28px; height: 28px; border-radius: 6px; border: 2px solid #5a5a5a; cursor: pointer; padding: 0; flex: 0 0 auto; }
 .sk-paper.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
 #sketch-countdown {

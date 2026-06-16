@@ -74,7 +74,7 @@
         bind('sketch-layout-btn', 'click', function(event){ skToggleLayout(); });
         bind('sketch-images-btn', 'click', function(event){ skToggleImages(); });
         bind('sketch-training-btn', 'click', function(event){ skStartTraining(); });
-        bind('sketch-practice-tab', 'click', function(event){ skSetTab('practice'); }); // 上バーへ移動した「練習」
+        bind('sketch-practice-tab', 'click', function(event){ skTogglePractice(); }); // 上バーの「練習」（メニューを開閉）
         bind('je-skloadfolder', 'click', function(event){ skLoadFolder(); });
         bind('je-skloadfiles', 'click', function(event){ skLoadFiles(); });
         bind('je-skloadfavs', 'click', function(event){ skLoadFavorites(); });
