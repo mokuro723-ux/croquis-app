@@ -21,6 +21,7 @@
             SKETCH_GRID_COLOR: 'croquis_sketch_grid_color_v1', // グリッド線の色
             SKETCH_GRID_OP: 'croquis_sketch_grid_op_v1',     // グリッド線の濃さ(1〜10)
             SKETCH_BW_CONTRAST: 'croquis_sketch_bw_contrast_v1', // 二階調コントラスト(1〜20)
+            SKETCH_CONVERGE: 'croquis_sketch_converge_v1',    // 並べる時のお手本⇔描画の寄せ(0〜100)
         };
 
         // ── 保存係（読み書きと失敗時の記録を一手に引き受ける） ──────

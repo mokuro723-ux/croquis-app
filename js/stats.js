@@ -430,6 +430,10 @@
         let skMemTimer = null, skState = 'free';
         let skImgOpacity = 0.5, skWasRunning = false;
         let skSide = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_SIDE) === '1';
+        // 「並べる」時、お手本（左）と描画枠（右）を中央の境界へ寄せる量（0=中央寄せ＝従来 〜 1=境界にぴったり隣接）。
+        // スライダーは横向き時だけ表示するが、値の適用は左右どちらの向きでも行う（0なら従来と完全に同じ＝後方互換）。
+        let skConverge = Math.min(1, Math.max(0, (parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_CONVERGE), 10) || 0) / 100));
+        let skDrawConv = 0; // 今キャンバスに乗っている線が対応する寄せ量（寄せ変更時に線を枠と一緒に動かすため）
         let skCW = 0, skCH = 0, skLeft = 0; // 描画キャンバスのCSSサイズと左位置（直前の値）
         let skFormenOn = false, skDeckIdx = 0, skItemIdx = 0, skFormenPrevSide = false, skFormenOpacity = 0.7;
         let skFormenBackup = null, skFormenBackupW = 0, skFormenBackupH = 0, skFormenBackupLeft = 0;
@@ -503,15 +507,45 @@
                     : '<svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 4h8v16H3zM13 4h8v16h-8z"/></svg>';
                 b.title = skSide ? '重ねる（画像の上に直接描く）' : '並べる（左に画像・右に描画）';
             }
+            skUpdateImgPos();
             skResize(!preserve);
             skUpdateFrameGuide();
         }
+        // お手本（左半分）を寄せ量に応じて境界（右）へ寄せる：c=0→中央(50%), c=1→右端(100%)
+        function skUpdateImgPos(){ skOverlay.style.setProperty('--sk-imgpos', (50 + 50 * skConverge) + '%'); }
+        function skIsLandscape(){ return window.innerWidth >= window.innerHeight; }
+        // 寄せスライダーは「横向き × 並べる × 参考画像あり」のときだけ上バーに出す
+        function skUpdateSplitUI(){
+            const wrap = document.getElementById('sketch-split-wrap');
+            if (!wrap) return;
+            const show = skSide && skHasRefImage() && skIsLandscape();
+            wrap.style.display = show ? 'flex' : 'none';
+            const sl = document.getElementById('sketch-split'); if (sl) sl.value = String(Math.round(skConverge * 100));
+        }
+        // 寄せ量の変更。commit=false はドラッグ中（枠・グリッド・画像だけ軽く追従）、
+        // commit=true は離した時（保存＋描いた線も枠と一緒に最終位置へ移動）。
+        window.skSetConverge = function(v, commit){
+            skConverge = Math.min(1, Math.max(0, (parseInt(v, 10) || 0) / 100));
+            skUpdateImgPos();
+            if (commit) {
+                window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_CONVERGE, String(Math.round(skConverge * 100)), '並べるの寄せ');
+                if (skSide) skResize(false); // 線も枠と一緒に最終位置へ（中で frame/grid/UI も更新）
+                else { skUpdateFrameGuide(); skUpdateSplitUI(); }
+            } else {
+                skUpdateFrameGuide(); // 中で skRenderGrid も呼ぶ
+            }
+        };
         // 画像比率 a を box(bw×bh) に contain で収めたときの矩形（object-fit:contain と同じ）
         function fitRect(a, bw, bh){
             let w = bw, h = bw / a;
             if (h > bh) { h = bh; w = bh * a; }
             return { x: (bw - w) / 2, y: (bh - h) / 2, w: w, h: h };
         }
+        // 「並べる」の寄せ：中央寄せのマージン m を、寄せ量 skConverge に応じて境界側へずらす。
+        //  右側(描画)は境界=列の左端(0)へ → m*(1-c)。 左側(お手本)は境界=列の右端(2m)へ → m*(1+c)。
+        //  c=0 のときは従来どおり（m）なので後方互換。
+        function skConvRightX(m){ return m * (1 - skConverge); }
+        function skConvLeftX(m){ return m * (1 + skConverge); }
         function skHasRefImage(){
             return !!(skImg && skImg.naturalWidth > 0 && skImg.naturalHeight > 0 && skImg.getAttribute('src'));
         }
@@ -524,7 +558,7 @@
             const r = skStage.getBoundingClientRect();
             const W = r.width, H = r.height;
             const f = fitRect(skImg.naturalWidth / skImg.naturalHeight, W / 2, H);
-            g.style.left = (W / 2 + f.x) + 'px';
+            g.style.left = (W / 2 + skConvRightX(f.x)) + 'px'; // 寄せ量に応じて境界側へ
             g.style.top = f.y + 'px';
             g.style.width = f.w + 'px';
             g.style.height = f.h + 'px';
@@ -561,7 +595,8 @@
                 const a = skImg.naturalWidth / skImg.naturalHeight;
                 const lf = fitRect(a, W / 2, H);                       // 左：画像の表示枠
                 const rf = fitRect(a, W / 2, H);                       // 右：同じ比率の描画枠
-                svg = skGridLines(lf, n) + skGridLines({ x: W / 2 + rf.x, y: rf.y, w: rf.w, h: rf.h }, n);
+                lf.x = skConvLeftX(lf.x);                              // 寄せ：左の枠は境界（右端）側へ
+                svg = skGridLines(lf, n) + skGridLines({ x: W / 2 + skConvRightX(rf.x), y: rf.y, w: rf.w, h: rf.h }, n);
             } else if (skSide) {
                 svg = skGridLines({ x: 0, y: 0, w: W / 2, h: H }, n) + skGridLines({ x: W / 2, y: 0, w: W / 2, h: H }, n);
             } else {
@@ -643,6 +678,7 @@
             const src = ui.img.getAttribute('src') || '';
             if (src) skImg.src = src; else skImg.removeAttribute('src'); // 画像が無いときは壊れアイコンを出さない
             skApplyImgFilters();
+            skUpdateSplitUI(); // 参考画像の有無で寄せスライダーの表示を更新
         }
         // 参考画像の加工フィルタのCSS文字列（CSS filter と canvas ctx.filter で共用）
         function skImgFilterCSS(){
@@ -666,7 +702,7 @@
         window.skToggleMonoImg = function(){ skMono = !skMono; if (skMono) skBw = false; skApplyImgFilters(); };
         window.skToggleBwImg   = function(){ skBw = !skBw; if (skBw) skMono = false; skApplyImgFilters(); };
         ui.img.addEventListener('load', function(){ if (skOpen) skSyncImage(); });
-        skImg.addEventListener('load', function(){ if (skOpen) skUpdateFrameGuide(); }); // 画像が決まったら枠を更新
+        skImg.addEventListener('load', function(){ if (skOpen) { skUpdateFrameGuide(); skUpdateSplitUI(); } }); // 画像が決まったら枠・寄せUIを更新
 
         function skResize(clear){
             const r = skStage.getBoundingClientRect();
@@ -705,6 +741,12 @@
                     const a = skImg.naturalWidth / skImg.naturalHeight;
                     const oldF = fitRect(a, prevCW, prevCH);
                     const newF = fitRect(a, newCW, newCH);
+                    // 寄せ（並べる時のみ）：旧キャンバスは skDrawConv、新レイアウトは skConverge の位置に合わせて
+                    // 線を取り出し→置き直す。これで寄せスライダーを動かしても線が枠と一緒に動く。
+                    const oldC = (prevLeft > 0) ? skDrawConv : 0;
+                    const newC = skSide ? skConverge : 0;
+                    oldF.x = oldF.x * (1 - oldC);
+                    newF.x = newF.x * (1 - newC);
                     skCtx.drawImage(tmp, oldF.x * dpr, oldF.y * dpr, oldF.w * dpr, oldF.h * dpr, newF.x, newF.y, newF.w, newF.h);
                 } else {
                     // 画像が無い場合（ウォームアップ/自由描き）：拡大縮小せず画面上の同じ位置に戻す
@@ -712,8 +754,10 @@
                     skCtx.drawImage(tmp, dx, 0, prevCW, prevCH);
                 }
             }
+            skDrawConv = skSide ? skConverge : 0; // 今の線が対応する寄せ量を記録
             skCommitSnap(); // 大きさが変わったら確定スナップを取り直す（リサイズ復元は同期なのでここで確定）
             skUpdateFrameGuide(); // 枠とグリッドを同時に更新（下UIの開閉でズレないように。中でskRenderGridも呼ぶ）
+            skUpdateSplitUI();    // 寄せスライダーの表示/値を更新（横向き×並べる×参考画像のときだけ表示）
         }
         // リサイズは少し待ってから1回だけ反映（PCの枠ドラッグ中に毎フレーム再構築＝重い、を防ぐ）
         let skResizeTimer = null;
@@ -978,6 +1022,8 @@
         /* ── 下のタブ切り替え（全パネル同じ高さ＝キャンバスは伸縮しないので描画は保持される） ── */
         window.skSetTab = function(name){
             document.querySelectorAll('#sk-tabbar .sk-tab').forEach(function(t){ t.classList.toggle('active', t.getAttribute('data-tab') === name); });
+            // 「練習」は上バーへ移動した（.sk-tbtn）。選択中はアクセント表示にする
+            const pt = document.getElementById('sketch-practice-tab'); if (pt) pt.classList.toggle('accent', name === 'practice');
             document.querySelectorAll('#sk-tabbody .sk-panel').forEach(function(p){ p.classList.toggle('active', p.getAttribute('data-tab') === name); });
             if (name === 'settings') { skSyncSettingsBtns(); skApplyPaper(); } // 設定タブは現在値を反映
             if (name === 'view') skSyncViewBtns();                            // 表示タブはグリッド色・濃さ・コントラストを反映

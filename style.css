@@ -517,7 +517,7 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     position: absolute; left: 0; top: 0; height: 100%; width: 100%;
     object-fit: contain; pointer-events: none; user-select: none;
 }
-#sketch-overlay.side #sketch-img { width: 50%; }
+#sketch-overlay.side #sketch-img { width: 50%; object-position: var(--sk-imgpos, 50%) center; }
 #sketch-overlay.side #sketch-stage::before {
     content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
     background: #3d3d3d; z-index: 3;
@@ -645,8 +645,8 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 /* トレーニング（描画モードの目玉機能）は枠線で少し目立たせる */
 .sk-tbtn.sk-train { border: 1px solid var(--accent); }
 .sk-tbtn.sk-train .svg-icon { color: var(--accent); }
-#sketch-imgopacity-wrap { display: none; align-items: center; gap: 6px; font-size: 0.78rem; color: #ddd; }
-#sketch-imgopacity { width: 80px; accent-color: var(--accent); }
+#sketch-imgopacity-wrap, #sketch-split-wrap { display: none; align-items: center; gap: 6px; font-size: 0.78rem; color: #ddd; flex: 0 0 auto; white-space: nowrap; }
+#sketch-imgopacity, #sketch-split { width: 80px; accent-color: var(--accent); }
 #sk-gesture-hint { display: none; } /* 2本指タップの案内は省略（戻すボタンが常時見えるため） */
 @media (max-width: 700px) {
     #sk-topbar { padding: 6px 8px; gap: 5px; }

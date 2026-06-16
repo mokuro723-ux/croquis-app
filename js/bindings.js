@@ -74,6 +74,7 @@
         bind('sketch-layout-btn', 'click', function(event){ skToggleLayout(); });
         bind('sketch-images-btn', 'click', function(event){ skToggleImages(); });
         bind('sketch-training-btn', 'click', function(event){ skStartTraining(); });
+        bind('sketch-practice-tab', 'click', function(event){ skSetTab('practice'); }); // 上バーへ移動した「練習」
         bind('je-skloadfolder', 'click', function(event){ skLoadFolder(); });
         bind('je-skloadfiles', 'click', function(event){ skLoadFiles(); });
         bind('je-skloadfavs', 'click', function(event){ skLoadFavorites(); });
@@ -105,6 +106,8 @@
         bind('sketch-peek-btn', 'click', function(event){ skPeek(); });
         bind('sketch-reveal-btn', 'click', function(event){ skToggleReveal(); });
         bind('sketch-imgopacity', 'input', function(event){ skSetImgOpacity(this.value); });
+        bind('sketch-split', 'input', function(event){ skSetConverge(this.value, false); });  // ドラッグ中は軽く追従
+        bind('sketch-split', 'change', function(event){ skSetConverge(this.value, true); });   // 離したら保存＋線も移動
         bind('je-skprevimage', 'click', function(event){ skPrevImage(); });
         bind('je-sknextimage', 'click', function(event){ skNextImage(); });
         bind('je-sksave', 'click', function(event){ skSave(); });
