@@ -586,6 +586,7 @@
         // 「並べる」のとき、描く側（右半分）に画像と同じ縦横比の枠を表示（ズレ確認用）
         function skUpdateFrameGuide(){
             skRenderGrid(); // レイアウトが変わるたびグリッドも追従させる
+            skUpdateRefFrame(); // お手本枠も毎回更新（重ねる/並べる・レイアウト切替で古い枠が残らないように）
             const g = document.getElementById('sketch-frame-guide');
             if (!g) return;
             if (!skSide || skFormenOn || !skHasRefImage()) { g.style.display = 'none'; return; }
@@ -597,7 +598,6 @@
             g.style.width = f.w + 'px';
             g.style.height = f.h + 'px';
             g.style.display = 'block';
-            skUpdateRefFrame(); // お手本側の外枠も追従させる
         }
         // お手本（参考画像）の外枠に色付きの線を出す。色は「表示」タブのグリッド色を共用。
         // 並べる時は左の画像枠、重ねる時は画面いっぱいの画像枠に合わせる。画像が隠れている時は出さない。
@@ -608,6 +608,7 @@
             const r = skStage.getBoundingClientRect();
             const W = r.width, H = r.height;
             const a = skImg.naturalWidth / skImg.naturalHeight;
+            if (!isFinite(a) || a <= 0) { g.style.display = 'none'; return; } // 画像未読み込み時などは出さない
             let rect;
             if (skSide) { const f = fitRect(a, W / 2, H); rect = { x: skConvLeftX(f.x), y: f.y, w: f.w, h: f.h }; } // 左の画像枠
             else { rect = fitRect(a, W, H); }                                                                    // 重ねる：全体の画像枠
@@ -768,6 +769,7 @@
 
         function skResize(clear){
             const r = skStage.getBoundingClientRect();
+            if (r.width < 1 || r.height < 1) return; // 計測できない瞬間（向き変更直後など）は触らず描画を守る
             const dpr = Math.min(window.devicePixelRatio || 1, 2);
             // 直前のレイアウト（並べる⇔重ねる切替時に、描いた線を元の大きさ・位置のまま引き継ぐため控える）
             const prevCW = skCW, prevCH = skCH, prevLeft = skLeft;
@@ -797,19 +799,29 @@
             skLiveCtx.setTransform(dpr, 0, 0, dpr, 0, 0); skLiveCtx.lineCap = 'round'; skLiveCtx.lineJoin = 'round'; skLiveCtx.globalCompositeOperation = 'source-over';
             if (clear) { skUndoStack = []; skRedoStack = []; }
             else if (tmp) {
-                if (!skFormenOn && skHasRefImage()) {
-                    // 参考画像がある場合：描いた線を画像の表示枠に合わせて重ねる（並べる⇔重ねるでズレ比較ができる）。
-                    // 元枠・新枠とも同じ縦横比(a)で計算するので、ここでの拡縮では絶対に縦横比は崩れない。
-                    const a = skImg.naturalWidth / skImg.naturalHeight;
+                const a = skImg.naturalWidth / skImg.naturalHeight;
+                if (!skFormenOn && skHasRefImage() && isFinite(a) && a > 0) {
+                    // 参考画像がある場合：描いた線を画像の表示枠の拡縮に合わせて等比で移す。
+                    // 画像枠は新旧とも同じ縦横比(a)なので拡縮率 s は縦横で必ず一致＝歪まない。
+                    // 9引数drawImageで枠領域だけ切り出すと枠外の線が消える＆端数で歪む余地があるため、
+                    // 「全体を s 倍して平行移動」方式にして枠外の線も保持する。
                     const oldF = fitRect(a, prevCW, prevCH);
                     const newF = fitRect(a, newCW, newCH);
-                    // 寄せ（並べる時のみ）：旧キャンバスは skDrawConv、新レイアウトは skConverge の位置に合わせて
-                    // 線を取り出し→置き直す。これで寄せスライダーを動かしても線が枠と一緒に動く。
+                    // 寄せ（並べる時のみ）：旧は skDrawConv、新は skConverge の位置に合わせる
                     const oldC = (prevLeft > 0) ? skDrawConv : 0;
                     const newC = skSide ? skConverge : 0;
                     oldF.x = oldF.x * (1 - oldC);
                     newF.x = newF.x * (1 - newC);
-                    skCtx.drawImage(tmp, oldF.x * dpr, oldF.y * dpr, oldF.w * dpr, oldF.h * dpr, newF.x, newF.y, newF.w, newF.h);
+                    if (oldF.w > 0.5 && oldF.h > 0.5) {
+                        const s = newF.w / oldF.w;            // 画像枠の拡縮率（縦横同じ＝等比）
+                        skCtx.save();
+                        skCtx.translate(newF.x - oldF.x * s, newF.y - oldF.y * s); // 画像枠どうしを重ねる平行移動
+                        skCtx.scale(s, s);
+                        skCtx.drawImage(tmp, 0, 0, prevCW, prevCH); // 旧キャンバス全体を等比で移す
+                        skCtx.restore();
+                    } else {
+                        skCtx.drawImage(tmp, 0, 0, prevCW, prevCH);
+                    }
                 } else {
                     // 画像が無い場合（ウォームアップ/自由描き）：拡大縮小せず画面上の同じ位置に戻す
                     const dx = prevLeft - newLeft;
