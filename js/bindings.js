@@ -106,6 +106,10 @@
         bind('sketch-peek-btn', 'click', function(event){ skPeek(); });
         bind('sketch-reveal-btn', 'click', function(event){ skToggleReveal(); });
         bind('sketch-imgopacity', 'input', function(event){ skSetImgOpacity(this.value); });
+        bind('sketch-refhide-btn', 'click', function(event){ skToggleRefHide(); });          // お手本の見え方メニュー
+        bind('sketch-refop', 'input', function(event){ skSetRefOpacity(this.value); });        // お手本の濃さ
+        bind('sketch-refhideall-btn', 'click', function(event){ skToggleHideAllRef(); });      // 完全に隠す/表示
+        bind('sketch-refframe-btn', 'click', function(event){ skToggleRefFrame(); });          // お手本の外枠表示
         bind('sketch-split', 'input', function(event){ skSetConverge(this.value, false); });  // ドラッグ中は軽く追従
         bind('sketch-split', 'change', function(event){ skSetConverge(this.value, true); });   // 離したら保存＋線も移動
         bind('je-skprevimage', 'click', function(event){ skPrevImage(); });

@@ -22,6 +22,7 @@
             SKETCH_GRID_OP: 'croquis_sketch_grid_op_v1',     // グリッド線の濃さ(1〜10)
             SKETCH_BW_CONTRAST: 'croquis_sketch_bw_contrast_v1', // 二階調コントラスト(1〜20)
             SKETCH_CONVERGE: 'croquis_sketch_converge_v1',    // 並べる時のお手本⇔描画の寄せ(0〜100)
+            SKETCH_REF_FRAME: 'croquis_sketch_ref_frame_v1',  // お手本側の外枠に色付き線を出すか
         };
 
         // ── 保存係（読み書きと失敗時の記録を一手に引き受ける） ──────
@@ -677,11 +678,29 @@
 
         function _finishBreak() {
             clearInterval(breakCountdownTimer); breakCountdownTimer = null;
+            const cb = breakOnEnd; breakOnEnd = null;     // 描画モードからの休憩なら、その後処理をコールバックで
             const shouldResume = breakWasRunning;
             breakWasRunning = false;
-            if (shouldResume) startTimer();
+            if (cb) { cb(); }                              // 描画モード：描画タイマーの再開などはコールバック側に任せる
+            else if (shouldResume) startTimer();
             armFocusIdleTimer();
         }
+
+        // ── 描画モードからの「目の休憩」───────────────────────────
+        // 描画モードは本体タイマーと別系統で動くので、休憩の発動だけ共通の全画面オーバーレイを借りる。
+        // 設定（ON/OFF・インターバル）は本体と共有する。
+        let breakOnEnd = null;
+        window.croquisBreakInfo = function() {
+            return { enabled: breakReminderEnabled, intervalMin: breakIntervalMin };
+        };
+        window.croquisStartSketchBreak = function(onEnd) {
+            breakOnEnd = (typeof onEnd === 'function') ? onEnd : null;
+            breakWasRunning = false;          // 本体タイマーは描画モード中は止まっているので再開しない
+            setFocusDimmed(false);
+            if (focusIdleTimer) { clearTimeout(focusIdleTimer); focusIdleTimer = null; }
+            playSound();
+            startFullBreak();                 // 目の休憩なので常に全画面（コーナー表示ではなく）
+        };
 
         function endBreak() {
             setActive(ui.breakOverlay, false);

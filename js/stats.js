@@ -429,6 +429,10 @@
         let skCurSnap = null, skRestoreGen = 0;                      // 現在の確定キャンバス(dataURL)と復元の世代番号（undoの基準・連打対策）
         let skMemTimer = null, skState = 'free';
         let skImgOpacity = 0.5, skWasRunning = false;
+        let skFreeOpacity = 1;          // 自由描き(free)状態でのお手本の濃さ（上バーの目ボタンで調整・毎回1で開始）
+        let skPendingMemHide = null;    // タイマー終了ちょうどに線を引いていた時、ストローク完了まで「薄く＆隠す」を保留
+        let skBreakTick = null, skBreakStart = 0;  // 描画モード内の目の休憩タイマー
+        let skRefFrame = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_REF_FRAME) === '1'; // お手本の外枠表示
         let skSide = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_SIDE) === '1';
         // 「並べる」時、お手本（左）と描画枠（右）を中央の境界へ寄せる量（0=中央寄せ＝従来 〜 1=境界にぴったり隣接）。
         // スライダーは横向き時だけ表示するが、値の適用は左右どちらの向きでも行う（0なら従来と完全に同じ＝後方互換）。
@@ -470,15 +474,20 @@
                 skSyncSettingsBtns();                                   // 補正・記憶下描き化・見比べの状態を反映
                 skApplySavedInputs();                                   // 記憶秒数・ペン太さ・ペン色・グリッド色などを復元
                 skApplyPaper();                                         // 前回の紙の色を反映
+                skFreeOpacity = 1; skUpdateRefHideBtn();                 // お手本の濃さは毎回フル表示から
+                const rfb = document.getElementById('sketch-refframe-btn'); // お手本枠ボタンの状態を反映
+                if (rfb) rfb.classList.toggle('accent', skRefFrame);
                 skApplyLayout(false);
                 skSyncImage();
                 skResize(true);
                 skSetState('free');
+                skStartBreakWatch();                                     // 描画モード内でも目の休憩を見張る
                 skShowMsg(!hasImg
                     ? '画像が無くても描けます。「お題」や「参考画像」をどうぞ'
                     : (skSide ? '左の画像を見ながら右に描けます（模写）' : 'そのまま上から描けます。「記憶」で 見る→隠す→描く'));
                 setTimeout(function(){ skShowMsg(''); }, 4200);
             } else {
+                skStopBreakWatch();
                 skStopTimer();
                 skCancelMemory();
                 if (skFormenOn) skSetFormen(false);
@@ -491,6 +500,31 @@
             }
         };
         function skCommitSketchCount(){ if (skDrew) { skSketchCount++; skDrew = false; } } // 何か描いてあれば1枚と数える
+
+        /* ── 描画モード内の「目の休憩」──────────────────────────────
+           本体タイマーとは別系統なので、設定（ON/OFF・インターバル）だけ共有して
+           描画している経過時間で発動する。発動中の全画面オーバーレイは app.js と共用。 */
+        function skBreakOverlayActive(){ const o = document.getElementById('break-overlay'); return !!(o && o.classList.contains('active')); }
+        function skStartBreakWatch(){
+            skBreakStart = Date.now();
+            skStopBreakWatch();
+            skBreakTick = setInterval(skCheckBreak, 1000);
+        }
+        function skStopBreakWatch(){ if (skBreakTick) { clearInterval(skBreakTick); skBreakTick = null; } }
+        function skCheckBreak(){
+            if (!skOpen) { skStopBreakWatch(); return; }
+            if (typeof window.croquisBreakInfo !== 'function') return;
+            const info = window.croquisBreakInfo();
+            if (!info.enabled) { skBreakStart = Date.now(); return; } // OFFの間は経過をリセットし続ける
+            if (skDrawing || skMemTimer || skBreakOverlayActive()) return; // 描いてる最中・記憶カウント中・休憩中は割り込まない
+            if (Date.now() - skBreakStart < info.intervalMin * 60 * 1000) return;
+            // 目の休憩を発動。描画タイマーが動いていたら止め、休憩明けに仕切り直す。
+            if (skTimerOn) { skClearSessionTimer(); skCountdown.style.display = 'none'; }
+            window.croquisStartSketchBreak(function(){
+                skBreakStart = Date.now();
+                if (skOpen && skTimerOn) skRunTimer(); // 描画タイマーを再開
+            });
+        }
 
         window.skToggleLayout = function(){
             skSide = !skSide;
@@ -563,7 +597,33 @@
             g.style.width = f.w + 'px';
             g.style.height = f.h + 'px';
             g.style.display = 'block';
+            skUpdateRefFrame(); // お手本側の外枠も追従させる
         }
+        // お手本（参考画像）の外枠に色付きの線を出す。色は「表示」タブのグリッド色を共用。
+        // 並べる時は左の画像枠、重ねる時は画面いっぱいの画像枠に合わせる。画像が隠れている時は出さない。
+        function skUpdateRefFrame(){
+            const g = document.getElementById('sketch-ref-frame');
+            if (!g) return;
+            if (!skRefFrame || skFormenOn || !skHasRefImage() || skState === 'hidden') { g.style.display = 'none'; return; }
+            const r = skStage.getBoundingClientRect();
+            const W = r.width, H = r.height;
+            const a = skImg.naturalWidth / skImg.naturalHeight;
+            let rect;
+            if (skSide) { const f = fitRect(a, W / 2, H); rect = { x: skConvLeftX(f.x), y: f.y, w: f.w, h: f.h }; } // 左の画像枠
+            else { rect = fitRect(a, W, H); }                                                                    // 重ねる：全体の画像枠
+            const rgb = SK_GRID_RGB[skGridColor] || SK_GRID_RGB.cyan;
+            g.style.borderColor = 'rgba(' + rgb + ',0.95)';
+            g.style.left = rect.x + 'px'; g.style.top = rect.y + 'px';
+            g.style.width = rect.w + 'px'; g.style.height = rect.h + 'px';
+            g.style.display = 'block';
+        }
+        window.skToggleRefFrame = function(){
+            skRefFrame = !skRefFrame;
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_REF_FRAME, skRefFrame ? '1' : '0', 'お手本枠');
+            const b = document.getElementById('sketch-refframe-btn'); if (b) b.classList.toggle('accent', skRefFrame);
+            skUpdateRefFrame();
+            skFlash(skRefFrame ? 'お手本の外枠を表示（色は表示タブのグリッド色）' : 'お手本の外枠を消しました', 1800);
+        };
         // 比率合わせグリッド：与えた矩形 r を n×n に分割する線を返す（外枠も少し濃く）
         function skGridLines(r, n){
             const x0 = r.x, y0 = r.y, w = r.w, h = r.h, out = [];
@@ -627,6 +687,7 @@
             window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_GRID_COLOR, c, 'グリッドの色');
             skSyncViewBtns();
             skRenderGrid();
+            skUpdateRefFrame(); // お手本枠の色もグリッド色に合わせる
         };
         window.skSetGridOp = function(v){
             skGridOp = Math.min(10, Math.max(1, parseInt(v, 10) || 6));
@@ -642,6 +703,7 @@
             document.querySelectorAll('.sk-gridcolor').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-gc') === skGridColor); });
             const go = document.getElementById('sketch-grid-op'); if (go) go.value = String(skGridOp);
             const bc = document.getElementById('sketch-bwcontrast'); if (bc) bc.value = String(skBwContrast);
+            const rf = document.getElementById('sketch-refframe-btn'); if (rf) rf.classList.toggle('accent', skRefFrame);
         }
         // 記憶秒数・ペン太さ・ペン色を保存値から復元（描画モードを開くたびに呼ぶ）
         function skApplySavedInputs(){
@@ -778,7 +840,7 @@
             const opWrap    = document.getElementById('sketch-imgopacity-wrap');
             skCountdown.style.display = 'none';
             if (st === 'free') {
-                skImg.style.visibility = 'visible'; skImg.style.opacity = '1';
+                skImg.style.visibility = 'visible'; skImg.style.opacity = String(skFreeOpacity); // 上バーの目ボタンで決めた濃さ
                 memBtn.style.display = ''; peekBtn.style.display = 'none'; revealBtn.style.display = 'none'; opWrap.style.display = 'none';
             } else if (st === 'memorize') {
                 skImg.style.visibility = 'visible'; skImg.style.opacity = '1';
@@ -792,6 +854,24 @@
                 memBtn.style.display = 'none'; peekBtn.style.display = ''; revealBtn.style.display = '';
                 revealBtn.innerHTML = '<svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg><span>隠す</span>'; revealBtn.title = 'また隠す'; opWrap.style.display = 'flex';
             }
+            skUpdateRefFrame(); // お手本枠は画像が隠れている時は出さない
+        }
+
+        // ── お手本の見え方（上バーの目ボタン → 濃さスライダー／完全に隠す）──
+        window.skToggleRefHide = function(){ skToggleMenu('sketch-refhide-pop', 'sketch-refhide-btn'); };
+        window.skSetRefOpacity = function(v){
+            skFreeOpacity = Math.max(0, Math.min(1, (parseInt(v, 10) || 0) / 100));
+            if (skState === 'free') skImg.style.opacity = String(skFreeOpacity); // 自由描き中は即反映
+            skUpdateRefHideBtn();
+        };
+        window.skToggleHideAllRef = function(){ skSetRefOpacity(skFreeOpacity > 0 ? 0 : 100); };
+        function skUpdateRefHideBtn(){
+            const ro = document.getElementById('sketch-refop');
+            if (ro) ro.value = String(Math.round(skFreeOpacity * 100));
+            const btn = document.getElementById('sketch-refhide-btn');
+            if (btn) btn.classList.toggle('accent', skFreeOpacity < 1); // 薄め/非表示の時は目印
+            const hideBtn = document.getElementById('sketch-refhideall-btn');
+            if (hideBtn) hideBtn.textContent = (skFreeOpacity <= 0) ? '表示' : '完全に隠す';
         }
 
         window.skStartMemory = function(isTraining){
@@ -807,17 +887,23 @@
                 sec--;
                 if (sec <= 0) {
                     skCancelMemory();
-                    // 覚える間に描いた当たり線は、隠す瞬間に薄い下描き化＋グリッドも消す
-                    // （通常は設定でON/OFF。トレーニング中は必ず実行）
-                    if (skMemFade || isTraining) { skFadeOnce(0.2); skGridOff(); } // 0.2≒「薄く」2〜3回分
-                    skSetState('hidden');
-                    skShowMsg(isTraining
-                        ? '記憶を頼りに描こう！描けたら「重ねる」や「答え合わせ」で確認'
-                        : (skMemFade ? '記憶を頼りに描こう（下描きは薄くしました）' : '記憶を頼りに描いてみよう！描けたら「答え合わせ」'));
-                    setTimeout(function(){ skShowMsg(''); }, 3500);
+                    // タイマー終了ちょうどに線を引いている最中なら、そのストロークが終わるまで
+                    // 「薄く＆隠す」を保留する（描いてる途中で線がブツ切れ・半端に薄くなるのを防ぐ）。
+                    if (skDrawing) { skPendingMemHide = { training: !!isTraining }; }
+                    else { skApplyMemHide(!!isTraining); }
                 } else { skCountdown.textContent = sec; }
             }, 1000);
         };
+        // 記憶/トレーニングの「隠す」処理本体（覚える時間が終わった瞬間に呼ぶ）。
+        // 覚える間に描いた当たり線は薄い下描き化＋グリッド消し（トレーニング中は必ず実行）。
+        function skApplyMemHide(isTraining){
+            if (skMemFade || isTraining) { skFadeOnce(0.2); skGridOff(); } // 0.2≒「薄く」2〜3回分
+            skSetState('hidden');
+            skShowMsg(isTraining
+                ? '記憶を頼りに描こう！描けたら「重ねる」や「答え合わせ」で確認'
+                : (skMemFade ? '記憶を頼りに描こう（下描きは薄くしました）' : '記憶を頼りに描いてみよう！描けたら「答え合わせ」'));
+            setTimeout(function(){ skShowMsg(''); }, 3500);
+        }
         // ── トレーニングモード（上バーのアイコン）──────────────────────
         // ①現在の画像を「並べる」表示 → ②グリッド表示 → ③記憶発動（覚える間にアタリ）
         // → ④時間後に自動でアタリを薄く＆グリッドを消し、記憶を頼りに描く。
@@ -844,7 +930,7 @@
             // ③④ 記憶発動（トレーニング扱い：終了時に必ず薄く＋グリッド消し）
             window.skStartMemory(true);
         };
-        function skCancelMemory(){ if (skMemTimer) { clearInterval(skMemTimer); skMemTimer = null; } skCountdown.style.display = 'none'; }
+        function skCancelMemory(){ skPendingMemHide = null; if (skMemTimer) { clearInterval(skMemTimer); skMemTimer = null; } skCountdown.style.display = 'none'; }
         window.skPeek = function(){
             if (skState !== 'hidden') return;
             skImg.style.opacity = '1';
@@ -985,7 +1071,7 @@
             const sr = document.getElementById('sketch-stab-strength'); if (sr) sr.value = String(skStabStr);
         }
         /* ── 上バーから開くメニュー（画像読み込み / 練習）。普段は隠す ── */
-        const SK_POPS = [['sketch-images-pop', 'sketch-images-btn'], ['sketch-practice-pop', 'sketch-practice-tab']];
+        const SK_POPS = [['sketch-images-pop', 'sketch-images-btn'], ['sketch-practice-pop', 'sketch-practice-tab'], ['sketch-refhide-pop', 'sketch-refhide-btn']];
         function skCloseMenus(){
             SK_POPS.forEach(function(pr){
                 const p = document.getElementById(pr[0]); if (p) p.classList.remove('open');
@@ -1126,6 +1212,13 @@
             // （これを忘れると次の「薄く」やリサイズ復元が消去動作になってしまう）
             skCtx.globalCompositeOperation = 'source-over';
             skCommitSnap(); // 描き終わりの確定状態を記録（pen up時なので体感の引っかかり無し）
+            skFlushPendingMemHide(); // タイマー終了で保留していた「薄く＆隠す」があればここで実行
+        }
+        // タイマー終了ちょうどに線を引いていて保留した「薄く＆隠す」を、ストローク完了時に実行する
+        function skFlushPendingMemHide(){
+            if (!skPendingMemHide) return;
+            const m = skPendingMemHide; skPendingMemHide = null;
+            skApplyMemHide(m.training);
         }
         function skCancelStroke(){
             if (!skDrawing) return;
@@ -1133,7 +1226,7 @@
             skRedoStack = skRedoBackup; // 描き始めで消したやり直し履歴を復元（2/3本指ジェスチャー時）
             if (skLassoPts) { // 投げ縄を中断（本体未変更なのでスナップを捨てるだけ）
                 skLassoPts = null; skLiveCtx.clearRect(0, 0, skCW, skCH); skLive.style.opacity = '1';
-                skUndoStack.pop(); return;
+                skUndoStack.pop(); skFlushPendingMemHide(); return;
             }
             if (skLiveActive) {
                 skLiveCtx.clearRect(0, 0, skCW, skCH);
@@ -1144,6 +1237,7 @@
                 skUndoStack.pop();            // 開始時に積んだスナップは破棄
                 skRestore(skCurSnap);         // 描きかけを捨てて開始前の確定状態へ戻す
             }
+            skFlushPendingMemHide(); // タイマー終了で保留していた処理があれば実行
         }
         // 投げ縄塗り：なぞっている線（軌跡）は常に表示。設定ONなら「塗られる範囲」を
         // 半透明シルエット＋閉じる線で予測表示（最初の実装の挙動）。OFFなら軌跡だけ。

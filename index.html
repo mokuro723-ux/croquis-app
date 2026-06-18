@@ -260,22 +260,25 @@
             </div>
         </div>
 
-        <div id="break-overlay">
-            <div id="break-content">
-                <div id="break-icon">👁️</div>
-                <div id="break-countdown">20</div>
-                <div id="break-message">目を閉じて休んでください</div>
-                <div id="break-sub">20秒後に自動で再開します</div>
-                <button id="break-skip-btn">スキップ</button>
-            </div>
-        </div>
-
-        <div id="break-corner">
-            <div id="break-corner-icon">👁️</div>
-            <div id="break-corner-count">20</div>
-            <div id="break-corner-msg">目を休めて</div>
-        </div>
     </div><!-- /#settings-panel -->
+
+    <!-- 目の休憩オーバーレイ（body直下に置く。settings-panel内だと transform に閉じ込められ、
+         描画モードなど高z-indexの画面の上に出せないため。通常モード・描画モード共通で使う） -->
+    <div id="break-overlay">
+        <div id="break-content">
+            <div id="break-icon">👁️</div>
+            <div id="break-countdown">20</div>
+            <div id="break-message">目を閉じて休んでください</div>
+            <div id="break-sub">20秒後に自動で再開します</div>
+            <button id="break-skip-btn">スキップ</button>
+        </div>
+    </div>
+
+    <div id="break-corner">
+        <div id="break-corner-icon">👁️</div>
+        <div id="break-corner-count">20</div>
+        <div id="break-corner-msg">目を休めて</div>
+    </div>
 
     <div id="multiselect-overlay">
         <div id="multiselect-header">
@@ -340,6 +343,7 @@
             <span class="spacer"></span>
             <button id="sketch-peek-btn" class="sk-tbtn" title="一瞬だけ見る" style="display:none;"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg><span>見る</span></button>
             <button id="sketch-reveal-btn" class="sk-tbtn" title="答え合わせ" style="display:none;"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg><span>答え</span></button>
+            <button id="sketch-refhide-btn" class="sk-tbtn" title="お手本の見え方（濃さを変える／完全に隠す）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg><svg viewBox="0 0 24 24" class="sk-caret"><path d="M7 10l5 5 5-5z"/></svg></button>
             <div id="sketch-imgopacity-wrap">
                 <span>画像</span>
                 <input type="range" id="sketch-imgopacity" min="10" max="100" value="50">
@@ -355,6 +359,7 @@
         <div id="sketch-stage">
             <img id="sketch-img" draggable="false" alt="">
             <div id="sketch-frame-guide" aria-hidden="true"></div>
+            <div id="sketch-ref-frame" aria-hidden="true"></div>
             <svg id="sketch-formen" preserveAspectRatio="none" aria-hidden="true"></svg>
             <canvas id="sketch-canvas"></canvas>
             <canvas id="sketch-live"></canvas>
@@ -410,6 +415,15 @@
                     <button id="sketch-timer-btn" class="sk-tbtn" title="指定秒ごとに自動で次の絵へ（描きながらクロッキー）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0 0 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg><span>タイマー</span></button>
                 </div>
             </div>
+            <!-- お手本の見え方（濃さ／完全に隠す）。上バーの目アイコンで開閉。普段は隠す -->
+            <div id="sketch-refhide-pop" class="sk-pop" aria-hidden="true">
+                <div class="sk-pop-title">お手本の見え方</div>
+                <div class="sk-pop-row">
+                    <span class="sk-set-label">濃さ</span>
+                    <input type="range" id="sketch-refop" min="0" max="100" value="100" title="お手本（参考画像）の濃さ。0で完全に隠れます">
+                    <button id="sketch-refhideall-btn" class="panel-btn">完全に隠す</button>
+                </div>
+            </div>
             <button id="sk-tools-fab" title="ツールを表示"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M7 14c-1.66 0-3 1.34-3 3 0 1.31-1.16 2-2 2 .92 1.22 2.49 2 4 2 2.21 0 4-1.79 4-4 0-1.66-1.34-3-3-3zm13.71-9.37l-1.34-1.34a.9959.9959 0 0 0-1.41 0L9 12.25 11.75 15l8.96-8.96c.39-.39.39-1.02 0-1.41z"/></svg></button>
         </div>
         <!-- ── 下：アイコンのタブ＋中身（2段） ── -->
@@ -433,6 +447,7 @@
                     <button class="sk-color" data-c="#1a1a1a" data-a="1" style="background:#1a1a1a" title="黒"></button>
                     <button class="sk-color" data-c="#f5f5f5" data-a="1" style="background:#f5f5f5" title="白"></button>
                     <button class="sk-color" data-c="#3d8bff" data-a="1" style="background:#3d8bff" title="青"></button>
+                    <button class="sk-color" data-c="#2ecc71" data-a="1" style="background:#2ecc71" title="緑"></button>
                     <button class="sk-color half" data-c="#3d8bff" data-a="0.3" title="青鉛筆（半透明）— 当たり取りに"></button>
                     <span class="sk-set-label">太さ</span>
                     <input type="range" id="sketch-size" min="2" max="30" value="5" title="ペンの太さ">
@@ -453,6 +468,8 @@
                     <button class="sk-gridcolor" data-gc="red"   style="background:#ff4d5e" title="グリッドの色：赤"></button>
                     <span class="sk-set-label">濃さ</span>
                     <input type="range" id="sketch-grid-op" min="1" max="10" value="6" title="グリッド線の濃さ">
+                    <span class="sk-vsep"></span>
+                    <button id="sketch-refframe-btn" class="sk-tbtn" title="お手本の外枠に色付きの線を表示（色は左のグリッド色を使用）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 3h18v18H3V3zm2 2v14h14V5H5z"/></svg><span>お手本枠</span></button>
                     <span class="sk-vsep"></span>
                     <button id="sketch-fliph-btn" class="sk-tbtn" title="左右反転（鏡像でバランス確認）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10,6 L4,12 L10,18 Z"/><rect x="11" y="4" width="2" height="16"/><path d="M14,6 L20,12 L14,18 Z"/></svg><span>左右反転</span></button>
                     <button id="sketch-flipv-btn" class="sk-tbtn" title="上下反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6,10 L12,4 L18,10 Z"/><rect x="4" y="11" width="16" height="2"/><path d="M6,14 L12,20 L18,14 Z"/></svg><span>上下反転</span></button>
