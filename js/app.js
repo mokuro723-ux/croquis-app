@@ -250,6 +250,7 @@
         let lastTimerText      = '';
         let lastProgressWidth  = '';
         let lastProgressColor  = '';
+        let lastTimerUrgency   = '';   // タイマー文字の色段階（'' / 'warn' / 'urgent'）
         let lastImageTransform = '';
         let lastImageFilter    = '';
         let lastImageOpacity   = '';
@@ -1320,9 +1321,14 @@
 
         window.addEventListener('resize', debounce(applyFiltersDeferred, TIMING.RESIZE_DEBOUNCE_MS));
         
-        function toggle(key) { 
+        // トグル操作の状態をトーストで知らせる（スマホはツールチップが出ないため、今ON/OFFか分かるように）
+        function toggleToast(label, on) { if (window.showToast) window.showToast(label + (on ? '：ON' : '：OFF'), 1500); }
+        const TOGGLE_LABELS = { shuffle: 'シャッフル', flipH: '左右反転', flipV: '上下反転', grid: 'グリッド', mono: 'モノクロ' };
+
+        function toggle(key) {
             settings[key] = !settings[key]; const btn = uiBtnMap[key];
             setActive(btn, !!settings[key]);
+            if (TOGGLE_LABELS[key]) toggleToast(TOGGLE_LABELS[key], settings[key]);
             if (key === 'mono' && settings.mono && settings.bw) {
                 settings.bw = false;
                 setActive(ui.bwBtn, false);
@@ -1365,6 +1371,7 @@
                 setActive(ui.flipVBtn, false);
                 applyFiltersDeferred();
             }
+            toggleToast('ランダム反転', randomFlipEnabled);
             saveUiSettings();
         }
 
@@ -1384,6 +1391,7 @@
                 setActive(bwBtn, false);
                 if (bwBar) bwBar.classList.toggle('visible', false);
             }
+            toggleToast('2階調（白黒）', settings.bw);
             applyFiltersDeferred();
             saveUiSettings();
         }
@@ -1398,6 +1406,7 @@
                 isImageHidden = false;
                 applyFiltersDeferred();
             }
+            if (window.showToast) window.showToast(isEyeHideEnabled ? '目隠し練習：ON（数秒後に画像が隠れます）' : '目隠し練習：OFF', 1800);
             saveUiSettings();
         }
 
@@ -2233,7 +2242,7 @@
             ui.playBtn.classList.toggle('accent', true);
             clearTimeout(timerTickId);    timerTickId    = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
-            ui.timer.classList.toggle('urgent', false);
+            setTimerUrgency(99); // 一時停止時は色を通常へ戻す
             updateMediaSession();
             if (isPiP) updatePiP();
         }
@@ -2259,8 +2268,7 @@
             if (secondChanged) {
                 remaining = nextRemaining;
                 updateTimerText(remaining);
-                // 残り10秒以下でタイマー文字をハイライト
-                ui.timer.classList.toggle('urgent', remaining <= 10);
+                setTimerUrgency(remaining); // 残り時間に応じて色を段階強調
             }
             // PiP中かつバックグラウンドのときは残り秒が変わったときだけ再描画
             if (isPiP && document.hidden && secondChanged) {
@@ -2278,7 +2286,7 @@
                 // timerTickLoopに処理を任せる（二重発火防止）
                 animationFrameId = null; return;
             }
-            if (nextRemaining !== remaining) { remaining = nextRemaining; updateTimerText(remaining); }
+            if (nextRemaining !== remaining) { remaining = nextRemaining; updateTimerText(remaining); setTimerUrgency(remaining); }
             const totalMs = (hmActive ? hmPhases[hmPhase].s : timerSeconds) * 1000;
             const nextWidth = ((remainMs / totalMs) * 100) + '%';
             if (nextWidth !== lastProgressWidth) { ui.prog.style.width = nextWidth; lastProgressWidth = nextWidth; }
@@ -2305,7 +2313,7 @@
         function resetTimer() {
             clearTimeout(timerTickId);    timerTickId    = null;
             cancelAnimationFrame(animationFrameId); animationFrameId = null;
-            ui.timer.classList.toggle('urgent', false);
+            setTimerUrgency(99); // リセット時は色を通常へ戻す
             remaining = hmActive ? hmPhases[hmPhase].s : timerSeconds;
             if (isRunning) {
                 expectedEndTime = Date.now() + (remaining * 1000);
@@ -2340,6 +2348,15 @@
             if (txt !== lastTimerText) { ui.timer.textContent = txt; lastTimerText = txt; }
         }
 
+        // 残り時間に応じてタイマー文字の色を段階強調：>10s=通常 / 6〜10s=警告(黄) / 1〜5s=緊急(赤＋鼓動)
+        function setTimerUrgency(sec) {
+            const level = (sec > 0 && sec <= 5) ? 'urgent' : (sec <= 10 && sec > 5) ? 'warn' : '';
+            if (level === lastTimerUrgency) return; // 変化時だけDOM更新
+            lastTimerUrgency = level;
+            ui.timer.classList.toggle('warn', level === 'warn');
+            ui.timer.classList.toggle('urgent', level === 'urgent');
+        }
+
         function updateImageCounter() {
             const el = ui.imageCounter;
             if (!el) return;
@@ -2353,6 +2370,7 @@
             soundVolume = isMuted ? 0 : 2;
             ui.muteBtn.innerHTML = isMuted ? iconMuteSVG : iconVolSVG;
             if (ui.soundVolSel) ui.soundVolSel.value = soundVolume;
+            if (window.showToast) window.showToast(isMuted ? '音：OFF' : '音：ON', 1300);
             saveUiSettings();
         }
         function playSound() {
@@ -2434,9 +2452,11 @@
 
             requestAnimationFrame(animatePipFlash);
         }
-        function cycleBg() { 
-            bgMode = (bgMode + 1) % 3; 
-            document.documentElement.style.setProperty('--bg-color', bgColors[bgMode]); 
+        const BG_NAMES = ['ダーク', '黒', '白'];
+        function cycleBg() {
+            bgMode = (bgMode + 1) % 3;
+            document.documentElement.style.setProperty('--bg-color', bgColors[bgMode]);
+            if (window.showToast) window.showToast('背景：' + (BG_NAMES[bgMode] || ''), 1300);
             saveUiSettings();
             if (isPiP) {
                 pipRenderStamp = '';

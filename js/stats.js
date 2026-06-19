@@ -532,6 +532,7 @@
             skSide = !skSide;
             window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_SIDE, skSide ? '1' : '0', 'スケッチ表示位置');
             skApplyLayout(true);
+            skFlash(skSide ? '並べる：左お手本・右に描く（模写）' : '重ねる：画像の上に直接描く', 1600);
         };
         function skApplyLayout(preserve){
             skResetZoom(); // レイアウトが変わったらズームは解除（ズレ防止）
