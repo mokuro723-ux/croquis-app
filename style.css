@@ -544,8 +544,10 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 #sketch-live { pointer-events: none; z-index: 3; }
 /* ズーム用ラッパー（transformは原点左上）。描画層＝重ねる時のみお手本と一緒に拡大 */
 #sketch-zoomwrap, #sketch-imgwrap { position: absolute; inset: 0; transform-origin: 0 0; pointer-events: none; }
-/* 並べる時：お手本ズーム層は左半分だけ。はみ出しは隠して描画側に被らないようにする */
-#sketch-overlay.side #sketch-imgwrap { width: 50%; overflow: hidden; }
+/* お手本のクリップ枠（これ自体は変形しない）。重ねる時は全面、並べる時は左半分に固定して切り抜く。
+   transform は内側の imgwrap だけにかけるので、拡大してもこの枠の外（右の描画領域）へは出ない。 */
+#sketch-imgclip { position: absolute; inset: 0; pointer-events: none; }
+#sketch-overlay.side #sketch-imgclip { width: 50%; overflow: hidden; }
 /* 並べる時だけ出す、お手本（左半分）用のピンチ受け面（拡大しても描画側のタッチを奪わない） */
 #sketch-imgpinch { position: absolute; left: 0; top: 0; width: 50%; height: 100%; z-index: 5; display: none; touch-action: none; }
 #sketch-overlay.side #sketch-imgpinch { display: block; pointer-events: auto; }

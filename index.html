@@ -367,10 +367,14 @@
         </div>
         <div id="sketch-stage">
             <!-- お手本ズーム層：参考画像とその外枠だけを拡大／パン。
-                 重ねるモードは下の描画層と同じ変形で一緒に拡大、並べるモードはこの層（左半分）だけ拡大する。 -->
-            <div id="sketch-imgwrap">
-                <img id="sketch-img" draggable="false" alt="">
-                <div id="sketch-ref-frame" aria-hidden="true"></div>
+                 重ねるモードは下の描画層と同じ変形で一緒に拡大、並べるモードはこの層（左半分）だけ拡大する。
+                 ★ imgclip は「変形しないクリップ枠」。並べる時はこの枠を左半分に固定し overflow:hidden で切り抜くので、
+                   内側の imgwrap をいくら拡大しても右の描画領域へはみ出さない。 -->
+            <div id="sketch-imgclip">
+                <div id="sketch-imgwrap">
+                    <img id="sketch-img" draggable="false" alt="">
+                    <div id="sketch-ref-frame" aria-hidden="true"></div>
+                </div>
             </div>
             <!-- 描画ズーム層：描画キャンバス・グリッド・枠など。重ねる時のみお手本と一緒に拡大 -->
             <div id="sketch-zoomwrap">
