@@ -449,8 +449,14 @@
                     <button class="sk-color" data-c="#3d8bff" data-a="1" style="background:#3d8bff" title="青"></button>
                     <button class="sk-color" data-c="#2ecc71" data-a="1" style="background:#2ecc71" title="緑"></button>
                     <button class="sk-color half" data-c="#3d8bff" data-a="0.3" title="青鉛筆（半透明）— 当たり取りに"></button>
+                    <label class="sk-customcolor" id="sketch-customcolor-wrap" title="好きな色を選ぶ"><input type="color" id="sketch-customcolor" value="#ffcc00"></label>
+                    <span class="sk-vsep"></span>
                     <span class="sk-set-label">太さ</span>
                     <input type="range" id="sketch-size" min="2" max="30" value="5" title="ペンの太さ">
+                    <span class="sk-set-label">濃さ</span>
+                    <input type="range" id="sketch-alpha" min="10" max="100" value="100" title="ペンの濃さ（薄くするとどの色でも当たり取りに使えます）">
+                    <span class="sk-brush-preview" id="sketch-brush-preview" title="今のペンの色・太さ・濃さ"><span class="sk-brush-dot"></span></span>
+                    <span class="sk-vsep"></span>
                     <button class="sk-tbtn" id="sketch-eraser-btn" title="消しゴム"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17c-.78-.79-.78-2.05 0-2.84l10.6-10.6c.79-.78 2.05-.78 2.83 0zM4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l3.53-3.53-4.95-4.95-4.95 4.95z"/></svg><span>消しゴム</span></button>
                 </div>
                 <!-- 投げ縄 -->

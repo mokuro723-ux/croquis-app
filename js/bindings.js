@@ -101,6 +101,9 @@
         bind('sketch-timer-btn', 'click', function(event){ skToggleTimer(); });
         bind('sketch-memsec', 'change', function(event){ window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_MEMSEC, this.value, '記憶の秒数'); });
         bind('sketch-size', 'change', function(event){ window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_SIZE, this.value, 'ペンの太さ'); });
+        bind('sketch-size', 'input', function(event){ skUpdateBrushPreview(); });                 // 太さの見本を即時更新
+        bind('sketch-customcolor', 'input', function(event){ skSetCustomColor(this.value); });     // 好きな色を選ぶ
+        bind('sketch-alpha', 'input', function(event){ skSetAlpha(this.value); });                 // ペンの濃さ
         bind('sketch-hide-btn', 'click', function(event){ skToggleHide(); });
         bind('sketch-mem-btn', 'click', function(event){ skStartMemory(); });
         bind('sketch-peek-btn', 'click', function(event){ skPeek(); });

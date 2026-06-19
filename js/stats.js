@@ -719,14 +719,23 @@
                 const parts = col.split('|'), c = parts[0], a = parts[1] || '1';
                 let matched = null;
                 document.querySelectorAll('.sk-color').forEach(function(b){
+                    b.classList.remove('on');
                     if (b.getAttribute('data-c') === c && (b.getAttribute('data-a') || '1') === a) matched = b;
                 });
+                const wrap = document.getElementById('sketch-customcolor-wrap');
                 if (matched) {
-                    document.querySelectorAll('.sk-color').forEach(function(b){ b.classList.remove('on'); });
                     matched.classList.add('on');
-                    skColor = c; skAlpha = parseFloat(a) || 1;
+                    if (wrap) wrap.classList.remove('on');
+                } else {
+                    // プリセットに無い色＝カスタム色として復元
+                    if (wrap) wrap.classList.add('on');
+                    const ci = document.getElementById('sketch-customcolor');
+                    if (ci && /^#[0-9a-fA-F]{6}$/.test(c)) ci.value = c;
                 }
+                skColor = c; skAlpha = parseFloat(a) || 1;
             }
+            const al = document.getElementById('sketch-alpha'); if (al) al.value = String(Math.round((skAlpha || 1) * 100));
+            skUpdateBrushPreview();
             skSyncViewBtns();
         }
         window.skToggleTools = function(){
@@ -1029,6 +1038,7 @@
         function skNudgeSize(d){ // ペンの太さを増減（PCの [ ] キー用）
             const s = document.getElementById('sketch-size'); if (!s) return;
             s.value = Math.max(+s.min, Math.min(+s.max, (+s.value) + d));
+            skUpdateBrushPreview();
             skFlash('太さ ' + s.value, 900);
         }
         window.skToggleEraser = function(){ skSetTool(skTool === 'eraser' ? 'pen' : 'eraser'); };
@@ -1130,16 +1140,46 @@
             if (name === 'settings') { skSyncSettingsBtns(); skApplyPaper(); } // 設定タブは現在値を反映
             if (name === 'view') skSyncViewBtns();                            // 表示タブはグリッド色・濃さ・コントラストを反映
         };
+        // ペンの色・濃さを一括反映（スウォッチ/カスタム色/濃さスライダー/復元で共用）
+        function skApplyPenColor(c, a, save){
+            skColor = c;
+            skAlpha = Math.max(0.1, Math.min(1, (typeof a === 'number') ? a : parseFloat(a) || 1));
+            if (save !== false) window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_COLOR, skColor + '|' + skAlpha, 'ペンの色');
+            if (skTool !== 'pen') skSetTool('pen'); // 色を選んだらペンに戻す（消し/投げ縄から復帰）
+            const al = document.getElementById('sketch-alpha'); if (al) al.value = String(Math.round(skAlpha * 100));
+            skUpdateBrushPreview();
+        }
+        // 今のペン（色・太さ・濃さ）の見本ドットを更新
+        function skUpdateBrushPreview(){
+            const dot = document.querySelector('#sketch-brush-preview .sk-brush-dot');
+            if (!dot) return;
+            const szEl = document.getElementById('sketch-size');
+            const sz = szEl ? (parseInt(szEl.value, 10) || 5) : 5;
+            const d = Math.max(3, Math.min(24, sz));
+            dot.style.width = d + 'px'; dot.style.height = d + 'px';
+            dot.style.background = skColor; dot.style.opacity = String(skAlpha);
+        }
+        window.skUpdateBrushPreview = skUpdateBrushPreview; // bindings.js から太さスライダーで呼ぶため公開
         document.querySelectorAll('.sk-color').forEach(function(b){
             b.addEventListener('click', function(){
                 document.querySelectorAll('.sk-color').forEach(function(x){ x.classList.remove('on'); });
                 b.classList.add('on');
-                skColor = b.getAttribute('data-c');
-                skAlpha = parseFloat(b.getAttribute('data-a') || '1');
-                window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_COLOR, skColor + '|' + skAlpha, 'ペンの色'); // 色をサイト内に保持
-                if (skTool !== 'pen') skSetTool('pen'); // 色を選んだらペンに戻す（消し/投げ縄から復帰）
+                const wrap = document.getElementById('sketch-customcolor-wrap'); if (wrap) wrap.classList.remove('on');
+                skApplyPenColor(b.getAttribute('data-c'), parseFloat(b.getAttribute('data-a') || '1'));
             });
         });
+        // カスタム色（好きな色を選ぶ）。今の濃さは維持する
+        window.skSetCustomColor = function(v){
+            document.querySelectorAll('.sk-color').forEach(function(x){ x.classList.remove('on'); });
+            const wrap = document.getElementById('sketch-customcolor-wrap'); if (wrap) wrap.classList.add('on');
+            skApplyPenColor(v, skAlpha);
+        };
+        // ペンの濃さスライダー（どの色でも薄く＝当たり取りに）
+        window.skSetAlpha = function(v){
+            skAlpha = Math.max(0.1, Math.min(1, (parseInt(v, 10) || 100) / 100));
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_COLOR, skColor + '|' + skAlpha, 'ペンの色');
+            skUpdateBrushPreview();
+        };
 
         /* ── 描画本体（半透明ペンはライブレイヤーに描き、ストローク確定時に合成） ── */
         function skPos(e){

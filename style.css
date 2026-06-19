@@ -648,6 +648,26 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 .sk-color { width: 31px; height: 31px; border-radius: 50%; border: 2px solid #5a5a5a; cursor: pointer; padding: 0; flex: 0 0 auto; }
 .sk-color.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
 .sk-color.half { background: linear-gradient(135deg, rgba(61,139,255,0.85) 50%, rgba(61,139,255,0.3) 50%) !important; }
+/* カスタム色スウォッチ（虹色＝好きな色を選べる目印。実際の色はブラシ見本で確認） */
+.sk-customcolor {
+    width: 31px; height: 31px; border-radius: 50%; border: 2px solid #5a5a5a; cursor: pointer;
+    padding: 0; flex: 0 0 auto; position: relative; overflow: hidden; display: inline-block;
+    background: conic-gradient(from 90deg, #ff4d5e, #ffd75e, #2ecc71, #00d4ff, #3d8bff, #b06cff, #ff4d5e);
+}
+.sk-customcolor.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
+.sk-customcolor input[type="color"] {
+    position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px);
+    border: none; padding: 0; margin: 0; background: transparent; cursor: pointer; opacity: 0;
+}
+@media (pointer: coarse) { .sk-customcolor { width: 34px; height: 34px; } }
+/* ペンの濃さスライダー＆今のブラシ見本（色・太さ・濃さがひと目で分かる） */
+.sk-panel #sketch-alpha { width: 90px; accent-color: var(--accent); flex: 0 0 auto; }
+.sk-brush-preview {
+    width: 30px; height: 30px; border-radius: 7px; flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center; border: 1px solid #444;
+    background: repeating-conic-gradient(#3a3a3a 0% 25%, #2b2b2b 0% 50%) 50% / 11px 11px; /* 透け確認用の市松 */
+}
+.sk-brush-dot { width: 5px; height: 5px; border-radius: 50%; background: #ff4d5e; }
 /* グリッドの色スウォッチ（表示タブ）＋濃さ/コントラストのスライダー */
 .sk-gridcolor { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #5a5a5a; cursor: pointer; padding: 0; flex: 0 0 auto; }
 .sk-gridcolor.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
