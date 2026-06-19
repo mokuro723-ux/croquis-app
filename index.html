@@ -247,6 +247,15 @@
                     </div>
                 </div>
                 <div class="settings-section">
+                    <div class="settings-section-title">ショートカットキー</div>
+                    <div class="settings-desc" style="margin-bottom:8px;">キーの欄をタップ → 割り当てたいキーを押すと変更できます（PCキーボード用）。Esc / Ctrl+Z などの一部は固定です。</div>
+                    <div id="shortcut-list"></div>
+                    <div class="settings-row">
+                        <div class="settings-label"><span>ショートカットを初期設定に戻す</span></div>
+                        <button id="je-shortcut-reset" class="panel-btn ghost">リセット</button>
+                    </div>
+                </div>
+                <div class="settings-section">
                     <div class="settings-section-title">サウンド</div>
                     <div class="settings-row">
                         <div class="settings-label"><span>タイマー終了音量</span></div>
@@ -357,13 +366,23 @@
             <button id="je-sksave" class="sk-tbtn" title="描いた絵を保存"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></button>
         </div>
         <div id="sketch-stage">
-            <img id="sketch-img" draggable="false" alt="">
-            <div id="sketch-frame-guide" aria-hidden="true"></div>
-            <div id="sketch-ref-frame" aria-hidden="true"></div>
-            <svg id="sketch-formen" preserveAspectRatio="none" aria-hidden="true"></svg>
-            <canvas id="sketch-canvas"></canvas>
-            <canvas id="sketch-live"></canvas>
-            <svg id="sketch-grid" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <!-- お手本ズーム層：参考画像とその外枠だけを拡大／パン。
+                 重ねるモードは下の描画層と同じ変形で一緒に拡大、並べるモードはこの層（左半分）だけ拡大する。 -->
+            <div id="sketch-imgwrap">
+                <img id="sketch-img" draggable="false" alt="">
+                <div id="sketch-ref-frame" aria-hidden="true"></div>
+            </div>
+            <!-- 描画ズーム層：描画キャンバス・グリッド・枠など。重ねる時のみお手本と一緒に拡大 -->
+            <div id="sketch-zoomwrap">
+                <div id="sketch-frame-guide" aria-hidden="true"></div>
+                <svg id="sketch-formen" preserveAspectRatio="none" aria-hidden="true"></svg>
+                <canvas id="sketch-canvas"></canvas>
+                <canvas id="sketch-live"></canvas>
+                <svg id="sketch-grid" preserveAspectRatio="none" aria-hidden="true"></svg>
+            </div>
+            <!-- 並べるモード時だけ表示する、お手本（左半分）のピンチ操作受け面 -->
+            <div id="sketch-imgpinch" aria-hidden="true"></div>
+            <button id="sketch-zoom-chip" type="button" aria-hidden="true">🔍 ×1.0　タップで等倍</button>
             <div id="sketch-countdown"></div>
             <div id="sketch-msg" style="display:none;"></div>
             <div id="sketch-formen-bar">

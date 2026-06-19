@@ -23,6 +23,7 @@
             SKETCH_BW_CONTRAST: 'croquis_sketch_bw_contrast_v1', // 二階調コントラスト(1〜20)
             SKETCH_CONVERGE: 'croquis_sketch_converge_v1',    // 並べる時のお手本⇔描画の寄せ(0〜100)
             SKETCH_REF_FRAME: 'croquis_sketch_ref_frame_v1',  // お手本側の外枠に色付き線を出すか
+            SHORTCUTS: 'croquis_shortcuts_v1',                // キーボードショートカットの割当（ユーザー変更）
         };
 
         // ── 保存係（読み書きと失敗時の記録を一手に引き受ける） ──────
@@ -73,6 +74,106 @@
         })();
         window.CROQUIS_KEYS = CROQUIS_KEYS;
         window.CroquisStore = CroquisStore;
+
+        // ── キーボードショートカット（ユーザーが割当を変更できる） ──────
+        // 各ハンドラは e.code 直書きをやめ CroquisShortcuts.match(id, e) で判定する。
+        const CROQUIS_SHORTCUT_DEFS = [
+            { id: 'g_play',    scope: 'global', def: 'Space',        label: '再生 / 一時停止' },
+            { id: 'g_next',    scope: 'global', def: 'ArrowRight',   label: '次の画像' },
+            { id: 'g_prev',    scope: 'global', def: 'ArrowLeft',    label: '前の画像' },
+            { id: 'g_fav',     scope: 'global', def: 'KeyF',         label: 'お気に入り登録 / 解除' },
+            { id: 'g_grid',    scope: 'global', def: 'KeyG',         label: 'グリッド' },
+            { id: 'g_flipH',   scope: 'global', def: 'KeyH',         label: '左右反転' },
+            { id: 'g_flipV',   scope: 'global', def: 'KeyV',         label: '上下反転' },
+            { id: 'g_sketch',  scope: 'global', def: 'KeyD',         label: '描画モードを開く' },
+            { id: 'g_online',  scope: 'global', def: 'KeyO',         label: 'オンライン素材' },
+            { id: 'g_tag',     scope: 'global', def: 'KeyT',         label: 'タグ（フォルダ分け）' },
+            { id: 'g_pip',     scope: 'global', def: 'KeyP',         label: '小窓表示（PiP）' },
+            { id: 'g_mute',    scope: 'global', def: 'KeyM',         label: '音のオン / オフ' },
+            { id: 's_pen',     scope: 'sketch', def: 'KeyB',         label: 'ペン' },
+            { id: 's_eraser',  scope: 'sketch', def: 'KeyE',         label: '消しゴム' },
+            { id: 's_lasso',   scope: 'sketch', def: 'KeyL',         label: '投げ縄' },
+            { id: 's_formen',  scope: 'sketch', def: 'KeyW',         label: 'お題（ウォームアップ）' },
+            { id: 's_grid',    scope: 'sketch', def: 'KeyG',         label: 'グリッド' },
+            { id: 's_sizeDown',scope: 'sketch', def: 'BracketLeft',  label: 'ペンを細く' },
+            { id: 's_sizeUp',  scope: 'sketch', def: 'BracketRight', label: 'ペンを太く' },
+            { id: 's_zoomIn',  scope: 'sketch', def: 'Equal',        label: 'お手本ズームイン' },
+            { id: 's_zoomOut', scope: 'sketch', def: 'Minus',        label: 'お手本ズームアウト' },
+            { id: 's_zoomReset',scope:'sketch', def: 'Digit0',       label: 'ズーム解除（等倍）' },
+        ];
+        function croquisKeyLabel(code){
+            if (!code) return '—';
+            if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+            if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+            const m = { Space: 'Space', ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓',
+                BracketLeft: '[', BracketRight: ']', Minus: '－', Equal: '＋', Comma: ',', Period: '.',
+                Slash: '/', Semicolon: ';', Quote: "'", Backslash: '\\', Backquote: '`', Enter: 'Enter', Tab: 'Tab' };
+            return m[code] || code.replace(/^Key|^Digit/, '');
+        }
+        const CroquisShortcuts = (function(){
+            const map = {};
+            CROQUIS_SHORTCUT_DEFS.forEach(function(d){ map[d.id] = d.def; });
+            const saved = CroquisStore.getJSON(CROQUIS_KEYS.SHORTCUTS, null);
+            if (saved && typeof saved === 'object') {
+                Object.keys(saved).forEach(function(k){ if (map.hasOwnProperty(k) && typeof saved[k] === 'string') map[k] = saved[k]; });
+            }
+            function persist(){ CroquisStore.setJSON(CROQUIS_KEYS.SHORTCUTS, map, 'ショートカット'); }
+            function defOf(id){ return CROQUIS_SHORTCUT_DEFS.find(function(d){ return d.id === id; }); }
+            return {
+                defs: CROQUIS_SHORTCUT_DEFS,
+                get: function(id){ return map[id]; },
+                // 修飾キー無しの単キー判定（Ctrl/⌘/Alt と組み合わさったものは別扱いで素通し）
+                match: function(id, e){ return !e.ctrlKey && !e.metaKey && !e.altKey && e.code === map[id]; },
+                set: function(id, code){ if (map.hasOwnProperty(id)) { map[id] = code; persist(); } },
+                reset: function(id){ const d = defOf(id); if (d) { map[id] = d.def; persist(); } },
+                resetAll: function(){ CROQUIS_SHORTCUT_DEFS.forEach(function(d){ map[d.id] = d.def; }); persist(); },
+                // 同スコープ内で同じキーを使っている別アクションを返す（割当時の重複警告用）
+                conflict: function(id, code){ const d0 = defOf(id); let hit = null; CROQUIS_SHORTCUT_DEFS.forEach(function(d){ if (d.id !== id && d.scope === d0.scope && map[d.id] === code) hit = d; }); return hit; },
+            };
+        })();
+        window.CroquisShortcuts = CroquisShortcuts;
+        window.croquisKeyLabel = croquisKeyLabel;
+
+        // ── ショートカット設定UI（設定パネル内） ──
+        let shortcutCapturingId = null;
+        function renderShortcutSettings(){
+            const wrap = document.getElementById('shortcut-list');
+            if (!wrap) return;
+            wrap.innerHTML = '';
+            [{ scope: 'global', title: '全体' }, { scope: 'sketch', title: '描画モード' }].forEach(function(g){
+                const head = document.createElement('div'); head.className = 'shortcut-group-title'; head.textContent = g.title;
+                wrap.appendChild(head);
+                CroquisShortcuts.defs.filter(function(d){ return d.scope === g.scope; }).forEach(function(d){
+                    const row = document.createElement('div'); row.className = 'shortcut-row';
+                    const name = document.createElement('span'); name.className = 'shortcut-name'; name.textContent = d.label;
+                    const key = document.createElement('button'); key.type = 'button'; key.className = 'shortcut-key';
+                    if (shortcutCapturingId === d.id) { key.textContent = 'キーを押す…'; key.classList.add('capturing'); }
+                    else key.textContent = croquisKeyLabel(CroquisShortcuts.get(d.id));
+                    key.addEventListener('click', function(){ shortcutCapturingId = (shortcutCapturingId === d.id) ? null : d.id; renderShortcutSettings(); });
+                    row.appendChild(name); row.appendChild(key);
+                    wrap.appendChild(row);
+                });
+            });
+        }
+        // 割当の取り込み（capture段階で最優先。割当中だけ作用し、その間は通常のショートカットを止める）
+        const SHORTCUT_MODIFIERS = ['ControlLeft','ControlRight','ShiftLeft','ShiftRight','AltLeft','AltRight','MetaLeft','MetaRight'];
+        document.addEventListener('keydown', function(e){
+            if (!shortcutCapturingId) return;
+            e.preventDefault(); e.stopImmediatePropagation();
+            if (e.code === 'Escape') { shortcutCapturingId = null; renderShortcutSettings(); return; }
+            if (SHORTCUT_MODIFIERS.indexOf(e.code) >= 0) return; // 修飾キー単体は無視（次の本キーを待つ）
+            const id = shortcutCapturingId;
+            const conflict = CroquisShortcuts.conflict(id, e.code);
+            CroquisShortcuts.set(id, e.code);
+            shortcutCapturingId = null;
+            renderShortcutSettings();
+            if (conflict && typeof window.showToast === 'function') window.showToast('「' + conflict.label + '」と同じキーになりました（必要なら変更してください）', 3200);
+        }, true);
+        window.renderShortcutSettings = renderShortcutSettings;
+        window.resetShortcuts = function(){
+            CroquisShortcuts.resetAll(); shortcutCapturingId = null; renderShortcutSettings();
+            if (typeof window.showToast === 'function') window.showToast('ショートカットを初期設定に戻しました');
+        };
 
         // ── タイミング定数 ────────────────────────────────────────
         const TIMING = {
@@ -2717,9 +2818,9 @@
                 if (ui.settingsPanel.classList.contains('open')) { toggleSettingsPanel(); return; }
                 if (isHistoryPanelOpen) { toggleHistoryPanel(); return; }
             }
-            if (e.code === 'Space') { e.preventDefault(); toggleTimer(); } 
-            else if (e.code === 'ArrowRight') { nextImage(); } 
-            else if (e.code === 'ArrowLeft') { prevImage(); }
+            if (CroquisShortcuts.match('g_play', e)) { e.preventDefault(); toggleTimer(); }
+            else if (CroquisShortcuts.match('g_next', e)) { nextImage(); }
+            else if (CroquisShortcuts.match('g_prev', e)) { prevImage(); }
         });
         document.addEventListener('pointerdown', function(e) {
             pointerStartX = e.clientX; pointerStartY = e.clientY; armFocusIdleTimer();

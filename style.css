@@ -517,7 +517,7 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     position: absolute; left: 0; top: 0; height: 100%; width: 100%;
     object-fit: contain; pointer-events: none; user-select: none;
 }
-#sketch-overlay.side #sketch-img { width: 50%; object-position: var(--sk-imgpos, 50%) center; }
+#sketch-overlay.side #sketch-img { width: 100%; object-position: var(--sk-imgpos, 50%) center; }
 #sketch-overlay.side #sketch-stage::before {
     content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
     background: #3d3d3d; z-index: 3;
@@ -529,8 +529,24 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     -webkit-touch-callout: none; -webkit-user-drag: none;
     -webkit-tap-highlight-color: transparent;
 }
-#sketch-canvas { cursor: crosshair; z-index: 2; }
+#sketch-canvas { cursor: crosshair; z-index: 2; pointer-events: auto; }
 #sketch-live { pointer-events: none; z-index: 3; }
+/* ズーム用ラッパー（transformは原点左上）。描画層＝重ねる時のみお手本と一緒に拡大 */
+#sketch-zoomwrap, #sketch-imgwrap { position: absolute; inset: 0; transform-origin: 0 0; pointer-events: none; }
+/* 並べる時：お手本ズーム層は左半分だけ。はみ出しは隠して描画側に被らないようにする */
+#sketch-overlay.side #sketch-imgwrap { width: 50%; overflow: hidden; }
+/* 並べる時だけ出す、お手本（左半分）用のピンチ受け面（拡大しても描画側のタッチを奪わない） */
+#sketch-imgpinch { position: absolute; left: 0; top: 0; width: 50%; height: 100%; z-index: 5; display: none; touch-action: none; }
+#sketch-overlay.side #sketch-imgpinch { display: block; pointer-events: auto; }
+/* ズーム中だけ出るチップ（タップで等倍に戻す） */
+#sketch-zoom-chip {
+    position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%);
+    z-index: 6; display: none; align-items: center; gap: 4px;
+    padding: 6px 14px; border-radius: 999px; font-size: 0.8rem; color: #fff; cursor: pointer;
+    background: rgba(20,20,20,0.9); border: 1px solid #4a4a4a; box-shadow: 0 3px 14px rgba(0,0,0,0.5);
+    white-space: nowrap;
+}
+#sketch-zoom-chip.show { display: inline-flex; }
 /* ── 「並べる」で描く側に出す、画像と同じ比率の枠（ズレ確認用） ── */
 #sketch-frame-guide {
     position: absolute; display: none; z-index: 1; box-sizing: border-box;
@@ -697,6 +713,19 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     #sk-topbar .sk-hsep { display: none; }            /* 区切り線を省いて幅を稼ぐ */
     #sk-topbar .sk-tbtn .sk-caret { display: none; }  /* キャレットも省略 */
 }
+
+/* ── ショートカット設定一覧（設定パネル内） ── */
+#shortcut-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+.shortcut-group-title { font-size: 0.72rem; color: var(--accent); font-weight: bold; margin: 8px 0 2px; letter-spacing: .03em; }
+.shortcut-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.shortcut-name { flex: 1; font-size: 0.84rem; color: #e6e6e6; min-width: 0; }
+.shortcut-key {
+    flex: 0 0 auto; min-width: 56px; text-align: center;
+    background: #2b2b2b; border: 1px solid #4a4a4a; color: #fff; border-radius: 7px;
+    padding: 6px 10px; font-size: 0.82rem; cursor: pointer; font-weight: bold; white-space: nowrap;
+}
+.shortcut-key:hover { border-color: #6a6a6a; }
+.shortcut-key.capturing { background: var(--accent); color: #00222b; border-color: var(--accent); animation: countPulse 1s ease-in-out infinite; }
 
 /* ── タグ ─────────────────────────────────────────── */
 #tag-panel {

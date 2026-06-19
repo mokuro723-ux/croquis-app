@@ -57,6 +57,8 @@
         bind('grid-color-select', 'change', function(event){ onGridColorChange(this.value); });
         bind('grid-opacity-slider', 'input', function(event){ onGridOpacityChange(parseInt(this.value)); });
         bind('je-resetstats', 'click', function(event){ resetStats(); });
+        bind('je-shortcut-reset', 'click', function(event){ resetShortcuts(); });
+        if (typeof renderShortcutSettings === 'function') renderShortcutSettings(); // ショートカット一覧を初期描画
         bind('sound-volume-select', 'change', function(event){ onSoundVolumeChange(parseInt(this.value)); });
         bind('break-skip-btn', 'click', function(event){ endBreak(); });
         bind('multiselect-select-all', 'click', function(event){ multiSelectAll(); });

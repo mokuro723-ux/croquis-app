@@ -432,6 +432,8 @@
         let skFreeOpacity = 1;          // 自由描き(free)状態でのお手本の濃さ（上バーの目ボタンで調整・毎回1で開始）
         let skPendingMemHide = null;    // タイマー終了ちょうどに線を引いていた時、ストローク完了まで「薄く＆隠す」を保留
         let skBreakTick = null, skBreakStart = 0;  // 描画モード内の目の休憩タイマー
+        let skZoom = 1, skPanX = 0, skPanY = 0;    // お手本＋描画レイヤーのピンチズーム（重ねるモードのみ）
+        let skPinchActive = false, skPinchStartDist = 0, skPinchStartZoom = 1, skPinchCX = 0, skPinchCY = 0; // ピンチ計算用
         let skRefFrame = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_REF_FRAME) === '1'; // お手本の外枠表示
         let skSide = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_SIDE) === '1';
         // 「並べる」時、お手本（左）と描画枠（右）を中央の境界へ寄せる量（0=中央寄せ＝従来 〜 1=境界にぴったり隣接）。
@@ -484,7 +486,7 @@
                 skStartBreakWatch();                                     // 描画モード内でも目の休憩を見張る
                 skShowMsg(!hasImg
                     ? '画像が無くても描けます。「お題」や「参考画像」をどうぞ'
-                    : (skSide ? '左の画像を見ながら右に描けます（模写）' : 'そのまま上から描けます。「記憶」で 見る→隠す→描く'));
+                    : (skSide ? '左の画像を見ながら右に描けます（模写）' : 'そのまま上から描けます／2本指ピンチ・ホイールでお手本を拡大'));
                 setTimeout(function(){ skShowMsg(''); }, 4200);
             } else {
                 skStopBreakWatch();
@@ -532,6 +534,7 @@
             skApplyLayout(true);
         };
         function skApplyLayout(preserve){
+            skResetZoom(); // レイアウトが変わったらズームは解除（ズレ防止）
             skOverlay.classList.toggle('side', skSide);
             const b = document.getElementById('sketch-layout-btn');
             if (b) {
@@ -839,6 +842,7 @@
             }
             skDrawConv = skSide ? skConverge : 0; // 今の線が対応する寄せ量を記録
             skCommitSnap(); // 大きさが変わったら確定スナップを取り直す（リサイズ復元は同期なのでここで確定）
+            skClampPan(); skApplyZoom(); // ステージ寸法が変わったらズームのパン量を測り直す
             skUpdateFrameGuide(); // 枠とグリッドを同時に更新（下UIの開閉でズレないように。中でskRenderGridも呼ぶ）
             skUpdateSplitUI();    // 寄せスライダーの表示/値を更新（横向き×並べる×参考画像のときだけ表示）
         }
@@ -967,6 +971,7 @@
             skCancelMemory();
             if (skFormenOn) skSetFormen(false);
             skClearRef();        // 参考画像の上書きを解除してプールに戻す
+            skResetZoom();       // 次の絵では等倍から
             nextImage();
             skSyncImage();
             skClearSilent();
@@ -981,6 +986,7 @@
             skCancelMemory();
             if (skFormenOn) skSetFormen(false);
             skClearRef();
+            skResetZoom();       // 戻った絵では等倍から
             prevImage();         // 履歴を1つ戻る（通常モードと共通）
             skSyncImage();
             skClearSilent();
@@ -1183,8 +1189,45 @@
 
         /* ── 描画本体（半透明ペンはライブレイヤーに描き、ストローク確定時に合成） ── */
         function skPos(e){
+            // getBoundingClientRect はズーム後の矩形を返すので、画面距離をズーム率で割れば
+            // キャンバス内の素の座標（0..skCW）に戻る。パンも rect 側に含まれるので追加補正は不要。
+            // 並べる時は描画キャンバスは等倍（お手本だけ拡大する）ので 1 で割る。
             const r = skCanvas.getBoundingClientRect();
-            return { x: e.clientX - r.left, y: e.clientY - r.top };
+            const z = skSide ? 1 : skZoom;
+            return { x: (e.clientX - r.left) / z, y: (e.clientY - r.top) / z };
+        }
+        /* ── お手本のピンチズーム ──
+           重ねる：お手本＋描画レイヤーを一緒に拡大（なぞり用）。
+           並べる：お手本ズーム層（左半分）だけ拡大（観察用）。描画側は等倍のまま。 */
+        function skApplyZoom(){
+            const iw = document.getElementById('sketch-imgwrap');
+            const dw = document.getElementById('sketch-zoomwrap');
+            if (skZoom <= 1.001) { skZoom = 1; skPanX = 0; skPanY = 0; }
+            const t = (skZoom <= 1.001) ? '' : 'translate(' + skPanX.toFixed(1) + 'px,' + skPanY.toFixed(1) + 'px) scale(' + skZoom.toFixed(3) + ')';
+            if (iw) iw.style.transform = t;                 // お手本層は常に拡大
+            if (dw) dw.style.transform = skSide ? '' : t;   // 描画層は重ねる時だけ一緒に拡大
+            const chip = document.getElementById('sketch-zoom-chip');
+            if (chip) {
+                if (skZoom > 1.001) { chip.textContent = '🔍 ' + (skSide ? 'お手本 ' : '') + '×' + skZoom.toFixed(1) + '　タップで等倍'; chip.classList.add('show'); }
+                else chip.classList.remove('show');
+            }
+        }
+        function skClampPan(){
+            const r = skStage.getBoundingClientRect();
+            if (skZoom <= 1) { skZoom = 1; skPanX = 0; skPanY = 0; return; }
+            // 拡大した中身が領域を覆うようパン量を制限（端に隙間が出ない）。並べる時のお手本は左半分。
+            const contentW = skSide ? r.width / 2 : r.width;
+            skPanX = Math.min(0, Math.max(contentW - contentW * skZoom, skPanX));
+            skPanY = Math.min(0, Math.max(r.height - r.height * skZoom, skPanY));
+        }
+        window.skResetZoom = function(){ skZoom = 1; skPanX = 0; skPanY = 0; skApplyZoom(); };
+        // キーボード/ボタン用：拡大の中心はズーム領域の中央（並べる時はお手本＝左半分の中央）
+        function skZoomStep(factor){ const r = skStage.getBoundingClientRect(); skZoomAt(skSide ? r.width / 4 : r.width / 2, r.height / 2, factor); }
+        function skZoomAt(stageX, stageY, factor){
+            const cx = (stageX - skPanX) / skZoom, cy = (stageY - skPanY) / skZoom; // ズーム中心の中身座標
+            skZoom = Math.max(1, Math.min(6, skZoom * factor));
+            skPanX = stageX - cx * skZoom; skPanY = stageY - cy * skZoom;
+            skClampPan(); skApplyZoom();
         }
         function skTargetCtx(){ return (skLiveActive ? skLiveCtx : skCtx); }
         function skBeginStroke(e){
@@ -1382,16 +1425,41 @@
                 gStartX = e.touches[0].clientX; gStartY = e.touches[0].clientY;
             } else {
                 skCancelStroke();     // 2本指以上はジェスチャ → 描きかけ取消
+                if (e.touches.length === 2 && !skSide) { // 2本指 → ピンチズーム開始（重ねるモードのみ）
+                    const t0 = e.touches[0], t1 = e.touches[1];
+                    const rect = skStage.getBoundingClientRect();
+                    skPinchActive = true;
+                    skPinchStartDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY) || 1;
+                    skPinchStartZoom = skZoom;
+                    const midX = (t0.clientX + t1.clientX) / 2 - rect.left;
+                    const midY = (t0.clientY + t1.clientY) / 2 - rect.top;
+                    skPinchCX = (midX - skPanX) / skZoom; // ピンチ中心の中身座標（指の間に固定する点）
+                    skPinchCY = (midY - skPanY) / skZoom;
+                }
             }
         }, { passive: false });
         skCanvas.addEventListener('touchmove', function(e){
             e.preventDefault();   // 指の移動中もスクロール/選択を抑止（描画はpointer側）
+            if (skPinchActive && e.touches.length === 2) { // ピンチ：拡大＋パン（指の中点を中身に固定）
+                const t0 = e.touches[0], t1 = e.touches[1];
+                const rect = skStage.getBoundingClientRect();
+                const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY) || 1;
+                const midX = (t0.clientX + t1.clientX) / 2 - rect.left;
+                const midY = (t0.clientY + t1.clientY) / 2 - rect.top;
+                skZoom = Math.max(1, Math.min(6, skPinchStartZoom * (dist / skPinchStartDist)));
+                skPanX = midX - skPinchCX * skZoom;
+                skPanY = midY - skPinchCY * skZoom;
+                skClampPan(); skApplyZoom();
+                gMoved = true; // ピンチ後にうっかり「2本指タップ＝元に戻す」が出ないように
+                return;
+            }
             if (e.touches.length >= 1) {
                 const dx = e.touches[0].clientX - gStartX, dy = e.touches[0].clientY - gStartY;
                 if (Math.hypot(dx, dy) > 16) gMoved = true;
             }
         }, { passive: false });
         function skGestureEnd(e){
+            if (e.touches.length < 2) skPinchActive = false; // 2本未満になったらピンチ終了
             if (e.touches.length > 0) return;   // まだ指が残っている
             const n = gFingerMax, dur = Date.now() - gStart;
             gFingerMax = 0;
@@ -1402,6 +1470,46 @@
         }
         skCanvas.addEventListener('touchend', skGestureEnd, { passive: false });
         skCanvas.addEventListener('touchcancel', skGestureEnd, { passive: false });
+        // PC：ホイールでカーソル位置を中心に拡大／縮小（重ねる＝全体、並べる＝お手本だけ）
+        skStage.addEventListener('wheel', function(e){
+            if (!skOpen) return;
+            e.preventDefault();
+            const rect = skStage.getBoundingClientRect();
+            skZoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+        }, { passive: false });
+        // ズームチップ（タップで等倍に戻す）
+        (function(){ const chip = document.getElementById('sketch-zoom-chip'); if (chip) chip.addEventListener('click', function(){ skResetZoom(); }); })();
+        // 並べるモード：お手本（左半分）を2本指ピンチで拡大／パン（描画は右の等倍キャンバスのまま）
+        (function(){
+            const iw = document.getElementById('sketch-imgpinch');
+            if (!iw) return;
+            let igActive = false, igDist = 0, igZoom0 = 1, igCX = 0, igCY = 0;
+            iw.addEventListener('touchstart', function(e){
+                if (!skOpen || !skSide) return;
+                e.preventDefault(); // iOSの画像長押しメニュー等を抑止
+                if (e.touches.length === 2) {
+                    const t0 = e.touches[0], t1 = e.touches[1], rect = skStage.getBoundingClientRect();
+                    igActive = true;
+                    igDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY) || 1;
+                    igZoom0 = skZoom;
+                    const midX = (t0.clientX + t1.clientX) / 2 - rect.left, midY = (t0.clientY + t1.clientY) / 2 - rect.top;
+                    igCX = (midX - skPanX) / skZoom; igCY = (midY - skPanY) / skZoom;
+                }
+            }, { passive: false });
+            iw.addEventListener('touchmove', function(e){
+                if (!igActive || !skSide || e.touches.length < 2) return;
+                e.preventDefault();
+                const t0 = e.touches[0], t1 = e.touches[1], rect = skStage.getBoundingClientRect();
+                const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY) || 1;
+                const midX = (t0.clientX + t1.clientX) / 2 - rect.left, midY = (t0.clientY + t1.clientY) / 2 - rect.top;
+                skZoom = Math.max(1, Math.min(6, igZoom0 * (dist / igDist)));
+                skPanX = midX - igCX * skZoom; skPanY = midY - igCY * skZoom;
+                skClampPan(); skApplyZoom();
+            }, { passive: false });
+            function igEnd(e){ if (e.touches.length < 2) igActive = false; }
+            iw.addEventListener('touchend', igEnd, { passive: false });
+            iw.addEventListener('touchcancel', igEnd, { passive: false });
+        })();
         // iOSの長押し選択メニュー・コンテキストメニューを抑制
         skCanvas.addEventListener('contextmenu', function(e){ e.preventDefault(); }, { passive: false });
         skCanvas.addEventListener('selectstart', function(e){ e.preventDefault(); }, { passive: false });
@@ -1916,21 +2024,25 @@
         document.addEventListener('keydown', function(e){
             const ae = document.activeElement;
             if (ae && (ae.tagName === 'SELECT' || ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
+            const S = window.CroquisShortcuts;
             if (skOpen) {
                 if (e.code === 'Escape') { if (skAnyMenuOpen()) { skCloseMenus(); } else if (skFormenOn) { skSetFormen(false); } else { toggleSketch(); } }
                 else if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey) && e.shiftKey) { e.preventDefault(); skRedo(); }
                 else if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); skUndo(); }
                 else if (e.code === 'KeyY' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); skRedo(); }
                 else if (e.ctrlKey || e.metaKey) { return; } // 他のCtrl/⌘系はブラウザに任せる
-                // ── PC向けショートカット（キーボードがある端末用） ──
-                else if (e.code === 'KeyW') { skToggleFormen(); }
-                else if (e.code === 'KeyE') { skSetTool(skTool === 'eraser' ? 'pen' : 'eraser'); }
-                else if (e.code === 'KeyB' || e.code === 'KeyP') { skSetTool('pen'); }
-                else if (e.code === 'KeyL') { skSetLasso(false); }
-                else if (e.code === 'KeyG') { skToggleGrid(); }
-                else if (e.code === 'BracketLeft')  { skNudgeSize(-2); }
-                else if (e.code === 'BracketRight') { skNudgeSize(2); }
-                else if (/^Digit[1-5]$/.test(e.code)) { const sw = document.querySelectorAll('.sk-color')[(+e.code.slice(5)) - 1]; if (sw) sw.click(); }
+                // ── PC向けショートカット（割当は設定で変更可・CroquisShortcuts経由） ──
+                else if (S.match('s_formen', e)) { skToggleFormen(); }
+                else if (S.match('s_eraser', e)) { skSetTool(skTool === 'eraser' ? 'pen' : 'eraser'); }
+                else if (S.match('s_pen', e)) { skSetTool('pen'); }
+                else if (S.match('s_lasso', e)) { skSetLasso(false); }
+                else if (S.match('s_grid', e)) { skToggleGrid(); }
+                else if (S.match('s_sizeDown', e))  { skNudgeSize(-2); }
+                else if (S.match('s_sizeUp', e)) { skNudgeSize(2); }
+                else if (S.match('s_zoomIn', e))  { skZoomStep(1.2); }
+                else if (S.match('s_zoomOut', e)) { skZoomStep(1 / 1.2); }
+                else if (S.match('s_zoomReset', e)) { skResetZoom(); }
+                else if (/^Digit[1-5]$/.test(e.code)) { const sw = document.querySelectorAll('.sk-color')[(+e.code.slice(5)) - 1]; if (sw) sw.click(); } // 色は固定（1〜5）
                 return;
             }
             const onlineOpen = document.getElementById('online-overlay').classList.contains('open');
@@ -1940,14 +2052,14 @@
                 if (tagOpen) { toggleTagPanel(); return; }
             }
             if (onlineOpen || tagOpen) return;
-            if (e.code === 'KeyF') { toggleFavCurrent(); }
-            else if (e.code === 'KeyG') { toggle('grid'); }
-            else if (e.code === 'KeyH') { toggle('flipH'); }
-            else if (e.code === 'KeyV') { toggle('flipV'); }
-            else if (e.code === 'KeyD') { toggleSketch(); }
-            else if (e.code === 'KeyO') { toggleOnlinePanel(); }
-            else if (e.code === 'KeyT') { toggleTagPanel(); }
-            else if (e.code === 'KeyP') { togglePiP(); }
-            else if (e.code === 'KeyM') { toggleMute(); }
+            if (S.match('g_fav', e)) { toggleFavCurrent(); }
+            else if (S.match('g_grid', e)) { toggle('grid'); }
+            else if (S.match('g_flipH', e)) { toggle('flipH'); }
+            else if (S.match('g_flipV', e)) { toggle('flipV'); }
+            else if (S.match('g_sketch', e)) { toggleSketch(); }
+            else if (S.match('g_online', e)) { toggleOnlinePanel(); }
+            else if (S.match('g_tag', e)) { toggleTagPanel(); }
+            else if (S.match('g_pip', e)) { togglePiP(); }
+            else if (S.match('g_mute', e)) { toggleMute(); }
         });
     })();
