@@ -23,6 +23,11 @@
             SKETCH_BW_CONTRAST: 'croquis_sketch_bw_contrast_v1', // 二階調コントラスト(1〜20)
             SKETCH_CONVERGE: 'croquis_sketch_converge_v1',    // 並べる時のお手本⇔描画の寄せ(0〜100)
             SKETCH_REF_FRAME: 'croquis_sketch_ref_frame_v1',  // お手本側の外枠に色付き線を出すか
+            SKETCH_TOOLSHIDE: 'croquis_sketch_toolshide_v1',  // 下ツールを畳んだ状態を次回も保つか(1/0)
+            SKETCH_AUTOHIDE: 'croquis_sketch_autohide_v1',    // 描き始めたら自動で下ツールを畳むか(1/0)
+            SKETCH_HAND: 'croquis_sketch_hand_v1',            // 利き手（'L'=左 / 'R'=右）。浮きボタンの左右位置に使う
+            SKETCH_GUIDE: 'croquis_sketch_guide_v1',          // キャンバスのガイド線(0=なし / 1=中心十字 / 2=三分割)
+            SKETCH_RECENT_COLOR: 'croquis_sketch_recent_color_v1', // 直近に使ったカスタム色（クイック再選択用）
             SHORTCUTS: 'croquis_shortcuts_v1',                // キーボードショートカットの割当（ユーザー変更）
         };
 

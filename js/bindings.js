@@ -128,9 +128,17 @@
         bind('sketch-memfade-btn', 'click', function(event){ skToggleMemFade(); });
         bind('sketch-cmp-btn', 'click', function(event){ skToggleCompare(); });
         bind('sketch-lassoprev-btn', 'click', function(event){ skToggleLassoFillPreview(); });
-        document.querySelectorAll('.sk-paper').forEach(function(b){
+        document.querySelectorAll('.sk-paper:not(.sk-paper-custom)').forEach(function(b){
             b.addEventListener('click', function(){ skSetPaper(b.getAttribute('data-bg')); });
         });
+        bind('sketch-paper-custom', 'input', function(event){ skSetPaper(this.value); });          // 紙の色を自由に選ぶ
+        // ── v6追加：集中モード / ガイド線 / 自動畳み / 利き手 / 直近の色 ──
+        bind('sketch-focus-btn', 'click', function(event){ skToggleFocus(); });                    // 上下バーを隠して描画領域を最大化
+        bind('sketch-focus-exit', 'click', function(event){ skExitFocus(); });                     // 集中モードを抜ける浮きボタン
+        bind('sketch-guide-btn', 'click', function(event){ skToggleGuide(); });                    // 構図ガイド線（中心十字→三分割→消す）
+        bind('sketch-autohide-btn', 'click', function(event){ skToggleAutoHide(); });              // 描き始めで自動的に畳む
+        bind('sketch-hand-btn', 'click', function(event){ skToggleHand(); });                      // 利き手（左右）
+        bind('sketch-recent-color', 'click', function(event){ skPickRecentColor(); });             // 直近に使った色を再選択
         bind('sketch-eraser-btn', 'click', function(event){ skToggleEraser(); });
         bind('sketch-lasso-btn', 'click', function(event){ skSetLasso(false); });
         bind('sketch-lassolight-btn', 'click', function(event){ skSetLasso(true); });

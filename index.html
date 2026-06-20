@@ -346,6 +346,7 @@
             <button id="je-togglesketch" class="sk-tbtn ghost" title="描画モードを閉じる"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
             <span class="sk-hsep"></span>
             <button id="sketch-layout-btn" class="sk-tbtn" title="画像と描画スペースを左右に並べる（模写モード）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 4h8v16H3zM13 4h8v16h-8z"/></svg></button>
+            <button id="sketch-focus-btn" class="sk-tbtn" title="集中モード：上下のバーを隠して描画領域を最大化（戻すボタンで復帰）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg></button>
             <button id="sketch-images-btn" class="sk-tbtn" title="画像を読み込む（フォルダ / ファイル / お気に入り / 参考画像）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg><svg viewBox="0 0 24 24" class="sk-caret"><path d="M7 10l5 5 5-5z"/></svg></button>
             <button id="sketch-training-btn" class="sk-tbtn sk-train" title="トレーニング：並べる→グリッド→記憶で描く を自動で進行（覚える間にアタリ→自動で薄く→記憶で描く）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/></svg></button>
             <button id="sketch-practice-tab" class="sk-tbtn" title="練習メニュー（お題・記憶・タイマー）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg><svg viewBox="0 0 24 24" class="sk-caret"><path d="M7 10l5 5 5-5z"/></svg></button>
@@ -384,6 +385,8 @@
                 <canvas id="sketch-live"></canvas>
                 <svg id="sketch-grid" preserveAspectRatio="none" aria-hidden="true"></svg>
             </div>
+            <!-- 構図ガイド線（中心十字 / 三分割）。描画より上・操作は透過。グリッドとは別の薄い線 -->
+            <svg id="sketch-guide" preserveAspectRatio="none" aria-hidden="true"></svg>
             <!-- 並べるモード時だけ表示する、お手本（左半分）のピンチ操作受け面 -->
             <div id="sketch-imgpinch" aria-hidden="true"></div>
             <button id="sketch-zoom-chip" type="button" aria-hidden="true">🔍 ×1.0　タップで等倍</button>
@@ -448,6 +451,8 @@
                 </div>
             </div>
             <button id="sk-tools-fab" title="ツールを表示"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M7 14c-1.66 0-3 1.34-3 3 0 1.31-1.16 2-2 2 .92 1.22 2.49 2 4 2 2.21 0 4-1.79 4-4 0-1.66-1.34-3-3-3zm13.71-9.37l-1.34-1.34a.9959.9959 0 0 0-1.41 0L9 12.25 11.75 15l8.96-8.96c.39-.39.39-1.02 0-1.41z"/></svg></button>
+            <!-- 集中モードを抜けるための浮きボタン（集中モード中だけ表示。位置は利き手で左右切替） -->
+            <button id="sketch-focus-exit" type="button" title="集中モードを抜ける（バーを戻す）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg></button>
         </div>
         <!-- ── 下：アイコンのタブ＋中身（2段） ── -->
         <div id="sketch-tools">
@@ -473,9 +478,11 @@
                     <button class="sk-color" data-c="#2ecc71" data-a="1" style="background:#2ecc71" title="緑"></button>
                     <button class="sk-color half" data-c="#3d8bff" data-a="0.3" title="青鉛筆（半透明）— 当たり取りに"></button>
                     <label class="sk-customcolor" id="sketch-customcolor-wrap" title="好きな色を選ぶ"><input type="color" id="sketch-customcolor" value="#ffcc00"></label>
+                    <button class="sk-color sk-recent" id="sketch-recent-color" title="直近に使った色（タップで再選択）" style="display:none;"></button>
                     <span class="sk-vsep"></span>
                     <span class="sk-set-label">太さ</span>
                     <input type="range" id="sketch-size" min="2" max="30" value="5" title="ペンの太さ">
+                    <span class="sk-size-val" id="sketch-size-val" title="今のペンの太さ">5</span>
                     <span class="sk-set-label">濃さ</span>
                     <input type="range" id="sketch-alpha" min="10" max="100" value="100" title="ペンの濃さ（薄くするとどの色でも当たり取りに使えます）">
                     <span class="sk-brush-preview" id="sketch-brush-preview" title="今のペンの色・太さ・濃さ"><span class="sk-brush-dot"></span></span>
@@ -498,6 +505,7 @@
                     <span class="sk-set-label">濃さ</span>
                     <input type="range" id="sketch-grid-op" min="1" max="10" value="6" title="グリッド線の濃さ">
                     <span class="sk-vsep"></span>
+                    <button id="sketch-guide-btn" class="sk-tbtn" title="構図ガイド線（押すたび 中心十字 → 三分割 → 消す）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M11 2h2v20h-2zM2 11h20v2H2z" opacity=".55"/><path d="M8 2h1v20H8zM15 2h1v20h-1zM2 8h20v1H2zM2 15h20v1H2z"/></svg><span>ガイド</span></button>
                     <button id="sketch-refframe-btn" class="sk-tbtn" title="お手本の外枠に色付きの線を表示（色は左のグリッド色を使用）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 3h18v18H3V3zm2 2v14h14V5H5z"/></svg><span>お手本枠</span></button>
                     <span class="sk-vsep"></span>
                     <button id="sketch-fliph-btn" class="sk-tbtn" title="左右反転（鏡像でバランス確認）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10,6 L4,12 L10,18 Z"/><rect x="11" y="4" width="2" height="16"/><path d="M14,6 L20,12 L14,18 Z"/></svg><span>左右反転</span></button>
@@ -513,6 +521,7 @@
                     <button class="sk-paper" data-bg="#000000" style="background:#000000" title="黒"></button>
                     <button class="sk-paper" data-bg="#7d7d7d" style="background:#7d7d7d" title="灰（中間色・明暗練習に）"></button>
                     <button class="sk-paper" data-bg="#f4f1ea" style="background:#f4f1ea" title="クリーム（白紙）"></button>
+                    <label class="sk-paper sk-paper-custom" id="sketch-paper-custom-wrap" title="紙の色を自由に選ぶ"><input type="color" id="sketch-paper-custom" value="#1e1e1e"></label>
                     <span class="sk-vsep"></span>
                     <button class="panel-btn" id="sketch-stab-btn" title="指で描くときに線を滑らかにする">手ブレ補正</button>
                     <span class="sk-set-label">強さ</span>
@@ -520,6 +529,9 @@
                     <span class="sk-vsep"></span>
                     <button class="panel-btn" id="sketch-memfade-btn" title="記憶モードで、覚える時間に描いた当たり線を、隠す瞬間に薄い下描きにする（グリッドも消す）">記憶:下描き化</button>
                     <button class="panel-btn" id="sketch-cmp-btn" title="制限時間タイマーで、時間が来たら即・次へ行かず『お手本と見比べる』時間を入れる">タイマー:見比べ</button>
+                    <span class="sk-vsep"></span>
+                    <button class="panel-btn" id="sketch-autohide-btn" title="ペンを置いたら下ツールを自動で畳み、指を離してしばらくすると戻す（描画に集中できます）">描き始めで畳む</button>
+                    <button class="panel-btn" id="sketch-hand-btn" title="利き手に合わせて、浮きボタン（戻す/集中モード解除）を左右どちらに置くか切り替えます">利き手: 右</button>
                 </div>
             </div>
             <span id="sk-gesture-hint">2本指タップ=戻る</span>

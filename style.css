@@ -727,6 +727,41 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     #sk-topbar .sk-tbtn .sk-caret { display: none; }  /* キャレットも省略 */
 }
 
+/* ════════ 描画モード v6 追加UI（集中モード / ガイド / 利き手 / 紙色 / ペン補助） ════════ */
+/* 集中モード：上バーと下ツールを隠して描画領域を最大化（復帰は浮きボタン focus-exit に一本化） */
+#sketch-overlay.focus #sk-topbar,
+#sketch-overlay.focus #sketch-tools,
+#sketch-overlay.focus #sk-tools-fab { display: none; }
+/* 集中モードを抜ける浮きボタン（集中中だけ表示。既定は左上、利き手=左で右上へ） */
+#sketch-focus-exit {
+    position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); left: 10px;
+    z-index: 8; width: 44px; height: 44px; border-radius: 50%; border: 1px solid #4a4a4a;
+    background: rgba(30,30,30,0.82); color: #eee; cursor: pointer; display: none;
+    align-items: center; justify-content: center; padding: 0;
+}
+#sketch-focus-exit .svg-icon { width: 22px; height: 22px; }
+#sketch-overlay.focus #sketch-focus-exit { display: flex; }
+/* 利き手＝左：浮きボタン（下ツールFAB・集中解除）を右側へ寄せて、描く手で隠れないように */
+#sketch-overlay.lefthand #sk-tools-fab,
+#sketch-overlay.lefthand #sketch-focus-exit { left: auto; right: 10px; }
+/* 構図ガイド線（中心十字 / 三分割）。キャンバスより上・グリッドより下に薄く重ねる */
+#sketch-guide {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    pointer-events: none; display: none; z-index: 3;
+}
+/* 紙色のカスタムピッカー（設定タブ・虹色＝好きな色を選べる目印） */
+.sk-paper-custom {
+    position: relative; overflow: hidden; display: inline-flex; padding: 0;
+    background: conic-gradient(from 90deg, #ff4d5e, #ffd75e, #2ecc71, #00d4ff, #3d8bff, #b06cff, #ff4d5e);
+}
+.sk-paper-custom.on { border-color: #fff; box-shadow: 0 0 0 2px var(--panel-bg), 0 0 0 4px var(--accent); }
+.sk-paper-custom input[type="color"] {
+    position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px);
+    border: none; padding: 0; margin: 0; background: transparent; cursor: pointer; opacity: 0;
+}
+/* ペンの太さの数値表示（スライダーの右に今の太さを表示） */
+.sk-size-val { color: #cfcfcf; font-size: 0.78rem; min-width: 1.7em; text-align: center; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+
 /* ── ショートカット設定一覧（設定パネル内） ── */
 #shortcut-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
 .shortcut-group-title { font-size: 0.72rem; color: var(--accent); font-weight: bold; margin: 8px 0 2px; letter-spacing: .03em; }
