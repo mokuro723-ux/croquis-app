@@ -9,7 +9,7 @@
    ・将来ビルドを導入できるなら、ファイル内容のハッシュを自動でCACHE_NAMEに埋め込む
    （今は手動運用なので、上のコメントを目印にしてください）
    ============================================================ */
-const CACHE_NAME = 'croquis-timer-v49';
+const CACHE_NAME = 'croquis-timer-v50';
 
 // アプリ本体（オフラインでも動かすために事前キャッシュするファイル）
 // ※ sw.js 自身はここに入れない（Service Workerファイルの自己キャッシュはアンチパターン）
@@ -21,6 +21,7 @@ const STATIC_CACHE = [
     './style.css',
     './js/app.js',
     './js/stats.js',
+    './js/sketch.js',
     './js/features.js',
     './js/bindings.js'
 ];
