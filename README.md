@@ -11,8 +11,14 @@
 index.html          画面の骨組み（ボタンやパネルの配置）
 style.css           見た目（色・大きさ・配置）
 js/
-  app.js            アプリ本体（タイマー・画像・お気に入り・設定など）
-  stats.js          統計・スケッチ・タグ・オンライン素材
+  app-core.js       SW登録・保存係(CroquisStore)・キー定義(CROQUIS_KEYS)・TIMING
+  app-state.js      状態変数・ui要素マップ・IndexedDB・設定保存/読込・起動処理
+  app-images.js     画像読み込み・シャッフル・プリロード・お気に入り・スキップ
+  app-manage.js     複数選択・画像ナビ(次へ/前へ)・履歴パネル
+  app-timer.js      タイマー本体・音・背景色・ハードモード・MediaSession・PiP・スワイプ
+                    （↑元は1本の app.js。行順を変えず5分割したもの）
+  stats.js          統計
+  sketch.js         描画モード（模写・記憶練習）。分割しない方針。先頭に目次コメント
   features.js       巡回シャッフル・ズーム&パン・クラスモード
   bindings.js       ボタン配線表（「このボタン何やってる?」はまずここ）
 sw.js               Service Worker（オフライン用キャッシュ管理）
@@ -21,7 +27,7 @@ vercel.json         配信時のキャッシュ設定
 icon.png            アプリアイコン（変更不要）
 ```
 
-> 読み込み順は `index.html` 内で **app.js → stats.js → features.js → bindings.js** の順。
+> 読み込み順は `index.html` 内で **app-core → app-state → app-images → app-manage → app-timer → stats → sketch → features → bindings** の順。
 > この順番を変えないでください。
 
 ---
@@ -29,8 +35,8 @@ icon.png            アプリアイコン（変更不要）
 ## よくある修正の手引き
 
 - **色を変えたい** → `style.css` の先頭 `:root { }` にある `--accent` などの色変数を変更。PiPの小窓にも自動で反映されます。
-- **タイマーの秒数の選択肢を増やしたい** → `index.html` の時間選択 `<select>` と `js/app.js` のタイマー処理を確認。
-- **アニメの速さ・待ち時間を変えたい** → `js/app.js` 冒頭の `TIMING = { ... }` を変更。
+- **タイマーの秒数の選択肢を増やしたい** → `index.html` の時間選択 `<select>` と `js/app-timer.js` のタイマー処理を確認。
+- **アニメの速さ・待ち時間を変えたい** → `js/app-core.js` の `TIMING = { ... }` を変更。
 - **「このボタン何をしているか」を調べたい** → `js/bindings.js` を見る。ボタンのid名で検索。
 
 ---
@@ -59,9 +65,9 @@ PWAはキャッシュが強力なため、順に試してください：
 
 ## データ保存の仕組み
 
-- **IndexedDB** → お気に入り画像の実データ（`js/app.js` が管理）
-- **localStorage** → 設定・状態。キーは `js/app.js` 冒頭の `CROQUIS_KEYS` で一元管理（すべて `croquis_〇〇_v1` 形式）。
-  - 読み書きは必ず `CroquisStore`（app.js 冒頭の「保存係」）経由で行う。直接 `localStorage` を触らない。
+- **IndexedDB** → お気に入り画像の実データ（`js/app-state.js` が管理）
+- **localStorage** → 設定・状態。キーは `js/app-core.js` の `CROQUIS_KEYS` で一元管理（すべて `croquis_〇〇_v1` 形式）。
+  - 読み書きは必ず `CroquisStore`（app-core.js の「保存係」）経由で行う。直接 `localStorage` を触らない。
 
 ---
 

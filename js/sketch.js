@@ -7,6 +7,21 @@
     (function(){
         'use strict';
 
+        /* ── 目次（分割しない方針のため、探すときはこのコメントの目印文言で grep する）──
+           セクション（下の見出しコメントを grep すると先頭に飛べる）:
+             「5) スケッチ v4」          … 本体（描画・左右分割模写・ピンチズーム）
+             「5b) ウォームアップ」        … ウォームアップお題（一筆書き / フォルメン線描）
+             「5d) すぐ隠す」             … すぐ隠す / 時間制限タイマー / 線を薄くする
+             「5c) 参考画像を取り込む」    … 参考画像の取り込み（貼付 / ドロップ / URL）
+             「6) キーボードショートカット」… PC向けショートカット
+           主な公開関数（app.js のグローバルや bindings.js から呼ばれる。名前で grep）:
+             window.skNextImage / window.skPrevImage … お手本の画像送り（項目4のスワイプもこれを呼ぶ）
+             window.skToggleLayout                   … 重ねる / 並べる の切替
+             window.skStartMemory / window.skStartTraining … 記憶・記憶練習モード開始
+             window.skUndo / window.skRedo / window.skClear … 描画操作
+             window.skSave                            … 描いた絵の保存
+        ── 目次ここまで ── */
+
         /* ════════════════════════════════════════════════════════
            5) スケッチ v4 — 左右分割模写 / 記憶モード / 半透明青鉛筆
               2本指タップ=元に戻す（やり直しはツールバーのボタン）
@@ -1231,9 +1246,19 @@
             const iw = document.getElementById('sketch-imgpinch');
             if (!iw) return;
             let igActive = false, igDist = 0, igZoom0 = 1, igCX = 0, igCY = 0;
+            // 1本指スワイプ＝画像切替（2本指ピンチはそのまま）
+            let swX0 = 0, swY0 = 0, swT0 = 0, swOK = false;
             iw.addEventListener('touchstart', function(e){
                 if (!skOpen || !skSide) return;
                 e.preventDefault(); // iOSの画像長押しメニュー等を抑止
+                if (e.touches.length === 1) {
+                    // スワイプ候補として開始点を記録
+                    swOK = true;
+                    swX0 = e.touches[0].clientX; swY0 = e.touches[0].clientY;
+                    swT0 = Date.now();
+                } else {
+                    swOK = false; // 2本目が置かれたらスワイプ候補を取り下げ（ピンチ優先）
+                }
                 if (e.touches.length === 2) {
                     const t0 = e.touches[0], t1 = e.touches[1], rect = skStage.getBoundingClientRect();
                     igActive = true;
@@ -1253,7 +1278,19 @@
                 skPanX = midX - igCX * skZoom; skPanY = midY - igCY * skZoom;
                 skClampPan(); skApplyZoom();
             }, { passive: false });
-            function igEnd(e){ if (e.touches.length < 2) igActive = false; }
+            function igEnd(e){
+                if (e.touches.length < 2) igActive = false;
+                // 全指が離れた時、スワイプ候補が生きていて等倍表示中なら判定
+                if (e.type === 'touchend' && e.touches.length === 0 && swOK && skZoom === 1) {
+                    const t = e.changedTouches[0];
+                    const dx = t.clientX - swX0, dy = t.clientY - swY0;
+                    if (Math.abs(dx) > TIMING.SWIPE_THRESHOLD_PX && Math.abs(dx) > Math.abs(dy)
+                        && Date.now() - swT0 < 600) {
+                        if (dx < 0) window.skNextImage(); else window.skPrevImage();
+                    }
+                }
+                if (e.touches.length === 0) swOK = false;
+            }
             iw.addEventListener('touchend', igEnd, { passive: false });
             iw.addEventListener('touchcancel', igEnd, { passive: false });
         })();
