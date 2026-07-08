@@ -1,4 +1,16 @@
-        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./sw.js').catch(() => {}); }
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').then(function(registration) {
+                registration.addEventListener('updatefound', function() {
+                    const worker = registration.installing;
+                    if (!worker) return;
+                    worker.addEventListener('statechange', function() {
+                        if (worker.state === 'activated' && navigator.serviceWorker.controller) {
+                            if (typeof window.showToast === 'function') window.showToast('アプリが新しいバージョンに更新されました', 3200);
+                        }
+                    });
+                });
+            }).catch(() => {}); // SWが無くても本体は動く
+        }
 
         // ── 保存名の一覧表（localStorageキーはここで一元管理） ──────
         const CROQUIS_KEYS = {
@@ -66,7 +78,12 @@
                 },
                 setRaw: function(key, value, label) {
                     try { localStorage.setItem(key, value); }
-                    catch(e) { console.warn('croquis: ' + (label || key) + 'の保存に失敗', e); }
+                    catch(e) {
+                        console.warn('croquis: ' + (label || key) + 'の保存に失敗', e);
+                        if (typeof window.showToast === 'function') {
+                            window.showToast('⚠ ' + (label || '設定') + 'の保存に失敗しました（端末の空き容量を確認）', 3200);
+                        }
+                    }
                 },
                 setJSON: function(key, value, label) {
                     this.setRaw(key, JSON.stringify(value), label);
@@ -79,6 +96,51 @@
         })();
         window.CROQUIS_KEYS = CROQUIS_KEYS;
         window.CroquisStore = CroquisStore;
+
+        // ── 設定のバックアップ（書き出し/読み込み） ──────────────────
+        window.croquisExportSettings = function() {
+            const data = {};
+            Object.keys(CROQUIS_KEYS).forEach(function(name) {
+                const key = CROQUIS_KEYS[name];
+                const raw = CroquisStore.getRaw(key);
+                if (raw !== null) data[key] = raw;
+            });
+            const payload = {
+                app: 'croquis-timer',
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                data: data
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const d = new Date();
+            const fname = 'croquis_backup_' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '.json';
+            const a = document.createElement('a');
+            a.href = url; a.download = fname;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+            if (typeof window.showToast === 'function') window.showToast('設定を書き出しました（お気に入り画像は含みません）', 2600);
+        };
+
+        window.croquisImportSettings = function(file) {
+            const reader = new FileReader();
+            reader.onload = function() {
+                let payload;
+                try { payload = JSON.parse(reader.result); }
+                catch (e) { alert('ファイルを読み込めませんでした（JSONとして解釈できません）'); return; }
+                if (payload.app !== 'croquis-timer' || !payload.data) {
+                    alert('このファイルはクロッキータイマーのバックアップではありません');
+                    return;
+                }
+                if (!confirm('現在の設定をバックアップの内容で上書きします。よろしいですか？')) return;
+                Object.keys(payload.data).forEach(function(key) {
+                    if (key.indexOf('croquis_') === 0) CroquisStore.setRaw(key, payload.data[key]);
+                });
+                alert('設定を読み込みました。画面を再読み込みします。');
+                location.reload();
+            };
+            reader.readAsText(file);
+        };
 
         // ── キーボードショートカット（ユーザーが割当を変更できる） ──────
         // 各ハンドラは e.code 直書きをやめ CroquisShortcuts.match(id, e) で判定する。

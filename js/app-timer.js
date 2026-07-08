@@ -27,6 +27,7 @@
                     ui.sound.volume = 1;
                 }).catch(function(){ /* 自動再生やPiPの制限で失敗しても無害なため無視 */ });
             }
+            acquireWakeLock();
         }
 
         function stopTimer() {
@@ -38,6 +39,7 @@
             setTimerUrgency(99); // 一時停止時は色を通常へ戻す
             updateMediaSession();
             if (isPiP) updatePiP();
+            releaseWakeLock();
         }
         
         // バックグラウンドでも動作するタイマー進行ループ（250ms間隔）
@@ -639,3 +641,27 @@
             pointerStartX = e.clientX; pointerStartY = e.clientY; armFocusIdleTimer();
             if (!e.target.closest('#manage-popup') && !e.target.closest('#manage-btn')) { ui.managePopup.classList.toggle('show', false); }
         }, { passive: true });
+
+        // ── 画面スリープ防止（Wake Lock）──────────────────────────
+        let croquisWakeLock = null;
+
+        function acquireWakeLock() {
+            if (!('wakeLock' in navigator)) return; // 非対応ブラウザでは何もしない
+            navigator.wakeLock.request('screen').then(function(lock) {
+                croquisWakeLock = lock;
+                lock.addEventListener('release', function() { croquisWakeLock = null; });
+            }).catch(function() {
+                // 低電力モード等で失敗しても本体動作に影響なし
+                croquisWakeLock = null;
+            });
+        }
+
+        function releaseWakeLock() {
+            if (croquisWakeLock) { croquisWakeLock.release().catch(function(){}); }
+            croquisWakeLock = null;
+        }
+
+        // バックグラウンド移行時にOSが自動解放するため、再表示時に再生中なら取り直す
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && isRunning) acquireWakeLock();
+        });

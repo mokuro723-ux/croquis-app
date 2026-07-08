@@ -2,10 +2,16 @@
         let multiSelectSet  = new Set();
         let msBlobCache     = new Map();
 
+        // サムネイル用 blob URL をまとめて解放する
+        function revokeMsBlobCache() {
+            msBlobCache.forEach(function(url) { URL.revokeObjectURL(url); });
+            msBlobCache = new Map();
+        }
+
         function openMultiSelect() {
             ui.managePopup.classList.toggle('show', false);
             multiSelectSet.clear();
-            msBlobCache = new Map();
+            revokeMsBlobCache();
             renderMultiSelectGrid();
             ui.msOverlay.classList.add('open');
         }
@@ -13,7 +19,7 @@
         function closeMultiSelect() {
             ui.msOverlay.classList.remove('open');
             multiSelectSet.clear();
-            msBlobCache = new Map();
+            revokeMsBlobCache();
         }
 
         function updateMultiSelectCount() {
@@ -71,6 +77,7 @@
             let lastEndIdx   = -1;
             let isDragging   = false;
             let lastX = 0, lastY = 0;
+            let pressX = 0, pressY = 0; // 押下開始座標（ドラッグ判定の基準点）
             let autoRaf = null;
             let lastClickIdx = -1; // Shift選択の基点
 
@@ -181,6 +188,8 @@
                     lastEndIdx    = idx;
                     lastX = e.clientX;
                     lastY = e.clientY;
+                    pressX = e.clientX;
+                    pressY = e.clientY;
                     isDragging = false;
                     return;
                 }
@@ -192,6 +201,9 @@
                 isDragging   = false;
                 lastX = e.clientX;
                 lastY = e.clientY;
+                pressX = e.clientX;
+                pressY = e.clientY;
+                pointerActive = true;
             }, { passive: true });
 
             overlay.addEventListener('pointermove', function(e) {
@@ -199,8 +211,8 @@
                 if (!pointerActive || dragStartIdx < 0) return;
                 lastX = e.clientX;
                 lastY = e.clientY;
-                const dx = Math.abs(e.clientX - lastX);
-                const dy = Math.abs(e.clientY - lastY);
+                const dx = Math.abs(e.clientX - pressX);
+                const dy = Math.abs(e.clientY - pressY);
                 if (!isDragging && (dx > 6 || dy > 6)) {
                     isDragging = true;
                     if (!autoRaf) autoRaf = requestAnimationFrame(autoScroll);
@@ -390,6 +402,9 @@
             alert("データを完全にリセットしました。");
         }
 
+        // この関数は features.js の巡回シャッフルが window.pickShuffledIndex で上書きするため、
+        // 実際の再生では features.js 側（袋方式）が使われる。この定義は features.js が読み込めなかった
+        // 場合の予備として残している。抽選ロジックを変えたいときは features.js 側を修正すること。
         function pickShuffledIndex(excludeA, excludeB, maxGuard) {
             if (images.length === 1) return 0;
             if (images.length === 2) {

@@ -1,5 +1,12 @@
     (function(){
         'use strict';
+        /* 【このファイルが上書きしている本体関数の一覧】
+           window.pickShuffledIndex（app-manage.js の同名関数を袋方式に置き換え）
+           / window.setTimer と window.toggleHardMode（クラスモード中の割り込み終了処理を追加してから元関数を呼ぶ）
+           / window.onTimeSelectChange（『クラス…』選択の分岐を追加。stats.js の定義をラップ）
+           / window.isOverlayOpen（class-panel 分を追加。sketch.js の定義をラップ）。
+           ボタンの挙動を調べるときは bindings.js → 本体の定義 → この上書き、の順に読むこと。
+           （window.updateImageCounter の上書きは stats.js 側にあり、そちらには既存コメントがあるため触らない） */
         function fmtJa(sec){ if (sec < 60) return sec + '秒'; const m = Math.floor(sec/60), s = sec % 60; return s ? (m + '分' + s + '秒') : (m + '分'); }
         function showToast(msg, ms){
             const t = document.getElementById('app-toast');

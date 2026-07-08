@@ -63,6 +63,9 @@
         let skDrawConv = 0; // 今キャンバスに乗っている線が対応する寄せ量（寄せ変更時に線を枠と一緒に動かすため）
         let skCW = 0, skCH = 0, skLeft = 0; // 描画キャンバスのCSSサイズと左位置（直前の値）
         let skFormenOn = false, skDeckIdx = 0, skItemIdx = 0, skFormenPrevSide = false, skFormenOpacity = 0.7;
+        let fmTracePath = null; // お手本のフィット後の点列（trace系お題のみ。採点対象）
+        let skTraceRec = null;  // なぞり中の描点を記録する配列（お題モード中のみ生きる）
+        let skLastTrace = null; // 直近に描き終えた1本のなぞり軌跡（採点対象）
         let skFormenBackup = null, skFormenBackupW = 0, skFormenBackupH = 0, skFormenBackupLeft = 0;
         let skTimerOn = false, skSessionTimer = null; // 描画モード内の時間制限タイマー
         let skRefOverride = false, skRefObjUrl = null; // 参考画像の手動指定（URL/貼り付け/D&D）
@@ -780,8 +783,8 @@
             skCurSnap = skRedoStack.pop();
             skRestore(skCurSnap);
         };
-        function skClearSilent(){ skCtx.clearRect(0, 0, skCW, skCH); skLiveCtx.clearRect(0, 0, skCW, skCH); skUndoStack = []; skRedoStack = []; skDrew = false; skCommitSnap(); }
-        window.skClear = function(){ skPushUndo(); skRedoStack = []; skCtx.clearRect(0, 0, skCW, skCH); skDrew = false; skCommitSnap(); };
+        function skClearSilent(){ skCtx.clearRect(0, 0, skCW, skCH); skLiveCtx.clearRect(0, 0, skCW, skCH); skUndoStack = []; skRedoStack = []; skDrew = false; skLastTrace = null; skTraceRec = null; skCommitSnap(); }
+        window.skClear = function(){ skPushUndo(); skRedoStack = []; skCtx.clearRect(0, 0, skCW, skCH); skDrew = false; skLastTrace = null; skTraceRec = null; skCommitSnap(); };
         // 道具の切り替え（ペン / 消しゴム / 投げ縄塗り / 投げ縄塗り・薄）
         function skSetTool(t){
             skTool = t;
@@ -994,6 +997,7 @@
             skAutoHideBegin(); // 設定ONなら描き始めに下ツールを畳む（描点を取る前に寸法確定）
             skPushUndo(); skRedoBackup = skRedoStack; skRedoStack = [];
             skDrawing = true;
+            skTraceRec = null; // 記録は一旦リセットし、条件を満たす経路でのみ下で初期化する
             if (skTool === 'lasso' || skTool === 'lassoLight') { // 投げ縄塗り：頂点を集める（描画はライブ層にプレビュー）
                 skLiveActive = false;
                 const lp = skPos(e); skLassoPts = [{ x: lp.x, y: lp.y }];
@@ -1007,6 +1011,7 @@
             skLastX = p.x; skLastY = p.y; skPrevMidX = p.x; skPrevMidY = p.y; // 中点法の起点
             skStabX = p.x; skStabY = p.y;                                     // 補正の起点
             skRawLastX = p.x; skRawLastY = p.y;                               // 補正前の実位置
+            if (skFormenOn && fmTracePath) skTraceRec = [{ x: p.x, y: p.y }]; // お題(trace系)中のみ描線を記録
             c.globalCompositeOperation = skEraser ? 'destination-out' : 'source-over';
             c.strokeStyle = skColor;
             const size = parseInt(document.getElementById('sketch-size').value, 10) || 5;
@@ -1031,6 +1036,7 @@
                     skStabX += (raw.x - skStabX) * skStabK; skStabY += (raw.y - skStabY) * skStabK;
                     px = skStabX; py = skStabY;
                 }
+                if (skTraceRec) skTraceRec.push({ x: px, y: py }); // 手ブレ補正適用後（実際に画面に描かれる点）を記録
                 const pw = (events[i].pointerType === 'pen' && events[i].pressure > 0) ? (0.4 + events[i].pressure * 1.2) : 1;
                 c.lineWidth = (skEraser ? size * 3 : size) * pw;
                 // 中点法：直前中点→今回中点を、実サンプル点を制御点にした2次曲線でつなぐ（なめらか）
@@ -1047,6 +1053,8 @@
             if (!skDrawing) return;
             skDrawing = false;
             if (skLassoPts) { skLassoCommit(); return; } // 投げ縄塗りを確定
+            if (skTraceRec && skTraceRec.length >= 3) skLastTrace = skTraceRec; // 最後に描いた1本として控える
+            skTraceRec = null;
             skDrew = true; // 線を1本でも引いた（統計の「描いた枚数」判定用）
             // 最後の中点から指/ペンを離した点まで線を伸ばす（中点法で残る僅かな隙間を埋める）。
             // 補正ONのときは補正後の点が実位置より遅れているので、終点は“本当に離した位置”へ合わせる
@@ -1078,6 +1086,7 @@
         function skCancelStroke(){
             if (!skDrawing) return;
             skDrawing = false;
+            skTraceRec = null; // 記録中の描点を破棄（skLastTraceは変えない）
             skRedoStack = skRedoBackup; // 描き始めで消したやり直し履歴を復元（2/3本指ジェスチャー時）
             if (skLassoPts) { // 投げ縄を中断（本体未変更なのでスナップを捨てるだけ）
                 skLassoPts = null; skLiveCtx.clearRect(0, 0, skCW, skCH); skLive.style.opacity = '1';
@@ -1514,18 +1523,49 @@
         // 一筆書き（なぞり用）：点列→path＋始点ドット（緑●）。
         function fmStrokeSVG(gen, W, H){
             const pts = fmFit(gen(W, H), W, H);
+            fmTracePath = pts; // 採点用にフィット後の点列を控えておく
             const sw = Math.max(2.5, Math.min(W, H) * 0.007), dotR = Math.max(5, Math.min(W, H) * 0.014);
             let d = 'M' + pts[0].x.toFixed(1) + ' ' + pts[0].y.toFixed(1);
             for (let i = 1; i < pts.length; i++) d += 'L' + pts[i].x.toFixed(1) + ' ' + pts[i].y.toFixed(1);
             return '<path d="' + d + '" fill="none" stroke="#00d4ff" stroke-width="' + sw.toFixed(2) + '" stroke-linecap="round" stroke-linejoin="round"/>'
                 + '<circle cx="' + pts[0].x.toFixed(1) + '" cy="' + pts[0].y.toFixed(1) + '" r="' + dotR.toFixed(1) + '" fill="#39e07a" stroke="#0b3" stroke-width="1.5"/>';
         }
+        // 「線ならし」：直線・曲線の点列生成（座標は任意単位。fmFitが画面に等比で収める）
+        function fmLineStraight(x0, y0, x1, y1){
+            return function(W, H){
+                const P = [];
+                for (let i = 0; i <= 100; i++){ const t = i / 100; P.push({ x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t }); }
+                return P;
+            };
+        }
+        function fmLineC(s){
+            return function(W, H){
+                const P = [];
+                for (let i = 0; i <= 120; i++){ const t = i / 120; P.push({ x: 100 * t, y: Math.sin(t * Math.PI) * s * 100 }); }
+                return P;
+            };
+        }
+        function fmLineS(W, H){
+            const P = [];
+            for (let i = 0; i <= 160; i++){ const t = i / 160; P.push({ x: 100 * t, y: Math.sin(t * 2 * Math.PI) * 22 }); }
+            return P;
+        }
+        const FM_LINES = [
+            fmLineStraight(0, 0, 100, 0),    // 水平線
+            fmLineStraight(0, 0, 0, 100),    // 垂直線
+            fmLineStraight(0, 0, 100, 100),  // 左上→右下
+            fmLineStraight(0, 100, 100, 0),  // 左下→右上
+            fmLineC(-0.35),                  // C曲線（上ふくらみ）
+            fmLineC(0.35),                   // C曲線（下ふくらみ）
+            fmLineS                          // S字曲線
+        ];
         // お題のデッキ（カテゴリ）。各お題は (W,H)=>SVG内部マークアップ を返す。
         const FM_STROKES = [fmLoops, fmGarland, fmEight, fmSpiral, fmTrefoil, fmRose, fmWave];
         const FM_DECKS = [
             { name: '一筆書き', trace: true, items: FM_STROKES.map(function(g){ return function(W, H){ return fmStrokeSVG(g, W, H); }; }) },
             { name: '基本形', trace: false, items: [formSphere, formBox, formCylinder, formCone, formEgg, formPyramid, formTorus] },
-            { name: 'フラワーサック', trace: false, items: [makeSack(0, 1, 1), makeSack(0, 1.35, 0.72), makeSack(0, 0.8, 1.3), makeSack(20, 1.05, 0.95), makeSack(-26, 1.15, 0.85)] }
+            { name: 'フラワーサック', trace: false, items: [makeSack(0, 1, 1), makeSack(0, 1.35, 0.72), makeSack(0, 0.8, 1.3), makeSack(20, 1.05, 0.95), makeSack(-26, 1.15, 0.85)] },
+            { name: '線ならし（直線・曲線）', trace: true, items: FM_LINES.map(function(g){ return function(W, H){ return fmStrokeSVG(g, W, H); }; }) }
         ];
         function fmRender(){
             if (!skFormenOn || !skFormenSvg) return;
@@ -1536,8 +1576,10 @@
             skFormenSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
             skFormenSvg.style.opacity = String(skFormenOpacity);
             skFormenSvg.innerHTML = deck.items[skItemIdx](W, H);
+            if (!deck.trace) fmTracePath = null; // trace系でないデッキでは採点対象を持たない
             const sel = document.getElementById('sketch-deck'); if (sel) sel.value = String(skDeckIdx);
             const op = document.getElementById('sketch-formen-op'); if (op) op.value = String(Math.round(skFormenOpacity * 100));
+            const judgeBtn = document.getElementById('je-skjudge'); if (judgeBtn) judgeBtn.style.display = deck.trace ? '' : 'none';
         }
         function skSetFormen(on){
             const bar = document.getElementById('sketch-formen-bar');
@@ -1564,6 +1606,7 @@
                 skShowMsg('お題を見て（一筆書きはなぞって）描こう。種類は左下で切替、「次のお題」で別の形');
                 setTimeout(function(){ skShowMsg(''); }, 4600);
             } else {
+                fmTracePath = null;
                 if (skFormenSvg) skFormenSvg.style.display = 'none';
                 if (bar) bar.style.display = 'none';
                 if (btn) btn.classList.remove('accent');
@@ -1588,6 +1631,23 @@
         window.skSetDeck = function(i){ skDeckIdx = Math.max(0, Math.min(FM_DECKS.length - 1, parseInt(i, 10) || 0)); skItemIdx = 0; skClearSilent(); fmRender(); };
         window.skFormenNext = function(){ const deck = FM_DECKS[skDeckIdx] || FM_DECKS[0]; skItemIdx = (skItemIdx + 1) % deck.items.length; skClearSilent(); fmRender(); };
         window.skSetFormenOpacity = function(v){ skFormenOpacity = Math.max(0.1, Math.min(1, (parseInt(v, 10) || 70) / 100)); if (skFormenSvg) skFormenSvg.style.opacity = String(skFormenOpacity); };
+        // なぞり採点：直近のなぞり軌跡(skLastTrace)をお手本(fmTracePath)と突き合わせて採点する
+        window.skJudgeTrace = function(){
+            if (!skFormenOn || !fmTracePath) { skFlash('採点できるのは「なぞる」タイプのお題だけです', 2200); return; }
+            if (!skLastTrace || skLastTrace.length < 3) { skFlash('先にお題の線をなぞってください（緑の●がスタート地点です）', 2400); return; }
+            if (!window.LineJudge) { skFlash('採点機能の読み込みに失敗しています', 2200); return; }
+            const r = skStage.getBoundingClientRect();
+            const tol = Math.max(14, Math.min(r.width, r.height) * 0.03); // 甘さの調整はここ
+            let drawn = skLastTrace;
+            const path = fmTracePath;
+            // 逆なぞり対応：終点側から始めていたら描線を逆順にして採点する
+            const distFromStart = Math.hypot(drawn[0].x - path[0].x, drawn[0].y - path[0].y);
+            const distFromEnd = Math.hypot(drawn[0].x - path[path.length - 1].x, drawn[0].y - path[path.length - 1].y);
+            if (distFromEnd < distFromStart) drawn = drawn.slice().reverse();
+            const result = window.LineJudge.score(drawn, path, tol);
+            if (!result) { skFlash('採点できませんでした。もう一度なぞってみてください', 2200); return; }
+            skFlash('採点：' + result.total + '点 ' + result.rank + '（なめらかさ' + result.smoothness + '・正確さ' + result.accuracy + '）', 4200);
+        };
 
         /* ════════════════════════════════════════════════════════
            5d) すぐ隠す / 時間制限タイマー / 線を薄くする

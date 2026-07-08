@@ -60,6 +60,13 @@
         bind('je-shortcut-reset', 'click', function(event){ resetShortcuts(); });
         if (typeof renderShortcutSettings === 'function') renderShortcutSettings(); // ショートカット一覧を初期描画
         bind('sound-volume-select', 'change', function(event){ onSoundVolumeChange(parseInt(this.value)); });
+        bind('backup-export-btn', 'click', function(event){ window.croquisExportSettings(); });
+        bind('backup-import-btn', 'click', function(event){ document.getElementById('backup-import-input').click(); });
+        bind('backup-import-input', 'change', function(event){
+            const file = this.files[0];
+            if (file) window.croquisImportSettings(file);
+            this.value = '';
+        });
         bind('break-skip-btn', 'click', function(event){ endBreak(); });
         bind('multiselect-select-all', 'click', function(event){ multiSelectAll(); });
         bind('multiselect-deselect-all', 'click', function(event){ multiDeselectAll(); });
@@ -98,6 +105,7 @@
         bind('sketch-formen-btn', 'click', function(event){ skToggleFormen(); });
         bind('sketch-deck', 'change', function(event){ skSetDeck(this.value); });
         bind('je-skformennext', 'click', function(event){ skFormenNext(); });
+        bind('je-skjudge', 'click', function(event){ window.skJudgeTrace(); });
         bind('je-skformenclose', 'click', function(event){ skToggleFormen(); });
         bind('sketch-formen-op', 'input', function(event){ skSetFormenOpacity(this.value); });
         bind('sketch-timer-btn', 'click', function(event){ skToggleTimer(); });

@@ -41,14 +41,30 @@
             const h = Math.floor(sec/3600), m = Math.round((sec%3600)/60);
             return h > 0 ? (h + '時間' + m + '分') : (m + '分');
         }
+        // 連続練習日数（今日まだ描いていなければ昨日を起点に数える。最大90日で打ち切り）
+        function calcStreak(s){
+            let streak = 0;
+            const d = new Date();
+            const todayCount = (s.days[todayKey()] || {count:0}).count;
+            if (!todayCount) d.setDate(d.getDate() - 1);
+            for (let i = 0; i < 90; i++) {
+                const k = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+                const day = s.days[k];
+                if (day && day.count >= 1) { streak++; d.setDate(d.getDate() - 1); }
+                else break;
+            }
+            return streak;
+        }
         window.renderStatsPanel = function(){
             const el = document.getElementById('stats-grid'); if (!el) return;
             const s = loadStats(); const t = s.days[todayKey()] || { count:0, sec:0 };
+            const streak = calcStreak(s);
             el.innerHTML =
                 '<div class="stat-card"><div class="stat-v">' + t.count + '枚</div><div class="stat-k">今日 描いた枚数</div></div>' +
                 '<div class="stat-card"><div class="stat-v">' + fmtMin(t.sec) + '</div><div class="stat-k">今日 の練習時間</div></div>' +
                 '<div class="stat-card"><div class="stat-v">' + s.total.count + '枚</div><div class="stat-k">累計 枚数</div></div>' +
-                '<div class="stat-card"><div class="stat-v">' + fmtMin(s.total.sec) + '</div><div class="stat-k">累計 時間</div></div>';
+                '<div class="stat-card"><div class="stat-v">' + fmtMin(s.total.sec) + '</div><div class="stat-k">累計 時間</div></div>' +
+                '<div class="stat-card" style="grid-column:1/-1"><div class="stat-v">' + (streak > 0 ? ('🔥 ' + streak + '日') : '—') + '</div><div class="stat-k">連続 練習日数</div></div>';
             // 直近7日の枚数グラフ
             let wk = document.getElementById('stats-week');
             if (!wk) { wk = document.createElement('div'); wk.id = 'stats-week'; el.parentNode.insertBefore(wk, el.nextSibling); }

@@ -266,6 +266,19 @@
                         </select>
                     </div>
                 </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">バックアップ</div>
+                    <div class="settings-desc" style="margin-bottom:8px;">設定・統計・タグ・スキップ・ショートカットをファイルに保存/復元します（お気に入り画像は含まれません）。機種変更やブラウザのデータ削除に備えられます。</div>
+                    <div class="settings-row">
+                        <div class="settings-label"><span>設定をファイルに保存</span></div>
+                        <button id="backup-export-btn" class="panel-btn ghost">書き出し</button>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-label"><span>ファイルから復元</span></div>
+                        <button id="backup-import-btn" class="panel-btn ghost">読み込み</button>
+                    </div>
+                    <input type="file" id="backup-import-input" accept=".json" style="display:none;">
+                </div>
             </div>
         </div>
 
@@ -401,8 +414,10 @@
                     <option value="0">一筆書き</option>
                     <option value="1">基本形</option>
                     <option value="2">フラワーサック</option>
+                    <option value="3">線ならし</option>
                 </select>
                 <button id="je-skformennext" class="sk-fmbtn">次のお題</button>
+                <button id="je-skjudge" class="sk-fmbtn" style="display:none;">採点</button>
                 <span class="sk-fmgap"></span>
                 <span class="sk-fmlabel">濃さ</span>
                 <input type="range" id="sketch-formen-op" min="20" max="100" value="70">
@@ -560,6 +575,7 @@
     </div>
 
     <script src="./js/stats.js"></script>
+    <script src="./js/linejudge.js"></script>
     <script src="./js/sketch.js"></script>
 
     <!-- ════════════ v3 追加機能（クラスモード / シルエット / ズーム / 巡回シャッフル） ════════════ -->

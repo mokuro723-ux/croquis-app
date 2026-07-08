@@ -25,6 +25,8 @@ sw.js               Service Worker（オフライン用キャッシュ管理）
 manifest.json       PWA情報（アプリ名・アイコン・起動URL）
 vercel.json         配信時のキャッシュ設定
 icon.png            アプリアイコン（変更不要）
+tests/              特性テスト・チェックスクリプト置き場（配信対象外）
+docs/archive/       完了済み文書の保管
 ```
 
 > 読み込み順は `index.html` 内で **app-core → app-state → app-images → app-manage → app-timer → stats → sketch → features → bindings** の順。
@@ -50,6 +52,8 @@ icon.png            アプリアイコン（変更不要）
 3. **`sw.js` の `CACHE_NAME` の数字を1つ上げる**（例: `v20` → `v21`）← これを忘れると更新が届かない
 4. 必要なら `vercel.json` にキャッシュヘッダーを追加
 
+> コミット前に `tests/check-sw.ps1`（上げ忘れ）と `tests/check-manifest.ps1`（3点セットの整合）を実行すると 1〜3 の漏れを機械チェックできます。
+
 ---
 
 ## 修正したのに画面に反映されないとき
@@ -73,7 +77,7 @@ PWAはキャッシュが強力なため、順に試してください：
 
 ## リファクタリング完了ログ
 
-計画書（全5フェーズ）に基づき実施。完了した項目の一覧：
+計画書（`docs/archive/リファクタリング計画書.md`・全5フェーズ）に基づき実施。完了した項目の一覧：
 
 | 項目 | 内容 |
 |---|---|
