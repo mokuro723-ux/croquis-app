@@ -136,6 +136,8 @@
         bind('sketch-memfade-btn', 'click', function(event){ skToggleMemFade(); });
         bind('sketch-cmp-btn', 'click', function(event){ skToggleCompare(); });
         bind('sketch-lassoprev-btn', 'click', function(event){ skToggleLassoFillPreview(); });
+        bind('sketch-cursor-btn', 'click', function(event){ skCycleCursor(); });         // 描画カーソル なし→三角→ブラシ径
+        bind('sketch-cursor-dir-btn', 'click', function(event){ skCycleCursorDir(); });   // 三角矢印の向きを8方向で切替
         document.querySelectorAll('.sk-paper:not(.sk-paper-custom)').forEach(function(b){
             b.addEventListener('click', function(){ skSetPaper(b.getAttribute('data-bg')); });
         });

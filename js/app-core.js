@@ -40,6 +40,8 @@
             SKETCH_HAND: 'croquis_sketch_hand_v1',            // 利き手（'L'=左 / 'R'=右）。浮きボタンの左右位置に使う
             SKETCH_GUIDE: 'croquis_sketch_guide_v1',          // キャンバスのガイド線(0=なし / 1=中心十字 / 2=三分割)
             SKETCH_RECENT_COLOR: 'croquis_sketch_recent_color_v1', // 直近に使ったカスタム色（クイック再選択用）
+            SKETCH_CURSOR: 'croquis_sketch_cursor_v1',        // 描画カーソル(0=なし/1=三角矢印/2=ブラシ径の丸)
+            SKETCH_CURSOR_DIR: 'croquis_sketch_cursor_dir_v1', // 三角矢印カーソルの向き(0〜7で↑から時計回り)
             SHORTCUTS: 'croquis_shortcuts_v1',                // キーボードショートカットの割当（ユーザー変更）
         };
 

@@ -622,6 +622,14 @@
                 else { lastTapTime = currentTime; }
             }
         }, { passive: false });
+        // iOS Safari はダブルタップでブロックズームし画面がずれる。pointerupのpreventDefaultでは
+        // ネイティブのズームを止められないため、touchendで2連続タップの既定動作を抑止する。
+        let lastTouchEndT = 0;
+        ui.imgContainer.addEventListener('touchend', function(e) {
+            const now = Date.now();
+            if (now - lastTouchEndT < TIMING.DOUBLE_TAP_MS) e.preventDefault();
+            lastTouchEndT = now;
+        }, { passive: false });
         document.addEventListener('keydown', function(e) {
             armFocusIdleTimer();
             if (document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'INPUT') return;

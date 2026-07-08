@@ -590,7 +590,28 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     z-index: 6; display: none; align-items: center; gap: 9px;
     padding: 8px 14px; border-radius: 999px; max-width: 94vw; flex-wrap: wrap; justify-content: center;
     background: rgba(20,20,20,0.92); border: 1px solid #4a4a4a; box-shadow: 0 3px 14px rgba(0,0,0,0.55);
+    transition: opacity 0.18s ease;
 }
+/* 描画中はお題バーを一時的に隠す（お題に被って邪魔にならないように。指を離すと戻る） */
+#sketch-formen-bar.drawing-hide { opacity: 0; pointer-events: none; }
+/* ── 描画カーソル：ペン先の位置を示す。transformで先端(0,0)を実際の描画点に合わせる ── */
+#sketch-cursor {
+    position: absolute; left: 0; top: 0; z-index: 7; display: none;
+    pointer-events: none; will-change: transform;
+}
+#sketch-cursor.show { display: block; }
+#sketch-cursor-tri {
+    position: absolute; left: -20px; top: -20px; width: 40px; height: 40px;
+    display: none; overflow: visible; transform-origin: center;
+    filter: drop-shadow(0 0 2px rgba(0,0,0,0.95));
+}
+#sketch-cursor-tri polygon { fill: #fff; stroke: #000; stroke-width: 1; }
+#sketch-cursor.tri #sketch-cursor-tri { display: block; }
+#sketch-cursor-ring {
+    position: absolute; display: none; border-radius: 50%;
+    border: 1.5px solid #fff; box-shadow: 0 0 2px rgba(0,0,0,0.9), inset 0 0 2px rgba(0,0,0,0.6);
+}
+#sketch-cursor.ring #sketch-cursor-ring { display: block; }
 #sketch-deck { padding-right: 6px; }
 #sketch-formen-bar .sk-fmlabel { color: #cfcfcf; font-size: 0.8rem; }
 #sketch-formen-bar .sk-fmgap { width: 1px; height: 20px; background: #4a4a4a; }

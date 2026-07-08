@@ -85,6 +85,9 @@
         let skHand = (window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_HAND) === 'L') ? 'L' : 'R'; // 利き手（既定=右）
         let skGuide = Math.min(2, Math.max(0, parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_GUIDE), 10) || 0)); // 0なし/1中心十字/2三分割
         let skRecentColor = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_RECENT_COLOR) || ''; // 直近に使ったカスタム色
+        let skCursorMode = Math.min(2, Math.max(0, parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_CURSOR), 10) || 0)); // 描画カーソル 0=なし/1=三角矢印/2=ブラシ径の丸
+        let skCursorDir = parseInt(window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_CURSOR_DIR), 10); // 三角矢印の向き 0..7
+        if (isNaN(skCursorDir)) skCursorDir = 7; else skCursorDir = Math.min(7, Math.max(0, skCursorDir)); // 既定は左上（右利きで手に隠れにくい）
         const skFormenSvg = document.getElementById('sketch-formen');
         const skGridSvg = document.getElementById('sketch-grid');
         const skGuideSvg = document.getElementById('sketch-guide');
@@ -856,6 +859,7 @@
             const map = [['sketch-stab-btn', skStab], ['sketch-memfade-btn', skMemFade], ['sketch-cmp-btn', skCmpOn], ['sketch-lassoprev-btn', skLassoFillPreview], ['sketch-autohide-btn', skAutoHide]];
             map.forEach(function(p){ skAccent(p[0], p[1]); });
             const sr = document.getElementById('sketch-stab-strength'); if (sr) sr.value = String(skStabStr);
+            skCursorUpdateBtns(); // 描画カーソルのボタン文言・向き表示も合わせる
             skApplyHand(); // 利き手ボタンの文言（利き手: 右/左）も合わせる
         }
         /* ── 上バーから開くメニュー（画像読み込み / 練習）。普段は隠す ── */
@@ -997,6 +1001,7 @@
             skAutoHideBegin(); // 設定ONなら描き始めに下ツールを畳む（描点を取る前に寸法確定）
             skPushUndo(); skRedoBackup = skRedoStack; skRedoStack = [];
             skDrawing = true;
+            skFormenBarDraw(true); // お題モード中は描いてる間だけお題バーを隠す（お題に被らないように）
             skTraceRec = null; // 記録は一旦リセットし、条件を満たす経路でのみ下で初期化する
             if (skTool === 'lasso' || skTool === 'lassoLight') { // 投げ縄塗り：頂点を集める（描画はライブ層にプレビュー）
                 skLiveActive = false;
@@ -1052,8 +1057,10 @@
         function skEndStroke(){
             if (!skDrawing) return;
             skDrawing = false;
+            skFormenBarDraw(false); // 描き終わったらお題バーを戻す
             if (skLassoPts) { skLassoCommit(); return; } // 投げ縄塗りを確定
-            if (skTraceRec && skTraceRec.length >= 3) skLastTrace = skTraceRec; // 最後に描いた1本として控える
+            let skJustTraced = false;
+            if (skTraceRec && skTraceRec.length >= 3) { skLastTrace = skTraceRec; skJustTraced = true; } // 最後に描いた1本として控える
             skTraceRec = null;
             skDrew = true; // 線を1本でも引いた（統計の「描いた枚数」判定用）
             // 最後の中点から指/ペンを離した点まで線を伸ばす（中点法で残る僅かな隙間を埋める）。
@@ -1076,6 +1083,7 @@
             skCtx.globalCompositeOperation = 'source-over';
             skCommitSnap(); // 描き終わりの確定状態を記録（pen up時なので体感の引っかかり無し）
             skFlushPendingMemHide(); // タイマー終了で保留していた「薄く＆隠す」があればここで実行
+            if (skJustTraced && skFormenOn && fmTracePath) skAutoJudgeTrace(); // なぞる系お題：自動採点＋自動で次のお題へ
         }
         // タイマー終了ちょうどに線を引いていて保留した「薄く＆隠す」を、ストローク完了時に実行する
         function skFlushPendingMemHide(){
@@ -1086,6 +1094,7 @@
         function skCancelStroke(){
             if (!skDrawing) return;
             skDrawing = false;
+            skFormenBarDraw(false); // 描画取消でもお題バーを戻す
             skTraceRec = null; // 記録中の描点を破棄（skLastTraceは変えない）
             skRedoStack = skRedoBackup; // 描き始めで消したやり直し履歴を復元（2/3本指ジェスチャー時）
             if (skLassoPts) { // 投げ縄を中断（本体未変更なのでスナップを捨てるだけ）
@@ -1179,6 +1188,58 @@
             skCancelStroke();
             skAutoHideEnd();
         }, { passive: true });
+
+        /* ── 描画カーソル：ペン先の位置を示す（三角矢印は先端が描画点／ブラシ径は今の太さの丸）── */
+        const skCursorEl = document.getElementById('sketch-cursor');
+        const skCursorTri = document.getElementById('sketch-cursor-tri');
+        const skCursorRing = document.getElementById('sketch-cursor-ring');
+        const SK_CURSOR_NAMES = ['なし', '三角矢印', 'ブラシ径'];
+        const SK_DIR_GLYPH = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+        function skCursorApplyMode(){
+            if (!skCursorEl) return;
+            skCursorEl.classList.toggle('tri', skCursorMode === 1);
+            skCursorEl.classList.toggle('ring', skCursorMode === 2);
+            if (skCursorTri) skCursorTri.style.transform = 'rotate(' + (skCursorDir * 45) + 'deg)'; // 先端(0,0)=描画点を軸に回すので8方向どこでも先端は同じ位置
+            if (skCursorMode === 0) skCursorEl.classList.remove('show');
+        }
+        function skCursorUpdateBtns(){ // 設定タブのカーソル用ボタンの文言・表示を今の状態に合わせる
+            const b = document.getElementById('sketch-cursor-btn');
+            if (b) { b.textContent = 'カーソル: ' + SK_CURSOR_NAMES[skCursorMode]; skAccent('sketch-cursor-btn', skCursorMode !== 0); }
+            const d = document.getElementById('sketch-cursor-dir-btn');
+            if (d) { const s = d.querySelector('span'); if (s) s.textContent = '向き ' + SK_DIR_GLYPH[skCursorDir]; d.style.display = (skCursorMode === 1) ? '' : 'none'; }
+            skCursorApplyMode();
+        }
+        function skCursorMove(e){
+            if (skCursorMode === 0 || !skCursorEl) return;
+            if (e.pointerType === 'touch' && skTouches.size > 1) { skCursorEl.classList.remove('show'); return; } // ピンチ等の最中は出さない
+            const r = skStage.getBoundingClientRect();
+            skCursorEl.style.transform = 'translate(' + (e.clientX - r.left).toFixed(1) + 'px,' + (e.clientY - r.top).toFixed(1) + 'px)';
+            if (skCursorMode === 2) { // ブラシ径の丸：見た目の直径＝ペン太さ×表示倍率（並べる時の描画側は等倍）
+                const size = parseInt(document.getElementById('sketch-size').value, 10) || 5;
+                const dia = Math.max(4, size * (skSide ? 1 : skZoom));
+                skCursorRing.style.width = skCursorRing.style.height = dia + 'px';
+                skCursorRing.style.left = skCursorRing.style.top = (-dia / 2) + 'px';
+            }
+            skCursorEl.classList.add('show');
+        }
+        function skCursorHide(){ if (skCursorEl) skCursorEl.classList.remove('show'); }
+        skCanvas.addEventListener('pointermove', skCursorMove, { passive: true }); // 描画中でなくてもカーソルは追従（ホバー対応）
+        skCanvas.addEventListener('pointerdown', skCursorMove, { passive: true });
+        skCanvas.addEventListener('pointerleave', skCursorHide, { passive: true });
+        skCanvas.addEventListener('pointercancel', skCursorHide, { passive: true });
+        skCanvas.addEventListener('pointerup', function(e){ if (e.pointerType === 'touch') skCursorHide(); }, { passive: true }); // 指を離したら消す（マウス/ペンはホバーで残す）
+        window.skCycleCursor = function(){
+            skCursorMode = (skCursorMode + 1) % 3;
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_CURSOR, String(skCursorMode), '描画カーソル');
+            skCursorUpdateBtns();
+            skFlash('描画カーソル：' + SK_CURSOR_NAMES[skCursorMode], 1500);
+        };
+        window.skCycleCursorDir = function(){
+            skCursorDir = (skCursorDir + 1) % 8;
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_CURSOR_DIR, String(skCursorDir), '三角カーソルの向き');
+            skCursorUpdateBtns();
+        };
+        skCursorUpdateBtns(); // 起動時に今の設定（カーソル種類・向き）をボタンとカーソルへ反映
 
         /* ── 指のジェスチャ判定（タッチイベントで本数を数える）──
            2本指タップ = 元に戻す（やり直しはツールバーのボタン / Ctrl+Shift+Z を使用）
@@ -1631,11 +1692,11 @@
         window.skSetDeck = function(i){ skDeckIdx = Math.max(0, Math.min(FM_DECKS.length - 1, parseInt(i, 10) || 0)); skItemIdx = 0; skClearSilent(); fmRender(); };
         window.skFormenNext = function(){ const deck = FM_DECKS[skDeckIdx] || FM_DECKS[0]; skItemIdx = (skItemIdx + 1) % deck.items.length; skClearSilent(); fmRender(); };
         window.skSetFormenOpacity = function(v){ skFormenOpacity = Math.max(0.1, Math.min(1, (parseInt(v, 10) || 70) / 100)); if (skFormenSvg) skFormenSvg.style.opacity = String(skFormenOpacity); };
-        // なぞり採点：直近のなぞり軌跡(skLastTrace)をお手本(fmTracePath)と突き合わせて採点する
-        window.skJudgeTrace = function(){
-            if (!skFormenOn || !fmTracePath) { skFlash('採点できるのは「なぞる」タイプのお題だけです', 2200); return; }
-            if (!skLastTrace || skLastTrace.length < 3) { skFlash('先にお題の線をなぞってください（緑の●がスタート地点です）', 2400); return; }
-            if (!window.LineJudge) { skFlash('採点機能の読み込みに失敗しています', 2200); return; }
+        // お題モード中、描いてる間だけお題バーを隠す（お題に被らないように）。指を離すと戻る
+        function skFormenBarDraw(hide){ if (!skFormenOn) return; const fb = document.getElementById('sketch-formen-bar'); if (fb) fb.classList.toggle('drawing-hide', !!hide); }
+        // なぞり採点の中身：直近のなぞり(skLastTrace)をお手本(fmTracePath)と突き合わせて結果を返す（無理ならnull）
+        function skScoreLastTrace(){
+            if (!skFormenOn || !fmTracePath || !skLastTrace || skLastTrace.length < 3 || !window.LineJudge) return null;
             const r = skStage.getBoundingClientRect();
             const tol = Math.max(14, Math.min(r.width, r.height) * 0.03); // 甘さの調整はここ
             let drawn = skLastTrace;
@@ -1644,10 +1705,27 @@
             const distFromStart = Math.hypot(drawn[0].x - path[0].x, drawn[0].y - path[0].y);
             const distFromEnd = Math.hypot(drawn[0].x - path[path.length - 1].x, drawn[0].y - path[path.length - 1].y);
             if (distFromEnd < distFromStart) drawn = drawn.slice().reverse();
-            const result = window.LineJudge.score(drawn, path, tol);
+            return window.LineJudge.score(drawn, path, tol);
+        }
+        // なぞり採点（採点ボタン用・手動）：直近のなぞりを採点して結果を表示する
+        window.skJudgeTrace = function(){
+            if (!skFormenOn || !fmTracePath) { skFlash('採点できるのは「なぞる」タイプのお題だけです', 2200); return; }
+            if (!skLastTrace || skLastTrace.length < 3) { skFlash('先にお題の線をなぞってください（緑の●がスタート地点です）', 2400); return; }
+            if (!window.LineJudge) { skFlash('採点機能の読み込みに失敗しています', 2200); return; }
+            const result = skScoreLastTrace();
             if (!result) { skFlash('採点できませんでした。もう一度なぞってみてください', 2200); return; }
             skFlash('採点：' + result.total + '点 ' + result.rank + '（なめらかさ' + result.smoothness + '・正確さ' + result.accuracy + '）', 4200);
         };
+        // 自動採点：なぞる系お題で線を1本引き終わるたびに自動で採点し、テンポよく次のお題へ送る
+        let skAutoAdvTimer = null;
+        function skAutoJudgeTrace(){
+            const result = skScoreLastTrace();
+            if (!result) return;
+            if (result.coverage < 40) { skFlash('もう一度、お題の線をなぞってみよう（' + result.total + '点）', 1800); return; } // なぞりが短すぎ→送らずやり直し
+            skFlash('採点：' + result.total + '点 ' + result.rank + '（なめらかさ' + result.smoothness + '・正確さ' + result.accuracy + '）→ 次のお題へ', 1600);
+            if (skAutoAdvTimer) clearTimeout(skAutoAdvTimer);
+            skAutoAdvTimer = setTimeout(function(){ skAutoAdvTimer = null; if (skFormenOn) window.skFormenNext(); }, 1150);
+        }
 
         /* ════════════════════════════════════════════════════════
            5d) すぐ隠す / 時間制限タイマー / 線を薄くする

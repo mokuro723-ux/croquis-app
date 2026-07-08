@@ -409,6 +409,11 @@
             <button id="sketch-zoom-chip" type="button" aria-hidden="true">🔍 ×1.0　タップで等倍</button>
             <div id="sketch-countdown"></div>
             <div id="sketch-msg" style="display:none;"></div>
+            <!-- 描画カーソル：ペン先の位置を示す（三角矢印は先端が描画点。ブラシ径は今の太さの丸） -->
+            <div id="sketch-cursor" aria-hidden="true">
+                <svg id="sketch-cursor-tri" viewBox="-20 -20 40 40"><polygon points="0,0 -4.5,-15 4.5,-15"></polygon></svg>
+                <span id="sketch-cursor-ring"></span>
+            </div>
             <div id="sketch-formen-bar">
                 <select id="sketch-deck" class="sk-fmbtn" title="お題の種類">
                     <option value="0">一筆書き</option>
@@ -551,6 +556,9 @@
                     <span class="sk-vsep"></span>
                     <button class="panel-btn" id="sketch-autohide-btn" title="ペンを置いたら下ツールを自動で畳み、指を離してしばらくすると戻す（描画に集中できます）">描き始めで畳む</button>
                     <button class="panel-btn" id="sketch-hand-btn" title="利き手に合わせて、浮きボタン（戻す/集中モード解除）を左右どちらに置くか切り替えます">利き手: 右</button>
+                    <span class="sk-vsep"></span>
+                    <button class="panel-btn" id="sketch-cursor-btn" title="描画中にペン先の位置を示すカーソル（押すたび なし→三角矢印→ブラシ径の丸）">カーソル: なし</button>
+                    <button class="sk-tbtn" id="sketch-cursor-dir-btn" title="三角矢印カーソルの向き（押すたび8方向を切替。手に隠れない向きに）" style="display:none;"><span>向き ↖</span></button>
                 </div>
             </div>
             <span id="sk-gesture-hint">2本指タップ=戻る</span>
