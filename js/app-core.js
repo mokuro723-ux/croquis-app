@@ -30,6 +30,7 @@
             SKETCH_MEMSEC: 'croquis_sketch_memsec_v1',       // 記憶/タイマーの秒数
             SKETCH_SIZE: 'croquis_sketch_size_v1',           // ペンの太さ
             SKETCH_COLOR: 'croquis_sketch_color_v1',         // ペンの色（"色|不透明度"）
+            SKETCH_BRUSH: 'croquis_sketch_brush_v1',         // 描き味（pen=ペン / pencil=鉛筆 / marker=マーカー）
             SKETCH_GRID_COLOR: 'croquis_sketch_grid_color_v1', // グリッド線の色
             SKETCH_GRID_OP: 'croquis_sketch_grid_op_v1',     // グリッド線の濃さ(1〜10)
             SKETCH_BW_CONTRAST: 'croquis_sketch_bw_contrast_v1', // 二階調コントラスト(1〜20)

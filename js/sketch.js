@@ -76,6 +76,15 @@
         const SK_GRID_RGB = { cyan: '0,212,255', white: '255,255,255', black: '0,0,0', red: '255,77,94' }; // グリッド色の名前→RGB
         let skFlipH = false, skFlipV = false, skMono = false, skBw = false; // 参考画像の加工（描画モード内だけで独立管理）
         let skTool = 'pen', skLassoPts = null; // 道具: pen / eraser / lasso / lassoLight。投げ縄の頂点配列
+        // 描き味（クロッキー向けの筆感）。あくまで“っぽい”近似：ペン=くっきり／鉛筆=やわらか＋線幅を微妙に揺らす／マーカー=太く半透明・角ばった端。
+        let skBrush = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_BRUSH) || 'pen';
+        const SK_BRUSH = {
+            pen:    { cap: 'round',  wMul: 1,    aScale: 1 },              // ペン：現状のまま（不透明・くっきり）
+            pencil: { cap: 'round',  wMul: 0.9,  aScale: 0.8, grain: true }, // 鉛筆：少し薄く細く、線幅を揺らしてザラつき感
+            marker: { cap: 'square', wMul: 1.7,  aScale: 0.45 }            // マーカー：太く半透明・角ばった端（重ねると濃くなる）
+        };
+        function skBrushCfg(){ return SK_BRUSH[skBrush] || SK_BRUSH.pen; } // ponytail: 3種の近似で十分。本物の紙質感が要るなら画像テクスチャで
+        function skEffAlpha(){ return Math.max(0.05, Math.min(1, skAlpha * skBrushCfg().aScale)); } // 濃さスライダー × 筆の地の透明度
         let skLassoFillPreview = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_LASSOPREV) === '1'; // 投げ縄の塗り予測（シルエット）表示。既定OFF（なぞり線は常時）
         let skOpenTime = 0, skSketchCount = 0, skDrew = false; // 統計用：滞在時間と「描いた枚数」
         // ── v6 追加：集中モード / 自動畳み / 利き手 / ガイド線 / 直近の色 ──
@@ -926,7 +935,8 @@
             const sz = szEl ? (parseInt(szEl.value, 10) || 5) : 5;
             const d = Math.max(3, Math.min(24, sz));
             dot.style.width = d + 'px'; dot.style.height = d + 'px';
-            dot.style.background = skColor; dot.style.opacity = String(skAlpha);
+            dot.style.borderRadius = (skBrush === 'marker') ? '3px' : '50%'; // マーカーは角ばった見本
+            dot.style.background = skColor; dot.style.opacity = String(skEffAlpha());
             const val = document.getElementById('sketch-size-val'); if (val) val.textContent = String(sz); // 太さの数値表示
         }
         window.skUpdateBrushPreview = skUpdateBrushPreview; // bindings.js から太さスライダーで呼ぶため公開
@@ -938,6 +948,18 @@
                 const wrap = document.getElementById('sketch-customcolor-wrap'); if (wrap) wrap.classList.remove('on');
                 skApplyPenColor(b.getAttribute('data-c'), parseFloat(b.getAttribute('data-a') || '1'));
             });
+        });
+        // 描き味の切替（ペン / 鉛筆 / マーカー）。消し・投げ縄からはペンに戻す
+        function skSetBrush(b){
+            skBrush = (b === 'pencil' || b === 'marker') ? b : 'pen';
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_BRUSH, skBrush, '描き味');
+            if (skTool !== 'pen') skSetTool('pen');
+            document.querySelectorAll('.sk-brush-btn').forEach(function(x){ x.classList.toggle('on', x.getAttribute('data-brush') === skBrush); });
+            skUpdateBrushPreview();
+        }
+        document.querySelectorAll('.sk-brush-btn').forEach(function(b){
+            b.addEventListener('click', function(){ skSetBrush(b.getAttribute('data-brush')); });
+            b.classList.toggle('on', b.getAttribute('data-brush') === skBrush); // 起動時に保存値を反映
         });
         // カスタム色（好きな色を選ぶ）。今の濃さは維持し、直近の色として記憶する
         window.skSetCustomColor = function(v){
@@ -1009,8 +1031,8 @@
                 skLive.style.opacity = '1';
                 return;
             }
-            skLiveActive = (!skEraser && skAlpha < 1);
-            if (skLiveActive) { skLiveCtx.clearRect(0, 0, skCW, skCH); skLive.style.opacity = String(skAlpha); }
+            skLiveActive = (!skEraser && skEffAlpha() < 1); // 半透明の筆（鉛筆・マーカー・薄めペン）はライブ層で1回だけ合成
+            if (skLiveActive) { skLiveCtx.clearRect(0, 0, skCW, skCH); skLive.style.opacity = String(skEffAlpha()); }
             const c = skTargetCtx();
             const p = skPos(e);
             skLastX = p.x; skLastY = p.y; skPrevMidX = p.x; skPrevMidY = p.y; // 中点法の起点
@@ -1019,8 +1041,10 @@
             if (skFormenOn && fmTracePath) skTraceRec = [{ x: p.x, y: p.y }]; // お題(trace系)中のみ描線を記録
             c.globalCompositeOperation = skEraser ? 'destination-out' : 'source-over';
             c.strokeStyle = skColor;
+            const bc = skBrushCfg();
+            c.lineCap = skEraser ? 'round' : bc.cap; // マーカーは角ばった端
             const size = parseInt(document.getElementById('sketch-size').value, 10) || 5;
-            c.lineWidth = skEraser ? size * 3 : size;
+            c.lineWidth = skEraser ? size * 3 : size * bc.wMul;
             c.beginPath();
             c.moveTo(p.x, p.y);
             c.lineTo(p.x + 0.01, p.y + 0.01); // 点（タップ）でも描点が残るように
@@ -1032,7 +1056,10 @@
             const events = (typeof e.getCoalescedEvents === 'function') ? e.getCoalescedEvents() : [e];
             c.globalCompositeOperation = skEraser ? 'destination-out' : 'source-over';
             c.strokeStyle = skColor;
+            const bc = skBrushCfg();
+            c.lineCap = skEraser ? 'round' : bc.cap;
             const size = parseInt(document.getElementById('sketch-size').value, 10) || 5;
+            const baseW = skEraser ? size * 3 : size * bc.wMul;
             for (let i = 0; i < events.length; i++) {
                 const raw = skPos(events[i]);
                 let px = raw.x, py = raw.y;
@@ -1043,7 +1070,9 @@
                 }
                 if (skTraceRec) skTraceRec.push({ x: px, y: py }); // 手ブレ補正適用後（実際に画面に描かれる点）を記録
                 const pw = (events[i].pointerType === 'pen' && events[i].pressure > 0) ? (0.4 + events[i].pressure * 1.2) : 1;
-                c.lineWidth = (skEraser ? size * 3 : size) * pw;
+                let lw = baseW * pw;
+                if (bc.grain) lw *= (0.7 + Math.random() * 0.5); // 鉛筆：線幅を微妙に揺らしてザラついた手描き感に
+                c.lineWidth = lw;
                 // 中点法：直前中点→今回中点を、実サンプル点を制御点にした2次曲線でつなぐ（なめらか）
                 const midX = (skLastX + px) / 2, midY = (skLastY + py) / 2;
                 c.beginPath();
@@ -1071,7 +1100,7 @@
             c.beginPath(); c.moveTo(skPrevMidX, skPrevMidY); c.lineTo(endX, endY); c.stroke();
             if (skLiveActive) {
                 skCtx.globalCompositeOperation = 'source-over';
-                skCtx.globalAlpha = skAlpha;
+                skCtx.globalAlpha = skEffAlpha();
                 try { skCtx.drawImage(skLive, 0, 0, skCW, skCH); } catch(e){ console.warn("croquis: 描画の合成に失敗", e); }
                 skCtx.globalAlpha = 1;
                 skLiveCtx.clearRect(0, 0, skCW, skCH);

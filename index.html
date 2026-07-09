@@ -504,8 +504,12 @@
                     <label class="sk-customcolor" id="sketch-customcolor-wrap" title="好きな色を選ぶ"><input type="color" id="sketch-customcolor" value="#ffcc00"></label>
                     <button class="sk-color sk-recent" id="sketch-recent-color" title="直近に使った色（タップで再選択）" style="display:none;"></button>
                     <span class="sk-vsep"></span>
+                    <button class="sk-tbtn sk-brush-btn on" data-brush="pen" id="sk-brush-pen" title="ペン：くっきりした線">ペン</button>
+                    <button class="sk-tbtn sk-brush-btn" data-brush="pencil" id="sk-brush-pencil" title="鉛筆：やわらかくザラついた線（当たり取りに）">鉛筆</button>
+                    <button class="sk-tbtn sk-brush-btn" data-brush="marker" id="sk-brush-marker" title="マーカー：太く半透明。重ねると濃くなる">マーカー</button>
+                    <span class="sk-vsep"></span>
                     <span class="sk-set-label">太さ</span>
-                    <input type="range" id="sketch-size" min="2" max="30" value="5" title="ペンの太さ">
+                    <input type="range" id="sketch-size" min="1" max="80" value="5" title="ペンの太さ">
                     <span class="sk-size-val" id="sketch-size-val" title="今のペンの太さ">5</span>
                     <span class="sk-set-label">濃さ</span>
                     <input type="range" id="sketch-alpha" min="10" max="100" value="100" title="ペンの濃さ（薄くするとどの色でも当たり取りに使えます）">
