@@ -9,7 +9,7 @@
    ・将来ビルドを導入できるなら、ファイル内容のハッシュを自動でCACHE_NAMEに埋め込む
    （今は手動運用なので、上のコメントを目印にしてください）
    ============================================================ */
-const CACHE_NAME = 'croquis-timer-v69';
+const CACHE_NAME = 'croquis-timer-v70';
 
 // アプリ本体（オフラインでも動かすために事前キャッシュするファイル）
 // ※ sw.js 自身はここに入れない（Service Workerファイルの自己キャッシュはアンチパターン）
@@ -33,10 +33,30 @@ const STATIC_CACHE = [
 
 const RUNTIME_CACHE = 'croquis-runtime-v1';
 
+// アイコン等、無くてもアプリ本体は動くファイル。取得に失敗してもインストールを止めない。
+// （以前は addAll 一発だったため、1ファイルの404でSWインストール全体が失敗し、
+//   オフライン起動が一切できなくなる事故が起きていた）
+const OPTIONAL_CACHE = ['./icon.png', './manifest.json'];
+
 self.addEventListener('install', (e) => {
     self.skipWaiting();
     e.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_CACHE))
+        (async () => {
+            const cache = await caches.open(CACHE_NAME);
+            await Promise.all(STATIC_CACHE.map(async (url) => {
+                try {
+                    const res = await fetch(url, { cache: 'no-cache' });
+                    if (!res.ok) throw new Error(url + ' → ' + res.status);
+                    // Vercelの cleanUrls で '/index.html' → '/' にリダイレクトされた応答を
+                    // そのまま保存すると、オフライン時のナビゲーションでブラウザに拒否され
+                    // 白画面になる。応答を作り直して redirected フラグを消してから保存する。
+                    const body = await res.blob();
+                    await cache.put(url, new Response(body, { status: 200, headers: res.headers }));
+                } catch (err) {
+                    if (!OPTIONAL_CACHE.includes(url)) throw err; // 本体ファイルの欠落はインストール失敗として検知させる
+                }
+            }));
+        })()
     );
 });
 
@@ -68,8 +88,12 @@ self.addEventListener('fetch', (e) => {
             (async () => {
                 try {
                     const fresh = await fetch(req);
-                    const cache = await caches.open(CACHE_NAME);
-                    cache.put('./index.html', fresh.clone());
+                    // リダイレクト済み応答（/index.html→/ など）は保存しない。
+                    // オフライン時にナビゲーションへ返すとブラウザに拒否されるため。
+                    if (fresh.ok && !fresh.redirected) {
+                        const cache = await caches.open(CACHE_NAME);
+                        cache.put('./index.html', fresh.clone());
+                    }
                     return fresh;
                 } catch {
                     const cached = await caches.match('./index.html');

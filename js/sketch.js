@@ -80,11 +80,49 @@
         let skBrush = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_BRUSH) || 'pen';
         const SK_BRUSH = {
             pen:    { cap: 'round',  wMul: 1,    aScale: 1 },              // ペン：現状のまま（不透明・くっきり）
-            pencil: { cap: 'round',  wMul: 0.9,  aScale: 0.8, grain: true }, // 鉛筆：少し薄く細く、線幅を揺らしてザラつき感
+            pencil: { cap: 'round',  wMul: 0.9,  aScale: 0.8, grain: true }, // 鉛筆：粒状スタンプで描く（下の skPencilLine 参照）
             marker: { cap: 'square', wMul: 1.7,  aScale: 0.45 }            // マーカー：太く半透明・角ばった端（重ねると濃くなる）
         };
-        function skBrushCfg(){ return SK_BRUSH[skBrush] || SK_BRUSH.pen; } // ponytail: 3種の近似で十分。本物の紙質感が要るなら画像テクスチャで
+        function skBrushCfg(){ return SK_BRUSH[skBrush] || SK_BRUSH.pen; }
         function skEffAlpha(){ return Math.max(0.05, Math.min(1, skAlpha * skBrushCfg().aScale)); } // 濃さスライダー × 筆の地の透明度
+        // ── 鉛筆の質感（クリスタの鉛筆ブラシ pencil.sut を参考にした近似）──
+        // 実物の設定：塗料量60% / スタンプ間隔=サイズの5% / 紙テクスチャ強め / 先端はランダム回転のパターン画像。
+        // canvasでは「粒々の先端スタンプを短い間隔で回転させながら押していく」ことで黒鉛の粒感を再現する。
+        // ponytail: 紙テクスチャの掛け算までは再現しない。物足りなければ紙目画像を multiply で重ねる拡張余地あり
+        let skPencilTip = null, skPencilTipColor = '';
+        function skPencilTipImg(color){
+            if (skPencilTip && skPencilTipColor === color) return skPencilTip;
+            const S = 64, cv = document.createElement('canvas'); cv.width = cv.height = S;
+            const g = cv.getContext('2d');
+            g.fillStyle = color;
+            // 中心ほど密・外周ほど疎に粒を撒く（紙の目に黒鉛が乗った見た目）
+            for (let i = 0; i < 700; i++) {
+                const a = Math.random() * Math.PI * 2;
+                const r = Math.sqrt(Math.random()) * Math.random() * (S / 2);
+                g.globalAlpha = 0.25 + Math.random() * 0.45;
+                const d = 0.8 + Math.random() * 1.8;
+                g.fillRect(S / 2 + Math.cos(a) * r, S / 2 + Math.sin(a) * r, d, d);
+            }
+            skPencilTip = cv; skPencilTipColor = color; return cv;
+        }
+        // 2点間を鉛筆スタンプで埋める（通常の stroke() の代わり）。w は線幅相当。
+        function skPencilLine(c, x0, y0, x1, y1, w){
+            const tip = skPencilTipImg(skColor);
+            const step = Math.max(1.5, w * 0.25); // 実物の間隔5%より粗いが見た目の差は出ない範囲で軽量化
+            const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / step));
+            const prevA = c.globalAlpha;
+            for (let i = 0; i <= n; i++) {
+                const t = i / n;
+                const d = w * 1.6 * (0.85 + Math.random() * 0.3);           // スタンプ径（粒が疎なので線幅よりやや大きめ）
+                const x = x0 + (x1 - x0) * t + (Math.random() - 0.5) * w * 0.2; // わずかな位置ゆらぎ
+                const y = y0 + (y1 - y0) * t + (Math.random() - 0.5) * w * 0.2;
+                c.globalAlpha = prevA * (0.5 + Math.random() * 0.3);        // 塗料量60%相当（重ねると濃くなる）
+                c.save(); c.translate(x, y); c.rotate(Math.random() * Math.PI * 2); // 回転で同一スタンプの縞模様を防ぐ
+                c.drawImage(tip, -d / 2, -d / 2, d, d);
+                c.restore();
+            }
+            c.globalAlpha = prevA;
+        }
         let skLassoFillPreview = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_LASSOPREV) === '1'; // 投げ縄の塗り予測（シルエット）表示。既定OFF（なぞり線は常時）
         let skOpenTime = 0, skSketchCount = 0, skDrew = false; // 統計用：滞在時間と「描いた枚数」
         // ── v6 追加：集中モード / 自動畳み / 利き手 / ガイド線 / 直近の色 ──
@@ -1045,10 +1083,14 @@
             c.lineCap = skEraser ? 'round' : bc.cap; // マーカーは角ばった端
             const size = parseInt(document.getElementById('sketch-size').value, 10) || 5;
             c.lineWidth = skEraser ? size * 3 : size * bc.wMul;
-            c.beginPath();
-            c.moveTo(p.x, p.y);
-            c.lineTo(p.x + 0.01, p.y + 0.01); // 点（タップ）でも描点が残るように
-            c.stroke();
+            if (bc.grain && !skEraser) {
+                skPencilLine(c, p.x, p.y, p.x, p.y, c.lineWidth); // 鉛筆：タップでも粒の点が残る
+            } else {
+                c.beginPath();
+                c.moveTo(p.x, p.y);
+                c.lineTo(p.x + 0.01, p.y + 0.01); // 点（タップ）でも描点が残るように
+                c.stroke();
+            }
         }
         function skStrokeMove(e){
             if (skLassoPts) { skLassoMove(e); return; } // 投げ縄塗り中
@@ -1070,15 +1112,18 @@
                 }
                 if (skTraceRec) skTraceRec.push({ x: px, y: py }); // 手ブレ補正適用後（実際に画面に描かれる点）を記録
                 const pw = (events[i].pointerType === 'pen' && events[i].pressure > 0) ? (0.4 + events[i].pressure * 1.2) : 1;
-                let lw = baseW * pw;
-                if (bc.grain) lw *= (0.7 + Math.random() * 0.5); // 鉛筆：線幅を微妙に揺らしてザラついた手描き感に
-                c.lineWidth = lw;
-                // 中点法：直前中点→今回中点を、実サンプル点を制御点にした2次曲線でつなぐ（なめらか）
+                c.lineWidth = baseW * pw;
                 const midX = (skLastX + px) / 2, midY = (skLastY + py) / 2;
-                c.beginPath();
-                c.moveTo(skPrevMidX, skPrevMidY);
-                c.quadraticCurveTo(skLastX, skLastY, midX, midY);
-                c.stroke();
+                if (bc.grain && !skEraser) {
+                    // 鉛筆：線ではなく粒状スタンプで埋める（質感の主役）
+                    skPencilLine(c, skLastX, skLastY, px, py, c.lineWidth);
+                } else {
+                    // 中点法：直前中点→今回中点を、実サンプル点を制御点にした2次曲線でつなぐ（なめらか）
+                    c.beginPath();
+                    c.moveTo(skPrevMidX, skPrevMidY);
+                    c.quadraticCurveTo(skLastX, skLastY, midX, midY);
+                    c.stroke();
+                }
                 skPrevMidX = midX; skPrevMidY = midY;
                 skLastX = px; skLastY = py;
             }
@@ -1097,7 +1142,11 @@
             // （こうしないと素早い線が途中で切れて短く見える＝補正が効いていないように感じる原因）。
             const c = skTargetCtx();
             const endX = skStab ? skRawLastX : skLastX, endY = skStab ? skRawLastY : skLastY;
-            c.beginPath(); c.moveTo(skPrevMidX, skPrevMidY); c.lineTo(endX, endY); c.stroke();
+            if (skBrushCfg().grain && !skEraser) {
+                skPencilLine(c, skPrevMidX, skPrevMidY, endX, endY, c.lineWidth); // 鉛筆は最後の隙間もスタンプで埋める
+            } else {
+                c.beginPath(); c.moveTo(skPrevMidX, skPrevMidY); c.lineTo(endX, endY); c.stroke();
+            }
             if (skLiveActive) {
                 skCtx.globalCompositeOperation = 'source-over';
                 skCtx.globalAlpha = skEffAlpha();
