@@ -150,6 +150,7 @@
         bind('sketch-hand-btn', 'click', function(event){ skToggleHand(); });                      // 利き手（左右）
         bind('sketch-recent-color', 'click', function(event){ skPickRecentColor(); });             // 直近に使った色を再選択
         bind('sketch-eraser-btn', 'click', function(event){ skToggleEraser(); });
+        bind('sketch-eyedrop-btn', 'click', function(event){ skToggleEyedrop(); });        // スポイト（次のタップで色を拾う）
         bind('sketch-lasso-btn', 'click', function(event){ skSetLasso(false); });
         bind('sketch-lassolight-btn', 'click', function(event){ skSetLasso(true); });
         bind('je-skundo', 'click', function(event){ skUndo(); });

@@ -30,7 +30,8 @@
             SKETCH_MEMSEC: 'croquis_sketch_memsec_v1',       // 記憶/タイマーの秒数
             SKETCH_SIZE: 'croquis_sketch_size_v1',           // ペンの太さ
             SKETCH_COLOR: 'croquis_sketch_color_v1',         // ペンの色（"色|不透明度"）
-            SKETCH_BRUSH: 'croquis_sketch_brush_v1',         // 描き味（pen=ペン / pencil=鉛筆 / marker=マーカー）
+            SKETCH_COLOR2: 'croquis_sketch_color2_v1',       // サブ色（Xキーでメインと入替。クリスタの2色切替と同じ）
+            SKETCH_BRUSH: 'croquis_sketch_brush_v1',         // 描き味（pen=ペン / pencil=鉛筆 / ball=ボールペン / marker=マーカー）
             SKETCH_GRID_COLOR: 'croquis_sketch_grid_color_v1', // グリッド線の色
             SKETCH_GRID_OP: 'croquis_sketch_grid_op_v1',     // グリッド線の濃さ(1〜10)
             SKETCH_BW_CONTRAST: 'croquis_sketch_bw_contrast_v1', // 二階調コントラスト(1〜20)
@@ -170,6 +171,10 @@
             { id: 's_zoomIn',  scope: 'sketch', def: 'Equal',        label: 'お手本ズームイン' },
             { id: 's_zoomOut', scope: 'sketch', def: 'Minus',        label: 'お手本ズームアウト' },
             { id: 's_zoomReset',scope:'sketch', def: 'Digit0',       label: 'ズーム解除（等倍）' },
+            { id: 's_swapColor',scope: 'sketch', def: 'KeyX',        label: 'メイン⇄サブ色の入替' },
+            { id: 's_eyedrop', scope: 'sketch', def: 'KeyI',         label: 'スポイト（色を拾う）' },
+            { id: 's_brush',   scope: 'sketch', def: 'KeyC',         label: '描き味を切替（ペン→鉛筆→…）' },
+            { id: 's_focus',   scope: 'sketch', def: 'Tab',          label: '上下バーを隠す / 出す' },
         ];
         function croquisKeyLabel(code){
             if (!code) return '—';

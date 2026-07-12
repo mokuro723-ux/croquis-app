@@ -76,11 +76,12 @@
         const SK_GRID_RGB = { cyan: '0,212,255', white: '255,255,255', black: '0,0,0', red: '255,77,94' }; // グリッド色の名前→RGB
         let skFlipH = false, skFlipV = false, skMono = false, skBw = false; // 参考画像の加工（描画モード内だけで独立管理）
         let skTool = 'pen', skLassoPts = null; // 道具: pen / eraser / lasso / lassoLight。投げ縄の頂点配列
-        // 描き味（クロッキー向けの筆感）。あくまで“っぽい”近似：ペン=くっきり／鉛筆=やわらか＋線幅を微妙に揺らす／マーカー=太く半透明・角ばった端。
+        // 描き味（クロッキー向けの筆感）。あくまで“っぽい”近似：ペン=くっきり／鉛筆=芯＋粒感／ボールペン=細め・速いと痩せる／マーカー=太く半透明・角ばった端。
         let skBrush = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_BRUSH) || 'pen';
         const SK_BRUSH = {
             pen:    { cap: 'round',  wMul: 1,    aScale: 1 },              // ペン：現状のまま（不透明・くっきり）
-            pencil: { cap: 'round',  wMul: 0.9,  aScale: 0.8, grain: true }, // 鉛筆：粒状スタンプで描く（下の skPencilLine 参照）
+            pencil: { cap: 'round',  wMul: 0.9,  aScale: 0.8, grain: true }, // 鉛筆：芯線＋粒状スタンプで描く（下の skPencilLine 参照）
+            ball:   { cap: 'round',  wMul: 0.85, aScale: 1, speedW: true }, // ボールペン：細めで均一。速く引くと少し痩せる（skStrokeMove参照）
             marker: { cap: 'square', wMul: 1.7,  aScale: 0.45 }            // マーカー：太く半透明・角ばった端（重ねると濃くなる）
         };
         function skBrushCfg(){ return SK_BRUSH[skBrush] || SK_BRUSH.pen; }
@@ -103,20 +104,36 @@
                 const d = 0.8 + Math.random() * 1.8;
                 g.fillRect(S / 2 + Math.cos(a) * r, S / 2 + Math.sin(a) * r, d, d);
             }
+            // 中心の芯部分はさらに密＆濃く（硬い芯が紙に食い込んだ締まり。これが無いと全体がボケて“投げやり”に見える）
+            for (let i = 0; i < 300; i++) {
+                const a = Math.random() * Math.PI * 2;
+                const r = Math.sqrt(Math.random()) * (S / 6);
+                g.globalAlpha = 0.5 + Math.random() * 0.4;
+                const d = 1 + Math.random() * 1.2;
+                g.fillRect(S / 2 + Math.cos(a) * r, S / 2 + Math.sin(a) * r, d, d);
+            }
             skPencilTip = cv; skPencilTipColor = color; return cv;
         }
         // 2点間を鉛筆スタンプで埋める（通常の stroke() の代わり）。w は線幅相当。
         function skPencilLine(c, x0, y0, x1, y1, w){
             const tip = skPencilTipImg(skColor);
+            const prevA = c.globalAlpha;
+            // 芯：細い連続線を先に敷く（硬い鉛筆の「芯が乗った」感触。粒だけだとボケて頼りない線になる）
+            c.save();
+            c.globalAlpha = prevA * 0.45;
+            c.strokeStyle = skColor;
+            c.lineCap = 'round';
+            c.lineWidth = Math.max(1, w * 0.55);
+            c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+            c.restore();
             const step = Math.max(1.5, w * 0.25); // 実物の間隔5%より粗いが見た目の差は出ない範囲で軽量化
             const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / step));
-            const prevA = c.globalAlpha;
             for (let i = 0; i <= n; i++) {
                 const t = i / n;
-                const d = w * 1.6 * (0.85 + Math.random() * 0.3);           // スタンプ径（粒が疎なので線幅よりやや大きめ）
-                const x = x0 + (x1 - x0) * t + (Math.random() - 0.5) * w * 0.2; // わずかな位置ゆらぎ
-                const y = y0 + (y1 - y0) * t + (Math.random() - 0.5) * w * 0.2;
-                c.globalAlpha = prevA * (0.5 + Math.random() * 0.3);        // 塗料量60%相当（重ねると濃くなる）
+                const d = w * 1.25 * (0.9 + Math.random() * 0.2);           // スタンプ径（芯線に沿わせるため揺れは控えめに）
+                const x = x0 + (x1 - x0) * t + (Math.random() - 0.5) * w * 0.12; // わずかな位置ゆらぎ
+                const y = y0 + (y1 - y0) * t + (Math.random() - 0.5) * w * 0.12;
+                c.globalAlpha = prevA * (0.55 + Math.random() * 0.3);       // 塗料量60%相当（重ねると濃くなる）
                 c.save(); c.translate(x, y); c.rotate(Math.random() * Math.PI * 2); // 回転で同一スタンプの縞模様を防ぐ
                 c.drawImage(tip, -d / 2, -d / 2, d, d);
                 c.restore();
@@ -552,6 +569,22 @@
             skApplyPenColor(skRecentColor, skAlpha);
         };
 
+        /* ── メイン⇄サブの2色切替（クリスタのXキーと同じ。サブ色の初期値は白） ── */
+        let skColor2 = window.CroquisStore.getRaw(window.CROQUIS_KEYS.SKETCH_COLOR2) || '#ffffff';
+        function skSelectColorHex(c){ // カスタム色として選択状態にする共通処理（スウォッチ表示・ピッカー値も同期）
+            document.querySelectorAll('.sk-color').forEach(function(x){ x.classList.remove('on'); });
+            const wrap = document.getElementById('sketch-customcolor-wrap'); if (wrap) wrap.classList.add('on');
+            const ci = document.getElementById('sketch-customcolor'); if (ci && /^#[0-9a-fA-F]{6}$/.test(c)) ci.value = c;
+            skApplyPenColor(c, skAlpha);
+        }
+        function skSwapColor(){
+            const cur = skColor;
+            skSelectColorHex(skColor2);
+            skColor2 = cur;
+            window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_COLOR2, skColor2, 'サブ色');
+            skFlash('色を入替：今の色 ' + skColor + '（もう一度で ' + skColor2 + ' に戻る）', 1500);
+        }
+
         function skSyncImage(){
             if (skRefOverride) { skApplyImgFilters(); return; } // 参考画像を手動指定中はプール画像で上書きしない
             const co = ui.img.getAttribute('crossorigin');
@@ -839,10 +872,73 @@
         function skSetTool(t){
             skTool = t;
             skEraser = (t === 'eraser'); // 既存コードは skEraser を見るので連動
-            const active = { eraser: 'sketch-eraser-btn', lasso: 'sketch-lasso-btn', lassoLight: 'sketch-lassolight-btn' }[t];
-            ['sketch-eraser-btn', 'sketch-lasso-btn', 'sketch-lassolight-btn'].forEach(function(id){
+            const active = { eraser: 'sketch-eraser-btn', lasso: 'sketch-lasso-btn', lassoLight: 'sketch-lassolight-btn', eyedrop: 'sketch-eyedrop-btn' }[t];
+            ['sketch-eraser-btn', 'sketch-lasso-btn', 'sketch-lassolight-btn', 'sketch-eyedrop-btn'].forEach(function(id){
                 skAccent(id, id === active);
             });
+        }
+        /* ── スポイト：タップした位置の「画面上の見た目の色」を拾う ──
+           紙色を土台に、お手本画像の画素 → 描いた線の画素の順で重ねて合成する。
+           Iキーでスポイトモード（1回拾うとペンに戻る）、Alt+クリックはいつでも一時スポイト。 */
+        window.skToggleEyedrop = function(){
+            skSetTool(skTool === 'eyedrop' ? 'pen' : 'eyedrop');
+            if (skTool === 'eyedrop') skFlash('スポイト：拾いたい色をタップしてください', 2000);
+        };
+        function skHexByte(n){ return ('0' + Math.max(0, Math.min(255, Math.round(n))).toString(16)).slice(-2); }
+        function skPickColorAt(e){
+            // 1) 土台は紙の色
+            let r = parseInt(skPaper.slice(1, 3), 16) || 0, g = parseInt(skPaper.slice(3, 5), 16) || 0, b = parseInt(skPaper.slice(5, 7), 16) || 0;
+            // 2) お手本画像の画素（object-fit: contain の実描画枠を逆算。ズームは getBoundingClientRect が織り込み済み）
+            //    並べるモードでは右半分（描画側）はお手本が切り抜かれて見えないので画像は見ない
+            const stR = skStage.getBoundingClientRect();
+            const overRight = skSide && e.clientX > stR.left + stR.width / 2;
+            const ir = skImg.getBoundingClientRect();
+            if (!overRight && skImg.naturalWidth && skImg.getAttribute('src')) {
+                const nw = skImg.naturalWidth, nh = skImg.naturalHeight;
+                const s = Math.min(ir.width / nw, ir.height / nh);
+                const posX = (parseFloat(getComputedStyle(skImg).objectPosition) || 50) / 100; // 'NN% center' の横%だけ使う
+                const ox = ir.left + (ir.width - nw * s) * posX, oy = ir.top + (ir.height - nh * s) / 2;
+                let u = (e.clientX - ox) / s, v = (e.clientY - oy) / s;
+                if (skFlipH) u = nw - u;  // 反転表示中は見た目に合わせて座標を折り返す
+                if (skFlipV) v = nh - v;
+                if (u >= 0 && u < nw && v >= 0 && v < nh) {
+                    try {
+                        const cv = document.createElement('canvas'); cv.width = cv.height = 1;
+                        const g2 = cv.getContext('2d', { willReadFrequently: true });
+                        g2.drawImage(skImg, Math.floor(u), Math.floor(v), 1, 1, 0, 0, 1, 1);
+                        const px = g2.getImageData(0, 0, 1, 1).data;
+                        const a = px[3] / 255;
+                        r = px[0] * a + r * (1 - a); g = px[1] * a + g * (1 - a); b = px[2] * a + b * (1 - a);
+                        if (skMono || skBw) { // モノクロ/二階調表示中は見た目どおりのグレーを拾う
+                            let y = 0.299 * r + 0.587 * g + 0.114 * b;
+                            if (skBw) y = Math.max(0, Math.min(255, ((y / 255 - 0.5) * skBwContrast + 0.5) * 255)); // CSSのcontrast()近似
+                            r = g = b = y;
+                        }
+                    } catch(_) {
+                        skFlash('この画像は保護されていて色を取得できません', 2000);
+                        return null;
+                    }
+                }
+            }
+            // 3) 描いた線の画素をアルファ合成で重ねる（重ねるモードで自分の線の色も拾えるように）
+            const p = skPos(e);
+            if (p.x >= 0 && p.x < skCW && p.y >= 0 && p.y < skCH) {
+                const dpr = skCanvas.width / Math.max(1, skCW);
+                try {
+                    const d = skCtx.getImageData(Math.floor(p.x * dpr), Math.floor(p.y * dpr), 1, 1).data;
+                    const a = d[3] / 255;
+                    r = d[0] * a + r * (1 - a); g = d[1] * a + g * (1 - a); b = d[2] * a + b * (1 - a);
+                } catch(_){ /* まれに取得できなくても紙＋画像の色で続行 */ }
+            }
+            return '#' + skHexByte(r) + skHexByte(g) + skHexByte(b);
+        }
+        // スポイトとして処理したら true（描画側はストロークを始めない）。skBeginStroke とステージの両方から呼ぶ
+        function skHandleEyedrop(e){
+            if (skTool !== 'eyedrop' && !(e.altKey && e.pointerType !== 'touch')) return false;
+            const picked = skPickColorAt(e);
+            if (picked) { skSelectColorHex(picked); skRememberColor(picked); skFlash('色を拾いました ' + picked, 1400); }
+            if (skTool === 'eyedrop') skSetTool('pen'); // 1回拾ったらペンに戻る
+            return true;
         }
         function skNudgeSize(d){ // ペンの太さを増減（PCの [ ] キー用）
             const s = document.getElementById('sketch-size'); if (!s) return;
@@ -987,13 +1083,20 @@
                 skApplyPenColor(b.getAttribute('data-c'), parseFloat(b.getAttribute('data-a') || '1'));
             });
         });
-        // 描き味の切替（ペン / 鉛筆 / マーカー）。消し・投げ縄からはペンに戻す
+        // 描き味の切替（ペン / 鉛筆 / ボールペン / マーカー）。消し・投げ縄からはペンに戻す
         function skSetBrush(b){
-            skBrush = (b === 'pencil' || b === 'marker') ? b : 'pen';
+            skBrush = (b === 'pencil' || b === 'ball' || b === 'marker') ? b : 'pen';
             window.CroquisStore.setRaw(window.CROQUIS_KEYS.SKETCH_BRUSH, skBrush, '描き味');
             if (skTool !== 'pen') skSetTool('pen');
             document.querySelectorAll('.sk-brush-btn').forEach(function(x){ x.classList.toggle('on', x.getAttribute('data-brush') === skBrush); });
             skUpdateBrushPreview();
+        }
+        // Cキーで描き味を順送り（マウスを下バーまで動かさず切り替えられる）
+        const SK_BRUSH_ORDER = ['pen', 'pencil', 'ball', 'marker'];
+        const SK_BRUSH_NAMES = { pen: 'ペン', pencil: '鉛筆', ball: 'ボールペン', marker: 'マーカー' };
+        function skCycleBrush(){
+            skSetBrush(SK_BRUSH_ORDER[(SK_BRUSH_ORDER.indexOf(skBrush) + 1) % SK_BRUSH_ORDER.length]);
+            skFlash('描き味：' + SK_BRUSH_NAMES[skBrush], 1200);
         }
         document.querySelectorAll('.sk-brush-btn').forEach(function(b){
             b.addEventListener('click', function(){ skSetBrush(b.getAttribute('data-brush')); });
@@ -1058,6 +1161,7 @@
         function skTargetCtx(){ return (skLiveActive ? skLiveCtx : skCtx); }
         function skBeginStroke(e){
             if (skAnyMenuOpen()) { skCloseMenus(); return; } // メニューを開いている間の最初のタップは「閉じるだけ」（誤描き防止）
+            if (skHandleEyedrop(e)) return; // スポイト（Alt+クリックは一時スポイト＝クリスタと同じ）
             skAutoHideBegin(); // 設定ONなら描き始めに下ツールを畳む（描点を取る前に寸法確定）
             skPushUndo(); skRedoBackup = skRedoStack; skRedoStack = [];
             skDrawing = true;
@@ -1111,7 +1215,12 @@
                     px = skStabX; py = skStabY;
                 }
                 if (skTraceRec) skTraceRec.push({ x: px, y: py }); // 手ブレ補正適用後（実際に画面に描かれる点）を記録
-                const pw = (events[i].pointerType === 'pen' && events[i].pressure > 0) ? (0.4 + events[i].pressure * 1.2) : 1;
+                let pw = (events[i].pointerType === 'pen' && events[i].pressure > 0) ? (0.4 + events[i].pressure * 1.2) : 1;
+                if (bc.speedW && !skEraser) {
+                    // ボールペン：速く引くほど僅かに痩せる（インクが追いつかない掠れ感の近似）
+                    const sp = Math.hypot(px - skLastX, py - skLastY);
+                    pw *= Math.max(0.7, Math.min(1.06, 1.06 - sp * 0.012));
+                }
                 c.lineWidth = baseW * pw;
                 const midX = (skLastX + px) / 2, midY = (skLastY + py) / 2;
                 if (bc.grain && !skEraser) {
@@ -1266,6 +1375,12 @@
             skCancelStroke();
             skAutoHideEnd();
         }, { passive: true });
+        // 「並べる」モードではキャンバスが右半分だけなので、左のお手本側でもスポイトが効くようステージでも拾う
+        skStage.addEventListener('pointerdown', function(e){
+            if (e.target === skCanvas) return; // キャンバス上は上のハンドラで処理済み（二重拾い防止）
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            skHandleEyedrop(e);
+        });
 
         /* ── 描画カーソル：ペン先の位置を示す（三角矢印は先端が描画点／ブラシ径は今の太さの丸）── */
         const skCursorEl = document.getElementById('sketch-cursor');
@@ -2044,6 +2159,10 @@
                 else if (S.match('s_zoomIn', e))  { skZoomStep(1.2); }
                 else if (S.match('s_zoomOut', e)) { skZoomStep(1 / 1.2); }
                 else if (S.match('s_zoomReset', e)) { skResetZoom(); }
+                else if (S.match('s_swapColor', e)) { skSwapColor(); }
+                else if (S.match('s_eyedrop', e)) { skToggleEyedrop(); }
+                else if (S.match('s_brush', e)) { skCycleBrush(); }
+                else if (S.match('s_focus', e)) { e.preventDefault(); skToggleFocus(); } // Tab既定：フォーカス移動より優先
                 else if (/^Digit[1-5]$/.test(e.code)) { const sw = document.querySelectorAll('.sk-color')[(+e.code.slice(5)) - 1]; if (sw) sw.click(); } // 色は固定（1〜5）
                 return;
             }
