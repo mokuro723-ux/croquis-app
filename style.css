@@ -25,9 +25,18 @@ body { background-color: var(--bg-color); color: var(--text-color); font-family:
     z-index: 400;
     border-bottom: 1px solid var(--border-color); 
 }
-.top-left { display: flex; align-items: center; gap: 6px; flex: 1; max-width: 180px; height: 36px; }
-.top-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: 1; max-width: 150px; height: 36px; }
-#image-counter { color: #9a9a9a; font-size: 0.74rem; white-space: nowrap; letter-spacing: 0.5px; }
+/* 中央のタイマーは position:absolute で画面中央に置かれるので、左右の列が
+   中央に届かないよう幅を制限する。枚数が多い時（例 1/15900）に重なっていた。 */
+.top-left  { display: flex; align-items: center; gap: 6px; flex: 1; max-width: calc(50% - 62px); min-width: 0; overflow: hidden; height: 36px; }
+.top-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: 1; max-width: calc(50% - 62px); height: 36px; }
+.top-left .icon-btn, .top-right .icon-btn { flex: 0 0 auto; }   /* 押せる大きさは削らない。あふれる時は下の枚数表示を削る */
+#image-counter {
+    position: absolute; top: 8px; left: 8px; z-index: 6; pointer-events: none;
+    color: #b0b0b0; font-size: 0.72rem; white-space: nowrap; letter-spacing: 0.5px;
+    background: rgba(0,0,0,0.45); padding: 2px 8px; border-radius: 6px;
+    transition: opacity 0.3s ease;
+}
+#image-counter.idle-dim { opacity: 0.12; }   /* 無操作中は絵の邪魔をしない */
 
 #phase-label { color: var(--hm-color); font-weight: bold; font-size: 0.8rem; white-space: nowrap; }
 #hm-step-mini { color: #777; font-size: 0.72rem; white-space: nowrap; }
@@ -155,9 +164,8 @@ body { background-color: var(--bg-color); color: var(--text-color); font-family:
 /* 操作しない間はUIを引っ込めて絵に集中する。触れば armFocusIdleTimer() で即戻る */
 #bottom-panel.idle-dim { opacity: 0.12; }
 #top-panel.idle-dim .icon-btn,
-#top-panel.idle-dim #image-counter,
 #top-panel.idle-dim #hm-step-mini { opacity: 0.12; }
-#top-panel .icon-btn, #top-panel #image-counter, #top-panel #hm-step-mini { transition: opacity 0.3s ease; }
+#top-panel .icon-btn, #top-panel #hm-step-mini { transition: opacity 0.3s ease; }
 
 button { background-color: var(--btn-bg); color: #ddd; border: none; padding: var(--bottom-btn-pad-y) var(--bottom-btn-pad-x); border-radius: 4px; cursor: pointer; min-width: var(--bottom-btn-min); display: flex; justify-content: center; align-items: center; font-size: 0.9rem;}
 button:hover { background-color: #444; }
@@ -189,8 +197,8 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 .bar-group:has(.bar-pop button.active) > .grp-btn > span { color: var(--accent); }
 
 .bar-pop {
-    position: absolute; bottom: calc(100% + 8px);
-    transform: translate(var(--pop-shift, 0px), 8px);
+    /* 位置（left / bottom / max-height）は clampBarPop() が開く直前に実測して入れる */
+    position: fixed; transform: translateY(8px);
     background-color: rgba(22, 22, 22, 0.97);
     border: 1px solid var(--border-color); border-radius: 12px; padding: 6px;
     display: flex; flex-direction: column; gap: 4px; z-index: 150;
@@ -198,12 +206,9 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     transition: opacity 0.18s ease, transform 0.18s ease;
     box-shadow: 0 8px 28px rgba(0,0,0,0.55);
     min-width: 210px; max-width: calc(100vw - 20px);
-    max-height: 65vh; overflow-y: auto;
+    overflow-y: auto;
 }
-.bar-pop.show { opacity: 1; pointer-events: auto; transform: translate(var(--pop-shift, 0px), 0); }
-/* 画面外へはみ出さないよう、左側のグループは左寄せ・右側のグループは右寄せで開く */
-#manage-popup { left: 0; }
-#view-popup, #practice-popup { right: 0; }
+.bar-pop.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
 .bar-pop button { justify-content: flex-start; gap: 10px; padding: 10px; font-size: 0.88rem; width: 100%; }
 .bar-pop-title { font-size: 0.68rem; color: #7d7d7d; padding: 6px 8px 2px; letter-spacing: 0.5px; }
 .bar-pop-title:first-child { padding-top: 2px; }
@@ -420,13 +425,17 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
         --bottom-btn-min: 34px;
     }
     #top-panel { padding: 0 8px 12px 8px; }
-    .top-left, .top-right { max-width: 130px; gap: 4px; height: 36px; }
+    /* 固定幅にすると SE(320px) で中央のタイマーに食い込むため、画面幅から計算する */
+    .top-left, .top-right { max-width: calc(50% - 62px); gap: 4px; height: 36px; }
     .icon-btn { padding: 3px; }
     .svg-icon { width: 18px; height: 18px; }
-    #timer-label { font-size: 2.05rem; letter-spacing: 1px; bottom: 10px; }
+    #timer-label { font-size: 1.9rem; letter-spacing: 0.5px; bottom: 10px; }
     #history-panel { width: 100%; border-right: none; }
     #history-content { grid-template-columns: repeat(3, 1fr); }
     select { padding: 7px 10px; }
+    /* この幅では下バーが2段に折り返す。区切り線が行末に取り残されて壊れて見えるので出さない
+       （どのボタンが何かはラベルで分かる） */
+    #bottom-panel .separator { display: none; }
 }
 
 @media (orientation: landscape) and (max-height: 500px) {

@@ -161,7 +161,7 @@
             const el = ui.imageCounter;
             if (!el) return;
             if (isEmpty) { el.textContent = ''; return; }
-            el.textContent = (historyPos + 1) + ' / ' + pool.length;
+            el.textContent = (historyPos + 1) + '/' + pool.length;   // 枚数が多いと上バーで切れるので詰めて表示
         }
         
         function toggleMute() {

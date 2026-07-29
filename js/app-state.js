@@ -717,16 +717,22 @@
             document.querySelectorAll('.bar-pop').forEach(function(p) { p.classList.remove('show'); });
             if (willOpen) { clampBarPop(target); target.classList.add('show'); }
         }
-        // 画面の左右からはみ出さないように、開く直前に実測して横位置をずらす。
-        // 下バーは幅が狭いと折り返すのでグループの位置が変わる＝CSSだけでは寄せ方向を決められない。
+        // ポップの位置を開く直前に実測して決める。
+        // 下バーは狭い画面で2段に折り返すため、ボタンの真上に出すと下段のポップが上段の
+        // ボタン（再生・前後・時間）を覆って押せなくなる。なので必ず「下バー全体の上」に出す。
+        // 横は押したボタンの真上に中央を合わせ、画面からはみ出す分だけ内側へ寄せる。
         function clampBarPop(pop) {
-            pop.style.setProperty('--pop-shift', '0px');
-            const r = pop.getBoundingClientRect();
+            const panel = ui.bottomPanel, btn = pop.previousElementSibling;
+            if (!panel || !btn) return;
             const margin = 8;
-            let shift = 0;
-            if (r.left < margin) shift = margin - r.left;
-            else if (r.right > window.innerWidth - margin) shift = (window.innerWidth - margin) - r.right;
-            pop.style.setProperty('--pop-shift', Math.round(shift) + 'px');
+            const panelTop = panel.getBoundingClientRect().top;
+            // 高さは「下バーより上の空き」に収める（絵が全部隠れないように上限も付ける）
+            pop.style.maxHeight = Math.max(160, Math.min(window.innerHeight * 0.55, panelTop - 70)) + 'px';
+            const b = btn.getBoundingClientRect();
+            const w = pop.offsetWidth;
+            const left = Math.max(margin, Math.min(b.left + b.width / 2 - w / 2, window.innerWidth - w - margin));
+            pop.style.left = Math.round(left) + 'px';
+            pop.style.bottom = Math.round(window.innerHeight - panelTop + margin) + 'px';
         }
         function closeBarPops() {
             document.querySelectorAll('.bar-pop.show').forEach(function(p) { p.classList.remove('show'); });
@@ -741,6 +747,7 @@
             // 上バーも一緒に引っ込める（残り時間の表示だけは残す＝CSS側でボタンのみ薄くする）
             const top = document.getElementById('top-panel');
             if (top) top.classList.toggle('idle-dim', dim);
+            if (ui.imageCounter) ui.imageCounter.classList.toggle('idle-dim', dim);
         }
         function armFocusIdleTimer() {
             if (focusIdleTimer) clearTimeout(focusIdleTimer);
