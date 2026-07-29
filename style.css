@@ -189,7 +189,8 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
 .bar-group:has(.bar-pop button.active) > .grp-btn > span { color: var(--accent); }
 
 .bar-pop {
-    position: absolute; bottom: calc(100% + 8px); transform: translateY(8px);
+    position: absolute; bottom: calc(100% + 8px);
+    transform: translate(var(--pop-shift, 0px), 8px);
     background-color: rgba(22, 22, 22, 0.97);
     border: 1px solid var(--border-color); border-radius: 12px; padding: 6px;
     display: flex; flex-direction: column; gap: 4px; z-index: 150;
@@ -199,7 +200,7 @@ select { outline: none; text-align: center; font-weight: bold; appearance: none;
     min-width: 210px; max-width: calc(100vw - 20px);
     max-height: 65vh; overflow-y: auto;
 }
-.bar-pop.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.bar-pop.show { opacity: 1; pointer-events: auto; transform: translate(var(--pop-shift, 0px), 0); }
 /* 画面外へはみ出さないよう、左側のグループは左寄せ・右側のグループは右寄せで開く */
 #manage-popup { left: 0; }
 #view-popup, #practice-popup { right: 0; }

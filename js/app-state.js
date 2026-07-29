@@ -715,7 +715,18 @@
             const target = document.getElementById(id);
             const willOpen = target && !target.classList.contains('show');
             document.querySelectorAll('.bar-pop').forEach(function(p) { p.classList.remove('show'); });
-            if (willOpen) target.classList.add('show');
+            if (willOpen) { clampBarPop(target); target.classList.add('show'); }
+        }
+        // 画面の左右からはみ出さないように、開く直前に実測して横位置をずらす。
+        // 下バーは幅が狭いと折り返すのでグループの位置が変わる＝CSSだけでは寄せ方向を決められない。
+        function clampBarPop(pop) {
+            pop.style.setProperty('--pop-shift', '0px');
+            const r = pop.getBoundingClientRect();
+            const margin = 8;
+            let shift = 0;
+            if (r.left < margin) shift = margin - r.left;
+            else if (r.right > window.innerWidth - margin) shift = (window.innerWidth - margin) - r.right;
+            pop.style.setProperty('--pop-shift', Math.round(shift) + 'px');
         }
         function closeBarPops() {
             document.querySelectorAll('.bar-pop.show').forEach(function(p) { p.classList.remove('show'); });

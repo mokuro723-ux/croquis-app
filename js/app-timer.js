@@ -651,7 +651,7 @@
         });
         document.addEventListener('pointerdown', function(e) {
             pointerStartX = e.clientX; pointerStartY = e.clientY; armFocusIdleTimer();
-            if (!e.target.closest('.bar-pop') && !e.target.closest('.grp-btn')) { closeBarPops(); }
+            if (!e.target.closest('.bar-pop') && !e.target.closest('.pop-btn')) { closeBarPops(); }
         }, { passive: true });
 
         // ── 画面スリープ防止（Wake Lock）──────────────────────────
