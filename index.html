@@ -52,35 +52,49 @@
             <img id="main-image" src="" draggable="false">
             <div id="grid-overlay"></div>
             <div id="fav-icon-large">★</div>
+            <!-- 画像が1枚もないときだけ出す入口。ここから読み込めば下バーを探さなくていい -->
+            <div id="empty-state">
+                <div id="empty-title">練習する画像を読み込みます</div>
+                <div id="empty-actions">
+                    <button id="empty-folder-btn" class="accent">フォルダから読み込む</button>
+                    <button id="empty-files-btn">画像ファイルを選ぶ</button>
+                    <button id="empty-online-btn">オンライン素材から探す</button>
+                </div>
+                <div id="empty-hint">画像をこの画面にドラッグ＆ドロップしても読み込めます</div>
+            </div>
         </div>
     </div>
 
-    <div id="bw-bar-wrap">
-        <div id="bw-bar-inner">
-            <span id="bw-bar-label">コントラスト</span>
-            <input type="range" id="bw-bar-slider" min="1" max="20" step="1" value="10"
-               >
-            <span id="bw-bar-val">10</span>
-        </div>
-    </div>
     <div id="progress-container"><div id="progress-bar"></div></div>
 
     <div id="bottom-panel">
         <input type="file" id="folder-input" webkitdirectory directory multiple style="display:none;">
         <input type="file" id="file-input" multiple accept="image/*" style="display:none;">
-        
-        <button id="je-document-getelementbyid-folder-input-cli" title="フォルダ"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg></button>
-        <button id="je-document-getelementbyid-file-input-click" title="複数画像"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg></button>
-        <button id="manage-btn" title="画像管理"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M21 16.5c0 .38-.21.71-.53.88l-7.9 4.44c-.16.12-.36.18-.57.18-.21 0-.41-.06-.57-.18l-7.9-4.44A.991.991 0 0 1 3 16.5v-9c0-.38.21-.71.53-.88l7.9-4.44c.16-.12.36-.18.57-.18.21 0 .41.06.57.18l7.9 4.44c.32.17.53.5.53.88v9zM12 4.15L6.04 7.5 12 10.85l5.96-3.35L12 4.15zM5 15.91l6 3.38v-6.71L5 9.21v6.7zM19 15.91v-6.7l-6 3.37v6.71l6-3.38z"/></svg></button>
-        
+
+        <!-- ── 素材：読み込みと画像の管理をまとめる ── -->
+        <div class="bar-group">
+            <button id="manage-btn" class="grp-btn" title="画像を読み込む・管理する"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg><span>素材</span></button>
+            <div id="manage-popup" class="bar-pop">
+                <div class="bar-pop-title">読み込む</div>
+                <button id="je-document-getelementbyid-folder-input-cli"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg><span>フォルダから</span></button>
+                <button id="je-document-getelementbyid-file-input-click"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg><span>画像ファイルを選ぶ</span></button>
+                <button id="online-btn" title="オンライン素材ライブラリ (O)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2s.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.9-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2s.07-1.35.16-2h4.68c.09.65.16 1.32.16 2s-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2s-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg><span>オンライン素材</span></button>
+                <div class="bar-pop-title">今の画像</div>
+                <button id="je-togglefavcurrent">⭐ お気に入り登録/解除</button>
+                <button id="je-toggletagpanel">🏷️ タグ（フォルダ分け）</button>
+                <button id="je-skipcurrent" class="popup-danger">🗑️ この画像をスキップ</button>
+                <div class="bar-pop-title">まとめて</div>
+                <button id="je-openmultiselect">📋 複数選択</button>
+                <button id="je-clearmanagedata">🔄 設定をリセット</button>
+            </div>
+        </div>
+
         <span class="separator">|</span>
 
-        <button id="prev-btn"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
-        <button id="play-btn" class="accent"><svg viewBox="0 0 24 24" class="svg-icon" id="icon-play"><path d="M8 5v14l11-7z"/></svg></button>
-        <button id="next-btn"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
-        
-        <span class="separator">|</span>
-        
+        <button id="prev-btn" title="前の画像"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
+        <button id="play-btn" class="accent" title="開始/一時停止"><svg viewBox="0 0 24 24" class="svg-icon" id="icon-play"><path d="M8 5v14l11-7z"/></svg></button>
+        <button id="next-btn" title="次の画像"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+
         <select id="time-select">
             <option value="30">30s</option>
             <option value="60">1m</option>
@@ -92,32 +106,44 @@
             <option value="class">クラス…</option>
             <option value="custom">カスタム…</option>
         </select>
-        
-        <span class="separator">|</span>
-        
-        <button id="shuffle-btn" class="active" title="シャッフル"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
-        <button id="flipH-btn" title="左右反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10,6 L4,12 L10,18 Z" /><rect x="11" y="4" width="2" height="16" /><path d="M14,6 L20,12 L14,18 Z" /></svg></button>
-        <button id="flipV-btn" title="上下反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6,10 L12,4 L18,10 Z" /><rect x="4" y="11" width="16" height="2" /><path d="M6,14 L12,20 L18,14 Z" /></svg></button>
-        <button id="randomFlip-btn" title="ランダム反転（画像ごとにランダムで反転）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM8 17c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm4 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm4 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/></svg></button>
-        <button id="grid-btn" title="グリッド"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg></button>
-        <button id="mono-btn" title="モノクロ"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm1-17.93c3.95.49 7 3.85 7 7.93s-3.05 7.44-7 7.93V4.07z"/></svg></button>
-        <button id="bw-btn" title="2階調（白黒2値化）"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="2" y="2" width="5" height="5"/><rect x="12" y="2" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/><rect x="17" y="7" width="5" height="5"/><rect x="2" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/><rect x="7" y="17" width="5" height="5"/><rect x="17" y="17" width="5" height="5"/></svg></button>
-        
-        <span class="separator">|</span>
-        
-        <button id="pip-btn" title="小窓表示・常に最前面 (PiP) (P)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16.01H3V4.98h18v14.03z"/></svg></button>
-        <button id="eye-btn" title="5秒後に画像を隠す"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></button>
-        <button id="online-btn" title="オンライン素材ライブラリ (O)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm6.93 6h-2.95c-.32-1.25-.78-2.45-1.38-3.56 1.84.63 3.37 1.91 4.33 3.56zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14C4.1 13.36 4 12.69 4 12s.1-1.36.26-2h3.38c-.08.66-.14 1.32-.14 2s.06 1.34.14 2H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56-1.84-.63-3.37-1.9-4.33-3.56zm2.95-8H5.08c.96-1.66 2.49-2.93 4.33-3.56C8.81 5.55 8.35 6.75 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66c-.09-.66-.16-1.32-.16-2s.07-1.35.16-2h4.68c.09.65.16 1.32.16 2s-.07 1.34-.16 2zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95c-.96 1.65-2.49 2.93-4.33 3.56zM16.36 14c.08-.66.14-1.32.14-2s-.06-1.34-.14-2h3.38c.16.64.26 1.31.26 2s-.1 1.36-.26 2h-3.38z"/></svg></button>
-        <button id="sketch-btn" title="スケッチ・記憶モード (D)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></button>
-        <button class="hard-mode" id="hm-btn" title="ハードモード"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M13,2.05v9h6L7,22v-9H2L13,2.05z"/></svg></button>
 
-        <div id="manage-popup">
-            <button id="je-togglefavcurrent">⭐ お気に入り登録/解除</button>
-            <button id="je-toggletagpanel">🏷️ タグ（フォルダ分け）</button>
-            <button id="je-skipcurrent" class="popup-danger">🗑️ この画像をスキップ</button>
-            <button id="je-openmultiselect">📋 複数選択</button>
-            <button id="je-clearmanagedata">🔄 設定をリセット</button>
+        <span class="separator">|</span>
+
+        <!-- ── 見え方：画像の表示のしかた（描画モードの「表示」タブと同じ項目） ── -->
+        <div class="bar-group">
+            <button id="view-grp-btn" class="grp-btn" title="画像の見え方（反転・グリッド・モノクロ・2階調）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg><span>見え方</span></button>
+            <div id="view-popup" class="bar-pop">
+                <div class="bar-pop-title">画像の加工</div>
+                <button id="flipH-btn" title="左右反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10,6 L4,12 L10,18 Z" /><rect x="11" y="4" width="2" height="16" /><path d="M14,6 L20,12 L14,18 Z" /></svg><span>左右反転</span></button>
+                <button id="flipV-btn" title="上下反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6,10 L12,4 L18,10 Z" /><rect x="4" y="11" width="16" height="2" /><path d="M6,14 L12,20 L18,14 Z" /></svg><span>上下反転</span></button>
+                <button id="mono-btn" title="モノクロ"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm1-17.93c3.95.49 7 3.85 7 7.93s-3.05 7.44-7 7.93V4.07z"/></svg><span>モノクロ</span></button>
+                <button id="bw-btn" title="2階調（白黒2値化）"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="2" y="2" width="5" height="5"/><rect x="12" y="2" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/><rect x="17" y="7" width="5" height="5"/><rect x="2" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/><rect x="7" y="17" width="5" height="5"/><rect x="17" y="17" width="5" height="5"/></svg><span>2階調</span></button>
+                <!-- 2階調のコントラスト。2階調ONのときだけ .visible が付いて出る（JS側は従来のまま） -->
+                <div id="bw-bar-wrap">
+                    <div id="bw-bar-inner">
+                        <span id="bw-bar-label">コントラスト</span>
+                        <input type="range" id="bw-bar-slider" min="1" max="20" step="1" value="10">
+                        <span id="bw-bar-val">10</span>
+                    </div>
+                </div>
+                <div class="bar-pop-title">補助線</div>
+                <button id="grid-btn" title="グリッド"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg><span>グリッド</span></button>
+            </div>
         </div>
+
+        <!-- ── 練習：出題のしかた（順番・難度・表示先） ── -->
+        <div class="bar-group">
+            <button id="practice-grp-btn" class="grp-btn" title="練習のしかた（シャッフル・ランダム反転・目隠し・ハードモード・小窓）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"/></svg><span>練習</span></button>
+            <div id="practice-popup" class="bar-pop">
+                <button id="shuffle-btn" class="active" title="シャッフル"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg><span>シャッフル</span></button>
+                <button id="randomFlip-btn" title="ランダム反転（画像ごとにランダムで反転）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM8 17c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm4 8c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm4 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm0-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/></svg><span>ランダム反転</span></button>
+                <button id="eye-btn" title="5秒後に画像を隠す"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg><span>目隠し（途中で隠す）</span></button>
+                <button class="hard-mode" id="hm-btn" title="ハードモード"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M13,2.05v9h6L7,22v-9H2L13,2.05z"/></svg><span>ハードモード</span></button>
+                <button id="pip-btn" title="小窓表示・常に最前面 (PiP) (P)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16.01H3V4.98h18v14.03z"/></svg><span>小窓表示（PiP）</span></button>
+            </div>
+        </div>
+
+        <button id="sketch-btn" class="grp-btn" title="スケッチ・記憶モード (D)"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span>描く</span></button>
 
     </div><!-- /#bottom-panel -->
 
@@ -203,18 +229,6 @@
                             <option value="2" selected>中</option>
                             <option value="3">太</option>
                         </select>
-                    </div>
-                    <div class="settings-row settings-row-col">
-                        <div class="settings-label">
-                            <span>2階調のコントラスト</span>
-                            <span class="settings-desc">値が高いほどくっきりした白黒になります</span>
-                        </div>
-                        <div class="settings-slider-wrap">
-                            <input type="range" id="bw-contrast-slider" class="settings-slider"
-                                min="1" max="20" step="1" value="10"
-                               >
-                            <span id="bw-contrast-val">10</span>
-                        </div>
                     </div>
                     <div class="settings-row">
                         <div class="settings-label"><span>グリッド線の色</span></div>
@@ -483,10 +497,10 @@
             <div id="sk-tabbar">
                 <button class="sk-tab active" data-tab="draw" title="ペン・色・太さ・消しゴム"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span>描く</span></button>
                 <button class="sk-tab" data-tab="fill" title="投げ縄で囲んで塗る"><svg viewBox="0 0 24 24" class="svg-icon"><ellipse cx="11" cy="9" rx="8" ry="6" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2.5"/><path d="M5.5 13.7C5 16.2 6 19 9 20.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9.4" cy="21.2" r="1.7"/></svg><span>投げ縄</span></button>
-                <button id="je-skfade" class="sk-tbtn" title="描いた線を薄くする（下描きにして上から清書）"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="3" y="9" width="5" height="6"/><rect x="9.5" y="9" width="5" height="6" opacity=".6"/><rect x="16" y="9" width="5" height="6" opacity=".3"/></svg></button>
                 <button class="sk-tab" data-tab="view" title="参考画像の見え方"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg><span>表示</span></button>
                 <button class="sk-tab" data-tab="settings" title="紙の色・手ブレ補正など"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a6.97 6.97 0 0 0-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54a7.32 7.32 0 0 0-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54a7.32 7.32 0 0 0 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg><span>設定</span></button>
                 <span class="sk-tab-spacer"></span>
+                <button id="je-skfade" class="sk-tbtn" title="描いた線を薄くする（下描きにして上から清書）"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="3" y="9" width="5" height="6"/><rect x="9.5" y="9" width="5" height="6" opacity=".6"/><rect x="16" y="9" width="5" height="6" opacity=".3"/></svg></button>
                 <button id="je-skundo" class="sk-tbtn" title="元に戻す（2本指タップ / Ctrl+Z）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg></button>
                 <button id="je-skredo" class="sk-tbtn" title="やり直し（Ctrl+Y）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg></button>
                 <button id="je-skclear" class="sk-tbtn ghost" title="全部消す"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
@@ -527,6 +541,17 @@
                 </div>
                 <!-- 表示 -->
                 <div class="sk-panel" data-tab="view">
+                    <!-- 通常画面の「見え方」ポップと同じ並び（加工 → 補助線）。
+                         ただし状態は描画モード内で独立（sketch.js の skFlipH ほか）。スポイトと保存が参照している -->
+                    <span class="sk-set-label">加工</span>
+                    <button id="sketch-fliph-btn" class="sk-tbtn" title="左右反転（鏡像でバランス確認）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10,6 L4,12 L10,18 Z"/><rect x="11" y="4" width="2" height="16"/><path d="M14,6 L20,12 L14,18 Z"/></svg><span>左右反転</span></button>
+                    <button id="sketch-flipv-btn" class="sk-tbtn" title="上下反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6,10 L12,4 L18,10 Z"/><rect x="4" y="11" width="16" height="2"/><path d="M6,14 L12,20 L18,14 Z"/></svg><span>上下反転</span></button>
+                    <button id="sketch-mono-btn" class="sk-tbtn" title="モノクロ表示"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm1-17.93c3.95.49 7 3.85 7 7.93s-3.05 7.44-7 7.93V4.07z"/></svg><span>モノクロ</span></button>
+                    <button id="sketch-bw-btn" class="sk-tbtn" title="二階調（白黒コントラスト）"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="2" y="2" width="5" height="5"/><rect x="12" y="2" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/><rect x="17" y="7" width="5" height="5"/><rect x="2" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/><rect x="7" y="17" width="5" height="5"/><rect x="17" y="17" width="5" height="5"/></svg><span>二階調</span></button>
+                    <span class="sk-set-label">コントラスト</span>
+                    <input type="range" id="sketch-bwcontrast" min="1" max="20" value="10" title="二階調のコントラスト強さ">
+                    <span class="sk-vsep"></span>
+                    <span class="sk-set-label">補助線</span>
                     <button id="sketch-grid-btn" class="sk-tbtn" title="比率合わせ用グリッド（押すたび 3×3 → 4×4 → 消す）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg><span>グリッド</span></button>
                     <button class="sk-gridcolor" data-gc="cyan"  style="background:#00d4ff" title="グリッドの色：シアン"></button>
                     <button class="sk-gridcolor" data-gc="white" style="background:#ffffff" title="グリッドの色：白"></button>
@@ -537,13 +562,6 @@
                     <span class="sk-vsep"></span>
                     <button id="sketch-guide-btn" class="sk-tbtn" title="構図ガイド線（押すたび 中心十字 → 三分割 → 消す）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M11 2h2v20h-2zM2 11h20v2H2z" opacity=".55"/><path d="M8 2h1v20H8zM15 2h1v20h-1zM2 8h20v1H2zM2 15h20v1H2z"/></svg><span>ガイド</span></button>
                     <button id="sketch-refframe-btn" class="sk-tbtn" title="お手本の外枠に色付きの線を表示（色は左のグリッド色を使用）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M3 3h18v18H3V3zm2 2v14h14V5H5z"/></svg><span>お手本枠</span></button>
-                    <span class="sk-vsep"></span>
-                    <button id="sketch-fliph-btn" class="sk-tbtn" title="左右反転（鏡像でバランス確認）"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M10,6 L4,12 L10,18 Z"/><rect x="11" y="4" width="2" height="16"/><path d="M14,6 L20,12 L14,18 Z"/></svg><span>左右反転</span></button>
-                    <button id="sketch-flipv-btn" class="sk-tbtn" title="上下反転"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M6,10 L12,4 L18,10 Z"/><rect x="4" y="11" width="16" height="2"/><path d="M6,14 L12,20 L18,14 Z"/></svg><span>上下反転</span></button>
-                    <button id="sketch-mono-btn" class="sk-tbtn" title="モノクロ表示"><svg viewBox="0 0 24 24" class="svg-icon"><path d="M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10zm1-17.93c3.95.49 7 3.85 7 7.93s-3.05 7.44-7 7.93V4.07z"/></svg><span>モノクロ</span></button>
-                    <button id="sketch-bw-btn" class="sk-tbtn" title="二階調（白黒コントラスト）"><svg viewBox="0 0 24 24" class="svg-icon"><rect x="2" y="2" width="5" height="5"/><rect x="12" y="2" width="5" height="5"/><rect x="7" y="7" width="5" height="5"/><rect x="17" y="7" width="5" height="5"/><rect x="2" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/><rect x="7" y="17" width="5" height="5"/><rect x="17" y="17" width="5" height="5"/></svg><span>二階調</span></button>
-                    <span class="sk-set-label">コントラスト</span>
-                    <input type="range" id="sketch-bwcontrast" min="1" max="20" value="10" title="二階調のコントラスト強さ">
                 </div>
                 <!-- 設定 -->
                 <div class="sk-panel" data-tab="settings">

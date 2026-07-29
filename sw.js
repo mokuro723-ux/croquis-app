@@ -9,7 +9,7 @@
    ・将来ビルドを導入できるなら、ファイル内容のハッシュを自動でCACHE_NAMEに埋め込む
    （今は手動運用なので、上のコメントを目印にしてください）
    ============================================================ */
-const CACHE_NAME = 'croquis-timer-v71';
+const CACHE_NAME = 'croquis-timer-v73';
 
 // アプリ本体（オフラインでも動かすために事前キャッシュするファイル）
 // ※ sw.js 自身はここに入れない（Service Workerファイルの自己キャッシュはアンチパターン）
@@ -50,10 +50,23 @@ self.addEventListener('install', (e) => {
                     // Vercelの cleanUrls で '/index.html' → '/' にリダイレクトされた応答を
                     // そのまま保存すると、オフライン時のナビゲーションでブラウザに拒否され
                     // 白画面になる。応答を作り直して redirected フラグを消してから保存する。
+                    // ※ヘッダーは Content-Type だけ引き継ぐ。res.headers をまるごと渡すと
+                    //   圧縮前提の content-encoding / content-length が残るのに、
+                    //   本文(blob)は解凍済みなので食い違い、オフライン時に読み込みが失敗して
+                    //   白画面や「オフラインで使えない」になる。
                     const body = await res.blob();
-                    await cache.put(url, new Response(body, { status: 200, headers: res.headers }));
+                    const type = res.headers.get('content-type');
+                    await cache.put(url, new Response(body, {
+                        status: 200,
+                        headers: type ? { 'Content-Type': type } : {}
+                    }));
                 } catch (err) {
-                    if (!OPTIONAL_CACHE.includes(url)) throw err; // 本体ファイルの欠落はインストール失敗として検知させる
+                    if (OPTIONAL_CACHE.includes(url)) return;
+                    // 通信が一瞬不安定だっただけでインストール全体が失敗すると、
+                    // オフライン起動が丸ごと不能になる。前バージョンのキャッシュがあれば引き継ぐ。
+                    const old = await caches.match(url);
+                    if (!old) throw err; // 引き継ぐものが無い＝本当に壊れているのでインストール失敗にする
+                    await cache.put(url, old);
                 }
             }));
         })()

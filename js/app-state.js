@@ -133,8 +133,6 @@
             flashSel:         document.getElementById('flash-intensity-select'),
             progSel:          document.getElementById('progress-size-select'),
             soundVolSel:      document.getElementById('sound-volume-select'),
-            bwSlider:         document.getElementById('bw-contrast-slider'),
-            bwContrastVal:    document.getElementById('bw-contrast-val'),
             bwBarSlider:      document.getElementById('bw-bar-slider'),
             bwBarVal:         document.getElementById('bw-bar-val'),
             settingsPanel:    document.getElementById('settings-panel'),
@@ -418,8 +416,6 @@
             if (ui.flashSel) ui.flashSel.value = flashIntensity;
             if (ui.progSel) { ui.progSel.value = progressBarSize; onProgressSizeChange(progressBarSize); }
             if (ui.soundVolSel) ui.soundVolSel.value = soundVolume;
-            if (ui.bwSlider) ui.bwSlider.value = bwContrast;
-            if (ui.bwContrastVal) ui.bwContrastVal.textContent = bwContrast;
             if (ui.bwBarSlider) ui.bwBarSlider.value = bwContrast;
             if (ui.bwBarVal) ui.bwBarVal.textContent = bwContrast;
             if (ui.gridColorSel) ui.gridColorSel.value = gridColor;
@@ -443,6 +439,7 @@
             rebuildFavNameSet();
             initMediaSession();
             reflectUiSettings();
+            updateImageCounter();   // 起動直後：画像0枚なら空状態の入口を出す
             syncAppHeight();
             document.addEventListener('visibilitychange', handleVisibilityChange);
             window.addEventListener('resize', syncAppHeight, { passive: true });
@@ -650,10 +647,6 @@
 
         function onBwContrastChange(val) {
             bwContrast = val;
-            const sl = ui.bwSlider;
-            if (sl) sl.value = val;
-            const lbl = ui.bwContrastVal;
-            if (lbl) lbl.textContent = val;
             const bsl = ui.bwBarSlider;
             if (bsl) bsl.value = val;
             const bval = ui.bwBarVal;
@@ -717,13 +710,26 @@
         }
 
         function toggleBottomPanel() { ui.bottomPanel.classList.toggle('hidden'); } // hidden は2値トグルのため classList.toggle をそのまま使用
-        function toggleManagePopup() { ui.managePopup.classList.toggle('show'); }
+        // 下バーのポップオーバー（素材 / 見え方 / 練習）。1つ開いたら他は閉じる
+        function toggleBarPop(id) {
+            const target = document.getElementById(id);
+            const willOpen = target && !target.classList.contains('show');
+            document.querySelectorAll('.bar-pop').forEach(function(p) { p.classList.remove('show'); });
+            if (willOpen) target.classList.add('show');
+        }
+        function closeBarPops() {
+            document.querySelectorAll('.bar-pop.show').forEach(function(p) { p.classList.remove('show'); });
+        }
+        function toggleManagePopup() { toggleBarPop('manage-popup'); }
         function setFocusDimmed(dim) {
             const panel = ui.bottomPanel;
             if (!panel || panel.classList.contains('hidden')) return;
             if (dim === isFocusDimmed) return;
             isFocusDimmed = dim;
             panel.classList.toggle('idle-dim', dim);
+            // 上バーも一緒に引っ込める（残り時間の表示だけは残す＝CSS側でボタンのみ薄くする）
+            const top = document.getElementById('top-panel');
+            if (top) top.classList.toggle('idle-dim', dim);
         }
         function armFocusIdleTimer() {
             if (focusIdleTimer) clearTimeout(focusIdleTimer);

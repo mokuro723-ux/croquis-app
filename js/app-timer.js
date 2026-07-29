@@ -153,10 +153,14 @@
         }
 
         function updateImageCounter() {
+            const pool = isFavMode ? dbFavImages : sourceImages;
+            const isEmpty = !pool || pool.length === 0;
+            // 画像0枚のときは空状態の入口を出す（枚数表示と同じタイミングで必ず更新される）
+            const empty = document.getElementById('empty-state');
+            if (empty) empty.classList.toggle('show', isEmpty);
             const el = ui.imageCounter;
             if (!el) return;
-            const pool = isFavMode ? dbFavImages : sourceImages;
-            if (!pool || pool.length === 0) { el.textContent = ''; return; }
+            if (isEmpty) { el.textContent = ''; return; }
             el.textContent = (historyPos + 1) + ' / ' + pool.length;
         }
         
@@ -647,7 +651,7 @@
         });
         document.addEventListener('pointerdown', function(e) {
             pointerStartX = e.clientX; pointerStartY = e.clientY; armFocusIdleTimer();
-            if (!e.target.closest('#manage-popup') && !e.target.closest('#manage-btn')) { ui.managePopup.classList.toggle('show', false); }
+            if (!e.target.closest('.bar-pop') && !e.target.closest('.grp-btn')) { closeBarPops(); }
         }, { passive: true });
 
         // ── 画面スリープ防止（Wake Lock）──────────────────────────

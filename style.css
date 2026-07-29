@@ -104,20 +104,32 @@ body { background-color: var(--bg-color); color: var(--text-color); font-family:
         0 0%, 0 33.33%, 0 66.66%, 0 100%;
     background-repeat: no-repeat;
 }
+/* 空状態：画像0枚のときだけ出る入口。JS側で .show を付け外しする */
+#empty-state {
+    position: absolute; inset: 0; display: none;
+    flex-direction: column; justify-content: center; align-items: center; gap: 14px;
+    padding: 20px; text-align: center; z-index: 6;
+}
+#empty-state.show { display: flex; }
+#empty-title { font-size: 1.05rem; color: #cfcfcf; }
+#empty-actions { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 280px; }
+#empty-actions button { width: 100%; padding: 12px; font-size: 0.92rem; }
+#empty-hint { font-size: 0.76rem; color: #777; }
+
 #fav-icon-large { position: absolute; top: 10px; right: 10px; font-size: 2rem; color: gold; display: none; text-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 5; pointer-events: none; }
 
 #progress-container { width: 100%; height: var(--progress-height, 4px); background-color: #222; }
 #progress-bar { width: 100%; height: 100%; background-color: var(--accent); transition: background-color 0.3s; }
 
+/* 2階調のコントラスト。「見え方」ポップの中に入っていて、2階調ONのときだけ出る */
 #bw-bar-wrap {
     width: 100%; height: 0; overflow: hidden;
     transition: height 0.2s ease;
-    background-color: rgba(0,0,0,0.6);
 }
 #bw-bar-wrap.visible { height: 32px; }
 #bw-bar-inner {
     display: flex; align-items: center; gap: 8px;
-    padding: 0 12px; height: 32px;
+    padding: 0 6px; height: 32px;
 }
 #bw-bar-label { font-size: 0.7rem; color: #888; white-space: nowrap; }
 #bw-bar-val { font-size: 0.78rem; color: var(--accent); min-width: 20px; text-align: right; }
@@ -140,7 +152,12 @@ body { background-color: var(--bg-color); color: var(--text-color); font-family:
 
 #bottom-panel { position: relative; background-color: var(--panel-bg); padding: 10px calc(10px + env(safe-area-inset-right, 0px)) 10px calc(10px + env(safe-area-inset-left, 0px)); display: flex; flex-wrap: wrap; justify-content: center; gap: var(--bottom-gap); border-top: 1px solid var(--border-color); transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease; max-height: 250px; opacity: 1; overflow: visible; padding-bottom: calc(10px + var(--bottom-safe)); will-change: opacity; }
 #bottom-panel.hidden { max-height: 0; padding-top: 0; padding-bottom: 0; border-top: 0px solid transparent; opacity: 0; overflow: hidden; }
-#bottom-panel.idle-dim { opacity: 0.35; }
+/* 操作しない間はUIを引っ込めて絵に集中する。触れば armFocusIdleTimer() で即戻る */
+#bottom-panel.idle-dim { opacity: 0.12; }
+#top-panel.idle-dim .icon-btn,
+#top-panel.idle-dim #image-counter,
+#top-panel.idle-dim #hm-step-mini { opacity: 0.12; }
+#top-panel .icon-btn, #top-panel #image-counter, #top-panel #hm-step-mini { transition: opacity 0.3s ease; }
 
 button { background-color: var(--btn-bg); color: #ddd; border: none; padding: var(--bottom-btn-pad-y) var(--bottom-btn-pad-x); border-radius: 4px; cursor: pointer; min-width: var(--bottom-btn-min); display: flex; justify-content: center; align-items: center; font-size: 0.9rem;}
 button:hover { background-color: #444; }
@@ -158,18 +175,37 @@ button.pip-active { background-color: #00d4ff; color: #000; outline: none; }
 select { outline: none; text-align: center; font-weight: bold; appearance: none; -webkit-appearance: none; padding: 8px 16px; background-color: var(--btn-bg); color: #ddd; border: none; border-radius: 4px; cursor: pointer; }
 .text-btn { font-size: 0.8rem; padding: 6px 10px; min-width: auto; font-weight: bold; }
 
-#manage-popup {
-    position: fixed; bottom: calc(var(--bottom-safe) + 80px); left: 10px;
+/* ── 下バーのグループ（素材 / 見え方 / 練習）とそのポップオーバー ──
+   下バーは「素材・◀▶・時間・見え方・練習・描く」の6つだけを出し、
+   細かい項目はこのポップの中にしまう。ボタンのidは従来のままなので配線は変わらない。 */
+.bar-group { position: relative; display: flex; }
+.grp-btn { flex-direction: column; gap: 2px; padding: 5px 10px; min-width: 56px; }
+.grp-btn > span { font-size: 0.62rem; line-height: 1; color: #b9b9b9; }
+/* 中身のどれかがONなら、開かなくても分かるようにグループ側も光らせる */
+.bar-group:has(.bar-pop button.active) > .grp-btn,
+.bar-group:has(.bar-pop button.pip-active) > .grp-btn {
+    background-color: rgba(0,212,255,0.16); color: var(--accent);
+}
+.bar-group:has(.bar-pop button.active) > .grp-btn > span { color: var(--accent); }
+
+.bar-pop {
+    position: absolute; bottom: calc(100% + 8px); transform: translateY(8px);
     background-color: rgba(22, 22, 22, 0.97);
     border: 1px solid var(--border-color); border-radius: 12px; padding: 6px;
     display: flex; flex-direction: column; gap: 4px; z-index: 150;
-    opacity: 0; pointer-events: none; transform: translateY(8px);
+    opacity: 0; pointer-events: none;
     transition: opacity 0.18s ease, transform 0.18s ease;
     box-shadow: 0 8px 28px rgba(0,0,0,0.55);
-    min-width: 180px;
+    min-width: 210px; max-width: calc(100vw - 20px);
+    max-height: 65vh; overflow-y: auto;
 }
-#manage-popup.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
-#manage-popup button { justify-content: flex-start; gap: 8px; padding: 10px; font-size: 0.9rem; }
+.bar-pop.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+/* 画面外へはみ出さないよう、左側のグループは左寄せ・右側のグループは右寄せで開く */
+#manage-popup { left: 0; }
+#view-popup, #practice-popup { right: 0; }
+.bar-pop button { justify-content: flex-start; gap: 10px; padding: 10px; font-size: 0.88rem; width: 100%; }
+.bar-pop-title { font-size: 0.68rem; color: #7d7d7d; padding: 6px 8px 2px; letter-spacing: 0.5px; }
+.bar-pop-title:first-child { padding-top: 2px; }
 
 /* 複数選択オーバーレイ */
 #multiselect-overlay {

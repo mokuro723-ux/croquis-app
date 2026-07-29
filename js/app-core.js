@@ -1,10 +1,15 @@
         if ('serviceWorker' in navigator) {
+            // 「初回インストール」か「本当の更新」かの判定は、登録を始める“この瞬間”に
+            // 既にSWに制御されていたかどうかで決める。
+            // ※activated になった時点で controller を見ると、初回でも clients.claim() の
+            //   せいで controller が入っており、更新していないのに更新トーストが出る。
+            const hadController = !!navigator.serviceWorker.controller;
             navigator.serviceWorker.register('./sw.js').then(function(registration) {
                 registration.addEventListener('updatefound', function() {
                     const worker = registration.installing;
                     if (!worker) return;
                     worker.addEventListener('statechange', function() {
-                        if (worker.state === 'activated' && navigator.serviceWorker.controller) {
+                        if (worker.state === 'activated' && hadController) {
                             if (typeof window.showToast === 'function') window.showToast('アプリが新しいバージョンに更新されました', 3200);
                         }
                     });

@@ -22,7 +22,14 @@
         bind('bw-bar-slider', 'input', function(event){ onBwContrastChange(parseInt(this.value)); });
         bind('je-document-getelementbyid-folder-input-cli', 'click', function(event){ document.getElementById('folder-input').click(); });
         bind('je-document-getelementbyid-file-input-click', 'click', function(event){ document.getElementById('file-input').click(); });
-        bind('manage-btn', 'click', function(event){ toggleManagePopup(); });
+        bind('manage-btn', 'click', function(event){ toggleBarPop('manage-popup'); });
+        bind('empty-folder-btn', 'click', function(event){ document.getElementById('folder-input').click(); });
+        bind('empty-files-btn', 'click', function(event){ document.getElementById('file-input').click(); });
+        bind('empty-online-btn', 'click', function(event){ toggleOnlinePanel(); });
+        // 「素材」の中身は押したら別画面/ダイアログに移るものばかりなので、押したら閉じる
+        bind('manage-popup', 'click', function(event){ if (event.target.closest('button')) closeBarPops(); });
+        bind('view-grp-btn', 'click', function(event){ toggleBarPop('view-popup'); });
+        bind('practice-grp-btn', 'click', function(event){ toggleBarPop('practice-popup'); });
         bind('prev-btn', 'click', function(event){ handlePrevButtonClick(event); });
         bind('play-btn', 'click', function(event){ toggleTimer(); });
         bind('next-btn', 'click', function(event){ handleNextButtonClick(event); });
@@ -53,7 +60,6 @@
         bind('focus-idle-delay-select', 'change', function(event){ onFocusIdleDelayChange(parseInt(this.value)); });
         bind('flash-intensity-select', 'change', function(event){ onFlashIntensityChange(parseInt(this.value)); });
         bind('progress-size-select', 'change', function(event){ onProgressSizeChange(parseInt(this.value)); });
-        bind('bw-contrast-slider', 'input', function(event){ onBwContrastChange(parseInt(this.value)); });
         bind('grid-color-select', 'change', function(event){ onGridColorChange(this.value); });
         bind('grid-opacity-slider', 'input', function(event){ onGridOpacityChange(parseInt(this.value)); });
         bind('je-resetstats', 'click', function(event){ resetStats(); });
