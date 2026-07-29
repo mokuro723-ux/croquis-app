@@ -1394,6 +1394,7 @@
             skCursorEl.classList.toggle('ring', skCursorMode === 2);
             if (skCursorTri) skCursorTri.style.transform = 'rotate(' + (skCursorDir * 45) + 'deg)'; // 先端(0,0)=描画点を軸に回すので8方向どこでも先端は同じ位置
             if (skCursorMode === 0) skCursorEl.classList.remove('show');
+            skCanvas.style.cursor = (skCursorMode === 0) ? 'crosshair' : 'none'; // 自前カーソルを出す時は標準の＋を消す（二重に見えないように）
         }
         function skCursorUpdateBtns(){ // 設定タブのカーソル用ボタンの文言・表示を今の状態に合わせる
             const b = document.getElementById('sketch-cursor-btn');
